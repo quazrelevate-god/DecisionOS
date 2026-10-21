@@ -1000,6 +1000,13 @@ async def _bootstrap():
         await db.brain_query_cache.create_index([("tenant_id", 1), ("created_at", -1)])
         await db.brain_query_cache.create_index("id")
         await db.leaves.create_index([("tenant_id", 1), ("status", 1), ("from_date", -1)])
+        # Requests (2026-10-21): each list view, and a number that can never repeat.
+        await db.requests.create_index([("tenant_id", 1), ("created_at", -1)])
+        await db.requests.create_index([("tenant_id", 1), ("requester_id", 1), ("created_at", -1)])
+        await db.requests.create_index([("tenant_id", 1), ("approver_id", 1), ("status", 1)])
+        await db.requests.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
+        await db.requests.create_index([("tenant_id", 1), ("number", 1)], unique=True)
+        await db.requests.create_index("id")
         await db.contacts.create_index([("tenant_id", 1), ("name", 1)])
         # FIX-003-B (S2-08): the contacts collection field is `type`
         # (customer|vendor), NOT `kind`. Every read (see server.py

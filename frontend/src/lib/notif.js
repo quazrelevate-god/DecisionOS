@@ -8,6 +8,8 @@ export const NOTIF_TYPE_META = {
   status: { label: "Status Update", cls: "bg-brand-ink text-white" },
   comment: { label: "New Comment", cls: "bg-purple-600 text-white" },
   reminder: { label: "Reminder", cls: "bg-black/10 text-black" },
+  request_rejected: { label: "Request Declined", cls: "bg-danger-600 text-white" },
+  request_withdrawn: { label: "Request Withdrawn", cls: "bg-black/10 text-black" },
 };
 
 export function notifMeta(n) {
@@ -37,5 +39,13 @@ export function notifLink(n) {
     return `/inbox?leave=${n.entity_id}`;
   }
   if (n?.entity_type === "leave" && n?.entity_id) return `/leave?leave=${n.entity_id}`;
+  // 2026-10-21 — Requests. The approver's ("X asks…", an answer, a withdrawal)
+  // opens their queue; Finance's ("approved — to pay") opens the list to pay;
+  // the requester's opens their own requests. Each lands on the card itself.
+  if (n?.entity_type === "request" && n?.entity_id) {
+    if (n.type === "approval" || n.type === "request_withdrawn") return `/approvals?sub=requests&request=${n.entity_id}`;
+    if (n.type === "assigned") return `/requests?tab=fulfil&request=${n.entity_id}`;
+    return `/requests?request=${n.entity_id}`;
+  }
   return null;
 }

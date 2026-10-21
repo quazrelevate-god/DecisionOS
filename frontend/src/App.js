@@ -28,6 +28,9 @@ import Approvals from "./pages/Approvals";
 // which left a phone with no way to ask for time off.) Approving stays in
 // Approvals; the company's register stays on Team.
 import Leave from "./pages/Leave";
+// 2026-10-21 — Requests: ask for material, money or equipment; approval books
+// the expense in Finance (docs/REQUESTS_PLAN.md).
+import Requests from "./pages/Requests";
 // E2-73 (2026-08-15): legacy Inbox.js retired. Sprint 2 shipped the
 // new Decision Desk at /inbox; the old Inbox page had no users left.
 // /inbox-legacy now redirects to /inbox so any lingering bookmarks work.
@@ -347,6 +350,8 @@ function App() {
                 register stays on Team, approving in Approvals, per-department
                 approvers in Settings > Operations. */}
             <Route path="/leave" element={<Protected><Leave /></Protected>} />
+            {/* 2026-10-21 — Requests: yours, the ones routed to you, Finance's to pay. */}
+            <Route path="/requests" element={<Protected><Requests /></Protected>} />
             {/* ASK-25 F3 — the approvals that aren't decisions (task sign-offs
                 and leave) live as a view inside My Work, beside My Tasks /
                 All Tasks / Workflows. The standalone path stays as a deep

@@ -24,6 +24,8 @@ TENANT_COLLECTIONS = [
     "invoices", "payments", "expenses", "assets", "inventory", "ledger_ai",
     # HR
     "leaves", "attendance",
+    # Requests (2026-10-21)
+    "requests",
     # Communication + capture
     "meetings", "voice_notes", "inbox", "notifications", "ingestions",
     # Activity + memory

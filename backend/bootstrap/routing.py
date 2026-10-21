@@ -37,6 +37,7 @@ from routers.inbox import router as inbox_router
 from routers.desk import router as desk_router
 from routers.brief import router as brief_router
 from routers.team import router as team_router
+from routers.staff_requests import router as staff_requests_router  # 2026-10-21: Requests (docs/REQUESTS_PLAN.md)
 from routers.crm import router as crm_router
 from routers.dex import router as dex_router
 from routers.access import router as access_router
@@ -92,6 +93,7 @@ _DOMAIN_ROUTERS = (
     desk_router,       # Epic 2 Sprint 2 (E2-17 / E2-22): Decision Desk aggregation.
     brief_router,
     team_router,
+    staff_requests_router,  # 2026-10-21: Requests — raise, approve, book the expense
     crm_router,        # Epic 2 Sprint 8 (E2-67): per-contact outstanding aggregation.
     dex_router,        # Epic 2 Sprint 5 (E2-35 / E2-41): Dex persona endpoints.
     access_router,     # Epic 1 Batch 2 (RBAC-26 / RBAC-27): delegation + temp grants.

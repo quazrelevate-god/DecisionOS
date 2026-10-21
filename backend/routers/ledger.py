@@ -302,6 +302,9 @@ async def create_expense(tenant_id: str, user_id: str, data: dict, source: str =
         "ingestion_id": data.get("ingestion_id"),
         "workflow_id": data.get("workflow_id"),
         "workflow_type": data.get("workflow_type"),
+        # Requests (2026-10-21) — the staff request whose approval booked this
+        # expense; marking it paid closes the request (update_expense below).
+        "request_id": data.get("request_id"),
         "attachment": data.get("attachment"),
         "created_by": user_id, "created_at": now_iso(),
     }
@@ -991,7 +994,12 @@ async def update_expense(eid: str, inp: ExpensePatch, user: dict = Depends(requi
     r = await db.expenses.update_one({"id": eid, "tenant_id": user["tenant_id"]}, {"$set": updates})
     if not r.matched_count:
         raise HTTPException(status_code=404, detail="Expense not found")
-    return await db.expenses.find_one({"id": eid}, {"_id": 0})
+    doc = await db.expenses.find_one({"id": eid}, {"_id": 0})
+    if updates.get("status") == "paid" and (doc or {}).get("request_id"):
+        # Requests — paying the expense a request booked is fulfilling it.
+        from services.staff_requests import close_from_expense
+        await close_from_expense(user["tenant_id"], doc, user)
+    return doc
 
 
 @router.delete("/expenses/{eid}")
@@ -1002,6 +1010,11 @@ async def delete_expense(eid: str, user: dict = Depends(require_ledger)):
     r = await db.expenses.delete_one({"id": eid, "tenant_id": user["tenant_id"]})
     if not r.deleted_count:
         raise HTTPException(status_code=404, detail="Expense not found")
+    # Requests — a request that pointed at this expense must not link to a row
+    # that is gone; it says the expense has to be added again instead.
+    await db.requests.update_many(
+        {"tenant_id": user["tenant_id"], "expense_id": eid},
+        {"$set": {"expense_id": None, "expense_error": "The expense booked for this request was deleted in Finance."}})
     return {"ok": True}
 
 

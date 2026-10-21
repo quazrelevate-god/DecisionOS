@@ -1,5 +1,5 @@
 import { roleLabel } from "../lib/departments";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -97,13 +97,21 @@ const presetDate = (key) => {
  *   icon-only — the default trigger carries its own visible text, an icon
  *   one carries nothing.
  */
-export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, defaultType, triggerClassName, triggerChildren, triggerAriaLabel }) {
+/* 2026-10-21 (Requests) — `open` makes the dialog CONTROLLED: My Work's "+"
+   asks "New task or new request?" and opens this from its menu, so there is no
+   trigger of its own (`hideTrigger`) and every open/close goes through
+   `onOpenChange`. Left out, the dialog keeps its own state as before. */
+export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, defaultType, triggerClassName, triggerChildren, triggerAriaLabel,
+                                open: openProp, hideTrigger = false }) {
   const { user, tenant } = useAuth();
   const cats = opModel(tenant).task_categories;
   // Opens on the Department My Work is filtered to, when that is a real one.
   const firstType = () => (cats.some((c) => c.key === defaultType) ? defaultType : cats[0]?.key || "operational");
   const blank = () => ({ ...EMPTY_FORM, task_type: firstType() });
-  const [open, setOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const [openState, setOpenState] = useState(false);
+  const open = controlled ? openProp : openState;
+  const setOpen = (o) => (controlled ? onOpenChange?.(o) : setOpenState(o));
   /* PILOT-1 A — a half-written task is kept (lib/drafts.js). The dialog
      already refused stray clicks outside; what it could not survive was the
      page going away — another screen, a reload, a phone closing the app. The
@@ -130,6 +138,14 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
     setAskLeave(false); setOpen(false); onOpenChange?.(false);
   };
   const fileRef = useRef(null);
+  // Opened from outside (the "+" menu): the same on-the-way-in work the
+  // trigger path does below — read the kept draft again, take the Department.
+  useEffect(() => {
+    if (!controlled || !openProp) return;
+    formDraft.reload();
+    setForm((f) => (f.title ? f : { ...f, task_type: firstType() }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlled, openProp]);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const personId = form.assign.startsWith("u:") ? form.assign.slice(2) : "";
   const teamKey = form.assign.startsWith("r:") ? form.assign.slice(2) : "";
@@ -272,14 +288,16 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
       if (o && !form.title) setForm((f) => ({ ...f, task_type: firstType() }));
       onOpenChange?.(o);
     }}>
-      <DialogTrigger asChild>
-        <button data-testid="new-task-button"
-          aria-label={triggerAriaLabel}
-          title={triggerAriaLabel}
-          className={triggerClassName || "flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all"}>
-          {triggerChildren || (<><Plus size={16} weight="bold" /> New Task</>)}
-        </button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <button data-testid="new-task-button"
+            aria-label={triggerAriaLabel}
+            title={triggerAriaLabel}
+            className={triggerClassName || "flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 text-sm font-medium border border-border transition-all"}>
+            {triggerChildren || (<><Plus size={16} weight="bold" /> New Task</>)}
+          </button>
+        </DialogTrigger>
+      )}
       {/* KM-10 — .ng-bento: the app's glass-over-neumorphic tile, so the sheet
           the fields sit in is the same material as every card behind it. The
           default close X is hidden and replaced below, aligned with the title

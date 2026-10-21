@@ -35,6 +35,8 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { hasPerm, canSeeBuyers } from "../lib/perms";
 import { inrCompact } from "../lib/format";
+// 2026-10-21 — Requests waiting on me get a card in Watch (docs/REQUESTS_PLAN.md).
+import { useRequestsTabs } from "../components/requests/RequestsPanel";
 import { cn } from "../lib/utils";
 // ASK-36 2 — which decisions the founder read and set aside (see the file).
 import { saveAsDraft, subscribeDrafts, draftOverrides, isDraft, settleDraft } from "../lib/decisionDrafts";
@@ -202,6 +204,11 @@ const daysLabel = (n) => (n == null ? "" : n === 0 ? "today" : `${n} day${n === 
 /* ASK-25 — the leave chip's one line: the PEOPLE waiting, first names,
    each once (five requests from one person is one name, not five), then
    the first request's dates in the tail. */
+// 2026-10-21 — who is asking, as the leave card says who is away.
+const requestNames = (rows) => {
+  const names = [...new Set(rows.map((r) => (r.requester_name || "").split(" ")[0]).filter(Boolean))];
+  return names.length ? `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}` : "";
+};
 const leaveNames = (leaves) => {
   const names = [...new Set(leaves.map((l) => (l.user_name || "").split(" ")[0]).filter(Boolean))];
   return names.length ? `${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}` : "";
@@ -1337,6 +1344,10 @@ export default function Desk() {
     enabled: !!canApproveLeave,
   });
   const pendingLeaves = (leavesQ.data || []).filter((l) => l.status === "pending" || l.status === "info_requested");
+  // 2026-10-21 · Requests routed to me. The card shows only when one waits —
+  // most people are never asked, and an empty card would say nothing to them.
+  const { approvalsQ: requestsQ, waiting: waitingRequests } = useRequestsTabs();
+  const pendingRequests = requestsQ.data || [];
 
   // ── the score block ──────────────────────────────────────────────────────
   const ops = m.ops;
@@ -1539,7 +1550,8 @@ export default function Desk() {
      fetch, so the row turns under their finger (lib/decisionDrafts). */
   const [draftMarks, setDraftMarks] = useState(draftOverrides);
   useEffect(() => subscribeDrafts(setDraftMarks), []);
-  const watchCount = (counters?.due_today || 0) + (canApproveLeave ? pendingLeaves.length : 0) + (counters?.on_fire || 0);
+  const watchCount = (counters?.due_today || 0) + (canApproveLeave ? pendingLeaves.length : 0)
+    + waitingRequests + (counters?.on_fire || 0);
   /* ASK-41 1 — the server's count, plainly. It used to subtract the rows an
      undo window was hiding; there is no such row any more. */
   const decisionCount = counters ? counters.needs_decision : null;
@@ -2358,6 +2370,18 @@ export default function Desk() {
                   testid="desk-leave-m"
                 />
               )}
+              {waitingRequests > 0 && (
+                <StackCard
+                  tone="warm"
+                  title="Requests"
+                  count={waitingRequests}
+                  line={requestNames(pendingRequests)}
+                  tail={pendingRequests[0]?.total > 0 ? inrCompact(pendingRequests[0].total) : ""}
+                  empty="No requests waiting"
+                  to="/my-work?view=approvals&sub=requests"
+                  testid="desk-requests-m"
+                />
+              )}
               <StackCard
                 tone="fire"
                 title="Slipping"
@@ -2448,6 +2472,18 @@ export default function Desk() {
                 empty="No leave requests waiting"
                 to="/my-work?view=approvals&sub=leave"
                 testid="desk-leave"
+              />
+            )}
+            {waitingRequests > 0 && (
+              <StackCard
+                tone="warm"
+                title="Requests"
+                count={waitingRequests}
+                line={requestNames(pendingRequests)}
+                tail={pendingRequests[0]?.total > 0 ? inrCompact(pendingRequests[0].total) : ""}
+                empty="No requests waiting"
+                to="/my-work?view=approvals&sub=requests"
+                testid="desk-requests"
               />
             )}
             <StackCard

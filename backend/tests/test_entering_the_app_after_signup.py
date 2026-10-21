@@ -44,6 +44,10 @@ def test_nothing_else_raises_that_pane():
     out = subprocess.run(["git", "grep", "-l", "dos_welcome", "--", "frontend/src"],
                          cwd=str(FE.parents[1]), capture_output=True, text=True).stdout.split()
     # AuthContext only CLEARS it on sign-out (2026-10-08), so it cannot raise the pane.
-    assert sorted(Path(p).name for p in out) == ["AuthContext.js", "Signup.js", "WelcomeOverlay.js"]
+    # The phone walkthrough (2c3f155, 2026-10-14) only READS it, to wait while the
+    # welcome is up — a reader, not a second writer.
+    assert sorted(Path(p).name for p in out) == ["AuthContext.js", "Signup.js", "Walkthrough.jsx", "WelcomeOverlay.js"]
     auth = _fe("context", "AuthContext.js")
     assert 'localStorage.removeItem("dos_welcome")' in auth and 'setItem("dos_welcome"' not in auth
+    tour = _fe("components", "mobile", "Walkthrough.jsx")
+    assert 'getItem("dos_welcome")' in tour and 'setItem("dos_welcome"' not in tour

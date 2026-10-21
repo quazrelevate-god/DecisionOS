@@ -44,6 +44,9 @@ const TOUCHES = {
   workflows: [["workflows"], ["workflow"], ["workflows-counts"], ["desk"], ["desk-summary"]],
   contacts: [["contacts"], ["crm-contacts"], ["contact-profile"], ["ledger-parties"]],
   complaints: [["complaints"], ["complaints-open"], ["contact-profile"], ["crm-contacts"], ["desk"], ["desk-summary"]],
+  // 2026-10-21 — a request is raised by one person, decided by another and
+  // paid by a third; its approval also books an expense Finance lists.
+  requests: [["requests"], ["desk"], ["expenses"]],
 };
 
 export function usePulse(enabled = true) {

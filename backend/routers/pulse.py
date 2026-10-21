@@ -63,6 +63,9 @@ _WATCHED = (
     ("workflows", "workflows", ("updated_at", "created_at")),
     ("contacts", "contacts", ("updated_at", "created_at")),
     ("complaints", "complaints", ("resolved_at", "updated_at", "created_at")),
+    # 2026-10-21 — Requests: raised by one person, decided by another, paid by
+    # a third. Every change writes `updated_at`.
+    ("requests", "requests", ("updated_at", "created_at")),
 )
 
 

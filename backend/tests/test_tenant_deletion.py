@@ -44,6 +44,7 @@ KNOWN_TENANT_SCOPED_COLLECTIONS = {
     "invoices", "payments", "expenses", "assets", "inventory", "ledger_ai",
     # HR
     "leaves", "attendance",
+    "requests",
     # Communication + capture
     "meetings", "voice_notes", "inbox", "notifications", "ingestions",
     # Activity + memory

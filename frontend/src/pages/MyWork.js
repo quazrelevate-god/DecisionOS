@@ -13,9 +13,13 @@ import { canAssignPerson, canAssignTeam, canSeeAllTasks, taskEditRights } from "
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 // WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
-// under Workflows is gone. NewTaskDialog stays -- it is used by the
-// New-task launcher.
-import { NewTaskDialog } from "./Tasks";
+// under Workflows is gone.
+// 2026-10-21 — Requests: the "+" asks Task or Request (NewWorkMenu opens
+// Tasks.NewTaskDialog or the New Request form), "My requests" is a view of
+// this page, and the approvals hub gains a Requests tab.
+import { NewWorkMenu } from "../components/requests/NewWorkMenu";
+import { RequestsPanel, useRequestsTabs } from "../components/requests/RequestsPanel";
+import { RequestCard } from "../components/requests/RequestCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "../components/ui/sheet";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from "../components/ui/dropdown-menu";
@@ -47,6 +51,7 @@ import {
   Check, Clock, ArrowFatLinesUp, // ASK-25 · card checkbox, Overdue + Escalation pills
   ChartBar, UserPlus, // ASK-27 · % control, add a person
   Hourglass, // ASK-28 TK-07 · Waiting on
+  HandCoins, // 2026-10-21 · Requests
 } from "@phosphor-icons/react";
 import { AvatarStack, PersonAvatar } from "../components/neuglass/PersonAvatar";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
@@ -3630,7 +3635,8 @@ export default function MyWork({ only = null }) {
      ?view=workflows, ?view=board, ?view=approvals — are answered by App.js,
      which redirects them to /workflows and /approvals rather than leaving a
      branch here that nothing can reach. */
-  const initialView = approvalsPage || rawView === "approvals" ? "approvals" : "mywork";
+  const initialView = approvalsPage || rawView === "approvals" ? "approvals"
+    : rawView === "requests" ? "requests" : "mywork";
   // ASK-28 TK-02 — ?view=approvals&task=<id> (the approval-requested
   // notification) opens the task INSIDE Approvals, where it is guaranteed to
   // be; any other ?task= link still lands on the task list.
@@ -3657,7 +3663,7 @@ export default function MyWork({ only = null }) {
   // lane, so a named approver outside that lane never saw the task. Fetched
   // on every view: the switcher carries its count. The key is shared with the
   // Desk's Task approvals card so the two never disagree.
-  const [apprSub, setApprSub] = useState(params.get("sub") === "leave" ? "leave" : "tasks");
+  const [apprSub, setApprSub] = useState(["leave", "requests"].includes(params.get("sub")) ? params.get("sub") : "tasks");
   // 2026-09-14, founder — the Desk's Approvals pill lands on MY approvals
   // (?scope=mine); everything else starts on All.
   const [apprScope, setApprScope] = useState(params.get("scope") === "mine" ? "mine" : "all");
@@ -3671,6 +3677,9 @@ export default function MyWork({ only = null }) {
     queryFn: () => api.get("/leaves?scope=approvals").then((r) => r.data),
     enabled: view === "approvals" && canApproveLeave,
   });
+  // 2026-10-21 — requests routed to me (the server narrows the list; an owner
+  // may decide any). Shared with the Requests page and the Desk by its key.
+  const { approvalsQ: requestsApprQ, waiting: waitingRequests, showApprovals: canApproveRequests } = useRequestsTabs();
   // U7-05.5: filter chips persist per-user in localStorage. Reload the page
   // and the scope + tab + aiPriority toggle come back where you left them.
   // Founder ask 2026-08-17: 'remove the uneasy UX' -- resetting to All every
@@ -3808,7 +3817,8 @@ export default function MyWork({ only = null }) {
   const waitingLeave = canApproveLeave
     ? (leavesQ.data || []).filter((l) => l.status === "pending" || l.status === "info_requested").length
     : 0;
-  const waitingOnMe = waitingTasks + waitingLeave;
+  // 2026-10-21 — and the requests: the third tab of the same screen.
+  const waitingOnMe = waitingTasks + waitingLeave + waitingRequests;
   const showApprovalsView = canApprove || waitingOnMe > 0;
   const focusQ = useQuery({
     queryKey: ["task", focusTaskId],
@@ -3894,7 +3904,7 @@ export default function MyWork({ only = null }) {
   const viewSyncMounted = useRef(false);
   useEffect(() => {
     if (!viewSyncMounted.current) { viewSyncMounted.current = true; return; }
-    setView(approvalsPage || rawView === "approvals" ? "approvals" : "mywork");
+    setView(approvalsPage || rawView === "approvals" ? "approvals" : rawView === "requests" ? "requests" : "mywork");
     const s = scopeFromUrl(rawView);
     if (s) setScope(s);
     else if (!rawView && URL_SCOPES.includes(scope)) setScope(savedScope);
@@ -4106,6 +4116,7 @@ export default function MyWork({ only = null }) {
     // ASK-25 — in the Approvals view neither lens pill is pressed; the list
     // controls (AI priority, filters) hide because there is no task list.
     if (view === "approvals") return "approvals";
+    if (view === "requests") return "requests";
     // ASK-6: leave sub-view retired; the branch that returned "leave" here
     // was mapping to a case that no longer renders.
     if (canSeeAll && scope === "all") return "all";
@@ -4126,6 +4137,8 @@ export default function MyWork({ only = null }) {
     { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), pick: () => goView("asked") },
     ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), pick: () => goView("team") }] : []),
     ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), pick: () => goView("all") }] : []),
+    // 2026-10-21 — what I have asked for (Requests), on this page.
+    { key: "requests", label: t("mywork.my_requests", "My requests"), pick: () => goView(null, "requests") },
     /* ASK-42 B/C took Approvals and Workflows out of this list. 2026-09-19 —
        Workflows is back, last and marked as a way out (it opens its own page,
        it does not filter this list). Approvals stays in More. */
@@ -4308,10 +4321,12 @@ export default function MyWork({ only = null }) {
               beside the view dropdown: pick where you are, then add to it. It
               was a worded pill on a row of its own under the toolbar. Same
               dialog, same views (the task lists). */}
-          {inSegmentView && (
-            <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
-              onOpenChange={(o) => { if (o) setOpenId(null); }}
-              triggerAriaLabel="New task"
+          {/* 2026-10-21 — the plus asks: a task, or a request. */}
+          {(inSegmentView || mobileView === "requests") && (
+            <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+              onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
+              onRequestCreated={() => { if (view !== "requests") goView(null, "requests"); }}
+              testid="new-work-button-mobile"
               triggerChildren={<Plus size={20} weight="bold" aria-hidden="true" />}
               triggerClassName={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${INK_PILL}`} />
           )}
@@ -4564,6 +4579,13 @@ export default function MyWork({ only = null }) {
                 });
               }
             }
+            // 2026-10-21 — what I have asked for. A request is mine the way my
+            // tasks are, so it sits with the lenses on my own work.
+            segments.push({
+              key: "requests", label: t("mywork.my_requests", "My requests"), testid: "work-view-requests",
+              active: view === "requests",
+              onClick: () => go(null, "requests"),
+            });
             // ASK-25 — Approvals sits between the task lenses and Workflows:
             // it is about tasks (and leave), not pipelines.
             // ASK-28 TK-02 — also for a named approver without approval
@@ -4669,7 +4691,24 @@ export default function MyWork({ only = null }) {
           a broken screen for anyone who reached it by URL without the
           permission. They get the hub and its empty state instead, and the
           server's own rule still decides what is in it. */}
-      {view === "approvals" && (showApprovalsView || approvalsPage) ? (
+      {view === "requests" && !approvalsPage ? (
+        /* 2026-10-21 — My requests: what I have asked for, and where each one
+           stands. The page's own chrome (the lenses, the "+") stays above. */
+        <div data-testid="mywork-requests" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+          {/* Desktop: the "+ New" of the task views lives in their filter row,
+              which this view does not have — so it gets its own. */}
+          <div className="mb-4 hidden shrink-0 justify-end lg:flex">
+            <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+              onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
+              testid="new-work-button-requests"
+              triggerChildren={<><Plus size={16} weight="bold" aria-hidden="true" /> New <CaretDown size={12} weight="bold" aria-hidden="true" className="opacity-70" /></>}
+              triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
+          </div>
+          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+            <RequestsPanel embedded mineOnly highlightId={params.get("request")} />
+          </div>
+        </div>
+      ) : view === "approvals" && (showApprovalsView || approvalsPage) ? (
         // ASK-25 — the approvals that are not decisions. Two sub-tabs: Tasks
         // (the All/My lens, cards in the task grid) and Leave (the register's
         // cards). Decisions stay on the Desk and /decisions/:id.
@@ -4688,9 +4727,13 @@ export default function MyWork({ only = null }) {
               .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
             const apprList = apprScope === "mine" ? apprAll.filter((t) => t.approver_id === user?.id) : apprAll;
             const pendingLeaves = (leavesQ.data || []).filter((l) => l.status === "pending" || l.status === "info_requested");
+            const pendingRequests = (requestsApprQ.data || [])
+              .slice().sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
             const subs = [
               { key: "tasks", label: "Tasks", icon: Check, n: apprTasksQ.data ? apprAll.length : null },
               ...(canApproveLeave ? [{ key: "leave", label: "Leave", icon: CalendarBlank, n: leavesQ.data ? pendingLeaves.length : null }] : []),
+              // 2026-10-21 — Requests, for anyone something has been routed to.
+              ...(canApproveRequests ? [{ key: "requests", label: "Requests", icon: HandCoins, n: requestsApprQ.data ? pendingRequests.length : null }] : []),
             ];
             const sub = subs.some((s) => s.key === apprSub) ? apprSub : "tasks";
             return (
@@ -4783,6 +4826,24 @@ export default function MyWork({ only = null }) {
                           highlight: t.id === focusTaskId,
                         })}
                       />
+                    )
+                  ) : sub === "requests" ? (
+                    requestsApprQ.isLoading && !requestsApprQ.data ? (
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+                        {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-52 rounded-tile" />)}
+                      </div>
+                    ) : requestsApprQ.isError && !requestsApprQ.data ? (
+                      <LoadFailed what="the requests" onRetry={() => requestsApprQ.refetch()} testid="approvals-requests-failed" />
+                    ) : pendingRequests.length === 0 ? (
+                      <div className={`p-6 text-sm text-neutral-600 ${DRAWER_CARD}`} data-testid="approvals-requests-empty">
+                        Requests routed to you will appear here.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3" data-testid="approvals-requests">
+                        {pendingRequests.map((r) => (
+                          <RequestCard key={r.id} r={r} highlight={r.id === params.get("request")} />
+                        ))}
+                      </div>
                     )
                   ) : (
                     leavesQ.isLoading ? (
@@ -4932,10 +4993,13 @@ export default function MyWork({ only = null }) {
             <div className="flex shrink-0 items-center gap-2">
               {/* 2026-09-21 — Mark Leave moved to the Team page (beside Add
                   member). New task is My Work's only header action now. */}
-              <NewTaskDialog onCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
-                onOpenChange={(o) => { if (o) setOpenId(null); }}
+              {/* 2026-10-21 — "+ New" asks: a task, or a request. */}
+              <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+                onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
+                onRequestCreated={() => goView(null, "requests")}
                 /* 2026-09-14, founder — the same black ink pill as the drawer's
                    Complete and Log update or hand off. */
+                triggerChildren={<><Plus size={16} weight="bold" aria-hidden="true" /> New <CaretDown size={12} weight="bold" aria-hidden="true" className="opacity-70" /></>}
                 triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
             </div>
           </div>

@@ -31,7 +31,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  UsersThree, BookOpen, Gauge, AirplaneTakeoff, CaretRight,
+  UsersThree, BookOpen, Gauge, AirplaneTakeoff, HandCoins, CaretRight,
   ShieldCheck, FlowArrow, GearSix, AddressBook, Books,
 } from "@phosphor-icons/react";
 import { hasPerm, canSeeAnyCrm } from "@/lib/perms";
@@ -123,6 +123,9 @@ export function buildTiles({ user, t }) {
     // see your history. It used to land on Team (ASK-6), so a phone had no way
     // to ask for time off.
     { key: "leave", to: "/leave", label: t("nav.leave", "Leave"), icon: AirplaneTakeoff },
+    // 2026-10-21 — Requests: everyone may ask; the page shows the approver and
+    // Finance their own lists as well.
+    { key: "requests", to: "/requests", label: t("nav.requests", "Requests"), icon: HandCoins },
   ];
 
   return tiles.filter((tile) => {

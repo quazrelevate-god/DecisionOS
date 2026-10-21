@@ -48,6 +48,12 @@ async def may_read_file(user: dict, rec: dict) -> bool:
             from routers.decisions import _decision_participants
             if user["id"] in await _decision_participants(user["tenant_id"], d):
                 return True
+        # A bill or photo attached to a request: whoever may open the request.
+        r = await db.requests.find_one({"tenant_id": user["tenant_id"], "attachment_ids": fid}, {"_id": 0})
+        if r:
+            from services.staff_requests import may_read_request
+            if may_read_request(user, r):
+                return True
     return False
 
 

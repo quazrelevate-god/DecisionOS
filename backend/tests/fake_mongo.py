@@ -4,7 +4,7 @@ and the company's AI consent, so the RAG unit tests need somewhere to read them)
 
 Supports what those paths use: find_one / find (+ async iteration, to_list, sort,
 limit) / insert_one / insert_many / update_one / update_many (with upsert, $set,
-$inc, $unset) / delete_many / count_documents. Filters: equality, dotted paths,
+$inc, $unset, $push) / find_one_and_update / delete_many / count_documents. Filters: equality, dotted paths,
 $in, $nin, $ne, $exists, $and, $or.
 """
 import copy
@@ -126,6 +126,8 @@ def _apply(doc, update):
                 cur[parts[-1]] = (cur.get(parts[-1]) or 0) + v
             elif op == "$unset":
                 cur.pop(parts[-1], None)
+            elif op == "$push":
+                cur.setdefault(parts[-1], []).append(copy.deepcopy(v))
 
 
 class FakeCollection:
@@ -160,6 +162,21 @@ class FakeCollection:
             _apply(new, update)
             self.docs.append(new)
         return _Res(0)
+
+    async def find_one_and_update(self, flt, update, projection=None, upsert=False, return_document=False):
+        """`return_document` truthy (pymongo's ReturnDocument.AFTER) returns the
+        document as it is after the update; falsy, as it was before."""
+        for d in self.docs:
+            if matches(d, flt):
+                before = _project(d, projection)
+                _apply(d, update)
+                return _project(d, projection) if return_document else before
+        if upsert:
+            new = {k: v for k, v in flt.items() if not k.startswith("$")}
+            _apply(new, update)
+            self.docs.append(new)
+            return _project(new, projection) if return_document else None
+        return None
 
     async def update_many(self, flt, update):
         n = 0

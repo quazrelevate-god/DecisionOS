@@ -1,6 +1,6 @@
 # Requests — build plan (web first)
 
-**Status:** Web build shipped 2026-10-21 (58ce262). Tracked as its own epic — **Epic 11, Requests (new feature)**, `docs/DecisionOS_Epic11_Requests.xlsx`: 14 of 18, the 4 open items are Phase 3. (First filed as Epic 6 Sprint 26; moved the same day.) Client-facing version: `DecisionOS_Dossier/feature-plans/Requests_Feature_Plan.png`.
+**Status:** Web build shipped 2026-10-21 (58ce262). Tracked as **Epic 11 — New Features, Sprint 1**, `docs/DecisionOS_Epic11_New_Features.xlsx` (NF-1.1 … NF-1.18): 14 of 18, the 4 open items are Phase 3. (First filed as Epic 6 Sprint 26.) Client-facing version: `DecisionOS_Dossier/feature-plans/Requests_Feature_Plan.png`.
 
 **As built — worth knowing:**
 - **A General request is not financial** (Yokesh, 2026-10-21). It needs a yes and nothing else: the form has no amount, any amounts sent are dropped, and **approval closes it** — no expense is booked, Finance is not told, never lists it ("To pay") and cannot open it, and Mark paid is refused. On the card it reads "Approved" (not "Approved · to pay") and sits with the closed ones. Every other type still books the expense on approval.

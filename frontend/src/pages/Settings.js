@@ -25,6 +25,8 @@ import { ApproverConfig } from "./Leave";
 import { useQuery } from "@tanstack/react-query";
 import { FinanceCategoriesEditor } from "../components/FinanceCategoriesEditor";
 import { ProfileForm, ChangePasswordForm } from "../components/ProfileDialog";
+// Epic 12 (2026-10-22, client FEATURE-08): read notifications, kept and reachable.
+import { NotificationHistory } from "../components/notifications/NotificationHistory";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -1152,6 +1154,7 @@ export default function Settings() {
             here from the phone's More panel, but only the owner saw it). */}
         <div className="space-y-6" data-testid="settings-panel-member">
           <Section id="settings-s-profile" label="Your profile"><ProfileCard /></Section>
+          <Section id="settings-s-notifications" label="Notification history"><NotificationHistory embedded /></Section>
           <Section id="settings-s-access" label="Your access"><YourAccessCard /></Section>
           <Section id="settings-s-language" label="Language"><LanguageCard /></Section>
           <Section id="settings-s-ai" label="AI processing"><AiConsentCard /></Section>
@@ -1222,6 +1225,7 @@ export default function Settings() {
         {tab === "account" && (
           <>
             <Section id="settings-s-profile" label="Your profile"><ProfileCard /></Section>
+            <Section id="settings-s-notifications" label="Notification history"><NotificationHistory embedded /></Section>
             {user?.role !== "owner" && <Section id="settings-s-access" label="Your access"><YourAccessCard /></Section>}
             <Section id="settings-s-language" label="Language"><LanguageCard /></Section>
             <Section id="settings-s-security" label="Password & security"><SecurityCard /></Section>

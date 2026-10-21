@@ -12,6 +12,14 @@ from services.email import send_email
 
 NOTIF_LEVELS = {1: "reminder", 2: "urgency", 3: "manager", 4: "owner"}
 
+# What the bell's "need you" badge counts (MPWA-03 / J2-14): the notifications
+# that ask this person to DO something — approve, answer, act on what waits on
+# them, or a nudge from the owner. "Approved", "task done" and the like are
+# news, not asks. Epic 12 (2026-10-22): the bell tested a `kind` field no
+# notification has ever carried, so the badge was always 0;
+# the server counts it now, across every unread row, not inside the newest 100.
+NEEDS_YOU_TYPES = ("approval", "clarification", "waiting", "desk_nudge")
+
 # Short banner titles for the device-push channel (the body is the `message`,
 # which already reads as a full sentence). Keyed by the notification `ntype`.
 PUSH_TITLES = {

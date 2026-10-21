@@ -5,7 +5,9 @@ Owns:
                                              non-owners see their own delayed/todo/in_progress/etc.)
   • GET  /api/brief/details               — drill-down items behind a counter block
   • GET  /api/notifications               — user's notifications + unread count
+                                             (?status=unread|read&before=&limit= pages them)
   • POST /api/notifications/{nid}/read    — mark one read
+  • POST /api/notifications/{nid}/unread  — move one back to New (Epic 12)
   • POST /api/notifications/read-all      — mark all read
 
 E2-63 (2026-08-15): POST /brief/send-digest was retired. The digest
@@ -21,10 +23,11 @@ Server-level helpers deferred-imported inside handlers:
   `enrich_decisions`.
 """
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from core import db, get_current_user, new_id
+from core import db, get_current_user, new_id, now_iso
 from services.tasks import enrich_tasks
 
 
@@ -44,22 +47,78 @@ def _today_ist() -> str:
 # ---------------------------------------------------------------------------
 # Notifications
 # ---------------------------------------------------------------------------
+#
+# Epic 12 — Notification history (client FEATURE-08, 2026-10-22). Reading a
+# notification never deleted it, but this list stopped at the newest 100 —
+# read and unread mixed — and counted "unread" inside those 100. Eleven of 62
+# people on the dev database were already past it; the busiest two hold about
+# 2,500 each. So: `status` splits New (unread) from History (read), `before`
+# pages back through either, and the counts come from the database. With no
+# parameters the answer is what it always was, so nothing that reads it
+# today changes.
+async def _history_kept_days(tenant_id: str) -> Optional[int]:
+    """How long this company keeps notifications: its retention window when it
+    has switched retention on for them (Epic 9 S9), else None — kept until
+    deleted."""
+    from services.retention import tenant_policy, MIN_TTL_DAYS
+    pol = await tenant_policy(tenant_id)
+    if pol["enabled"] and "notifications" in pol["collections"]:
+        return max(pol["ttl_days"], MIN_TTL_DAYS)
+    return None
+
+
 @router.get("/notifications")
-async def list_notifications(user: dict = Depends(get_current_user)):
-    from services.finance_signals import run_followup
-    await run_followup(user["tenant_id"])
-    items = await db.notifications.find(
-        {"tenant_id": user["tenant_id"], "user_id": user["id"]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(100)
-    return {"notifications": items, "unread": sum(1 for n in items if not n.get("read"))}
+async def list_notifications(status: Optional[str] = None, before: Optional[str] = None,
+                             limit: Optional[int] = Query(None, ge=1, le=100),
+                             user: dict = Depends(get_current_user)):
+    from services.notifications import NEEDS_YOU_TYPES
+    mine = {"tenant_id": user["tenant_id"], "user_id": user["id"]}
+    if status not in (None, "unread", "read"):
+        raise HTTPException(status_code=400, detail="status is unread or read")
+    if status != "read":
+        # The follow-up sweep writes NEW notifications; History has none to add.
+        from services.finance_signals import run_followup
+        await run_followup(user["tenant_id"])
+    q = dict(mine)
+    if status == "unread":
+        q["read"] = False
+    elif status == "read":
+        q["read"] = True
+    if before:
+        q["created_at"] = {"$lt": before}
+    size = limit or (100 if status is None else 30)
+    rows = await db.notifications.find(q, {"_id": 0}).sort("created_at", -1).to_list(size + 1)
+    unread_q = {**mine, "read": False}
+    out = {
+        "notifications": rows[:size],
+        "has_more": len(rows) > size,
+        "unread": await db.notifications.count_documents(unread_q),
+        "needs_you": await db.notifications.count_documents({**unread_q, "type": {"$in": list(NEEDS_YOU_TYPES)}}),
+    }
+    if status == "read":
+        out["kept_days"] = await _history_kept_days(user["tenant_id"])
+    return out
 
 
 @router.post("/notifications/{nid}/read")
 async def read_notification(nid: str, user: dict = Depends(get_current_user)):
+    # read_at is the FIRST time it was read; reading it again changes nothing.
     await db.notifications.update_one(
-        {"id": nid, "tenant_id": user["tenant_id"], "user_id": user["id"]},
-        {"$set": {"read": True}},
+        {"id": nid, "tenant_id": user["tenant_id"], "user_id": user["id"], "read": {"$ne": True}},
+        {"$set": {"read": True, "read_at": now_iso()}},
     )
+    return {"ok": True}
+
+
+@router.post("/notifications/{nid}/unread")
+async def unread_notification(nid: str, user: dict = Depends(get_current_user)):
+    """Move it back to New — reading something by mistake loses nothing."""
+    res = await db.notifications.update_one(
+        {"id": nid, "tenant_id": user["tenant_id"], "user_id": user["id"]},
+        {"$set": {"read": False, "read_at": None}},
+    )
+    if not getattr(res, "matched_count", 0):
+        raise HTTPException(status_code=404, detail="Notification not found")
     return {"ok": True}
 
 
@@ -67,7 +126,7 @@ async def read_notification(nid: str, user: dict = Depends(get_current_user)):
 async def read_all_notifications(user: dict = Depends(get_current_user)):
     await db.notifications.update_many(
         {"tenant_id": user["tenant_id"], "user_id": user["id"], "read": False},
-        {"$set": {"read": True}},
+        {"$set": {"read": True, "read_at": now_iso()}},
     )
     return {"ok": True}
 

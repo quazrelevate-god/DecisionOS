@@ -1,6 +1,6 @@
 {
-  "count": 391,
-  "sha": "8b216d37a71d4c7be56de725aee6f205efbb428f939b939bc58f9a2a386bbe88",
+  "count": 392,
+  "sha": "6c47375747db9a47a1e5c925caa9a0e8574392b3095f6ffa6d1d2aa4691b56a8",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -325,6 +325,7 @@
     "POST /api/memory",
     "POST /api/notifications/read-all",
     "POST /api/notifications/{nid}/read",
+    "POST /api/notifications/{nid}/unread",
     "POST /api/onboarding/draft",
     "POST /api/onboarding/os-blueprint",
     "POST /api/onboarding/suggest",

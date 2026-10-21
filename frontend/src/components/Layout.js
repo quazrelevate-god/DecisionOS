@@ -598,15 +598,21 @@ export default function Layout({ children }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const { data: notif } = useQuery({ queryKey: ["notifications"], queryFn: () => api.get("/notifications").then((r) => r.data), refetchInterval: 30000 });
+  // Epic 12 (2026-10-22) — the bell asks for what is NEW only (read ones live
+  // in History) and takes both counts from the server, counted across every
+  // notification rather than inside the newest 100.
+  const { data: notif } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api.get("/notifications", { params: { status: "unread", limit: 7 } }).then((r) => r.data),
+    refetchInterval: 30000,
+  });
   const unread = notif?.unread || 0;
   // MPWA-03 (§8): the bell counts only what actually needs *him* — approvals,
-  // escalations and mentions. A badge that also counted "payment received" and
-  // "task done" trained him to ignore it, which is worse than no badge.
-  const NEEDS_HIM = /decision|approv|escalat|mention|handoff|nudge/i;
-  const bellCount = (notif?.notifications || []).filter(
-    (n) => !n.read && NEEDS_HIM.test(n.kind || "")
-  ).length;
+  // questions, what waits on him, a nudge. A badge that also counted "payment
+  // received" and "task done" trained him to ignore it, which is worse than no
+  // badge. Epic 12: this tested a `kind` field no notification carries, so it
+  // was always 0; the server counts it now (services/notifications.NEEDS_YOU_TYPES).
+  const bellCount = notif?.needs_you || 0;
 
   // KM-1 — the return value is deliberately not destructured. Its only reader
   // was `counts.myWork`, a prop AllAppsPanel never looked at; the poll itself
@@ -644,7 +650,7 @@ export default function Layout({ children }) {
      circle and the raw unread count — so §9.2's pixel-identical requirement
      still holds. */
   const Bellicon = () => {
-    const items = (notif?.notifications || []).slice(0, 7);
+    const items = (notif?.notifications || []).slice(0, 7);   // unread only (Epic 12)
     return (
       <Popover>
         <PopoverTrigger asChild>
@@ -699,10 +705,17 @@ export default function Layout({ children }) {
               );
             })}
           </div>
-          <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
-            className="w-full border-t border-slate-900/[0.06] px-4 py-3 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-900/[0.04]">
-            {t("header.view_all")}
-          </button>
+          {/* Epic 12 — read ones are not gone: one tap to History. */}
+          <div className="grid grid-cols-2 border-t border-slate-900/[0.06]">
+            <button onClick={() => navigate("/notifications")} data-testid="notif-view-all"
+              className="px-4 py-3 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-900/[0.04]">
+              {t("header.view_all")}
+            </button>
+            <button onClick={() => navigate("/notifications?tab=history")} data-testid="notif-history"
+              className="border-l border-slate-900/[0.06] px-4 py-3 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-900/[0.04]">
+              History
+            </button>
+          </div>
         </PopoverContent>
       </Popover>
     );

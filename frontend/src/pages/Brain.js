@@ -40,6 +40,7 @@ import { Loader } from "../components/common";
 import { DexAnswer, DexThinking } from "./brain/DexAnswer";
 import { DexComposer } from "./brain/DexComposer";
 import { DexWelcome } from "./brain/DexWelcome";
+import { greetingName } from "../lib/names";
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -80,7 +81,8 @@ export default function Brain() {
   const { tenant, user } = useAuth();
   const canAsk = hasPerm(user, "ask");
   const currency = tenant?.currency || "INR";
-  const firstName = String(user?.name || "").trim().split(/\s+/)[0] || "";
+  // FEATURE-03: the Preferred name, else the first word that is not an initial.
+  const firstName = greetingName(user);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [log, setLog] = useState([]);

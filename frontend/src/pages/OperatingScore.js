@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { opModel } from "../lib/operatingModel";
 import { roleLabel } from "../lib/departments";
 import { humanStage, taskStatusLabel, priorityLabel } from "../lib/format";
+import { greetingName } from "../lib/names";
 import {
   isDemoTenant, demoDelta, demoDrivers, demoDrilldowns, demoDex,
 } from "./_operatingScoreDemo";
@@ -842,7 +843,7 @@ function TeamTable({ rows, offset, roles, continuation, continued }) {
 // ─── self view ───────────────────────────────────────────────────────────────
 
 function SelfView({ data, windowKey, onWindow }) {
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
   const roles = tenant?.roles || [];
   /* The tenant's own words for a pipeline and its stages — the same ones the
      board shows. Ops printed the stored keys ("order_management · stage
@@ -866,7 +867,9 @@ function SelfView({ data, windowKey, onWindow }) {
   const hasActivity = stats.actionable > 0;
   const actions = useMemo(() => scoreActions(stats), [stats]);
   const isViewAs = Boolean(viewAs);
-  const firstName = self.name?.split(" ")[0] || "there";
+  // FEATURE-03: your own Preferred name on your own page; anyone else's page
+  // still skips an initial ("S Rhea" -> Rhea).
+  const firstName = greetingName(isViewAs ? self : { name: self.name, preferred_name: user?.preferred_name }, "there");
   /* Every link off this page has to land on the work it is ABOUT. Looking at
      somebody else, "See all" and each tile used to open the viewer's own My
      Work — the owner clicked Priya's 8 open tasks and got his own three.

@@ -80,7 +80,8 @@ def what_you_can_ask(user: dict) -> list:
 
 def closed_message(user: dict, entity: str) -> str:
     """Why this is refused, in the screen's words, and what they can ask."""
-    name = (user.get("name") or "").split()[0] if user.get("name") else "there"
+    from shared.names import greeting_name
+    name = greeting_name(user)   # FEATURE-03: preferred name, else not an initial
     label, _need, plural = _AREAS.get(entity) or ("that", None, False)
     can = what_you_can_ask(user)
     tail = ""

@@ -1191,6 +1191,11 @@ async def update_profile(inp: ProfileUpdateInput, user: dict = Depends(get_curre
     updates = {}
     if inp.name is not None and inp.name.strip():
         updates["name"] = inp.name.strip()[:80]
+    if inp.preferred_name is not None:
+        # FEATURE-03 (2026-10-22) — what the greetings call you. Blank clears it,
+        # and then shared/names.greeting_name falls back to the first word of the
+        # name that is not an initial.
+        updates["preferred_name"] = inp.preferred_name.strip()[:40] or None
     if inp.title is not None:
         # The line under your name on the Team page. Yours to keep current; a
         # team manager can still set it for you.

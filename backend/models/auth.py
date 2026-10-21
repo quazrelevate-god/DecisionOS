@@ -116,6 +116,9 @@ class ProfileUpdateInput(BaseModel):
     manager's call and live on PATCH /users. `email` is the sign-in id, so it
     needs `current_password` (or `otp_code` for a member who signs in by mobile)."""
     name: Optional[str] = None
+    # FEATURE-03 (2026-10-22): what the greetings call you ("Rhea" for "S Rhea").
+    # Blank clears it; then the greeting uses the first word that is not an initial.
+    preferred_name: Optional[str] = None
     phone: Optional[str] = None
     language: Optional[str] = None
     title: Optional[str] = None

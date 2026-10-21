@@ -28,6 +28,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core import db, get_current_user, new_id, now_iso
+from shared.names import greeting_name
 from services.tasks import enrich_tasks
 
 
@@ -209,7 +210,8 @@ async def ceo_brief(period: str = "morning", user: dict = Depends(get_current_us
     return {
         "period": period,
         "role": user["role"],
-        "greeting": f"{greet}, {user['name'].split(' ')[0]}",
+        # FEATURE-03: the Preferred name, else the first word that is not an initial.
+        "greeting": f"{greet}, {greeting_name(user)}",
         "completed_label": completed_label,
         "counters": counters,
         "finance_amounts": finance_amounts,

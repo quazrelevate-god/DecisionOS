@@ -9,12 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { UserCircle, FloppyDisk, Lock, CheckCircle, Envelope } from "@phosphor-icons/react";
 // B11 — the dev OTP is ignored by a production build (lib/devOtp).
 import { devOtpFrom } from "../lib/devOtp";
+// FEATURE-03 (2026-10-22): the greeting's name — the same rule the server uses.
+import { greetingName, timeOfDay } from "../lib/names";
 
 const inp = "w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 bg-card focus:outline-none focus:ring-2 focus:ring-ring/40";
 
 export function ProfileForm({ onSaved }) {
   const { user, refreshMe } = useAuth();
-  const [form, setForm] = useState({ name: "", title: "", about: "", phone: "", email: "" });
+  const [form, setForm] = useState({ name: "", preferred_name: "", title: "", about: "", phone: "", email: "" });
   const [confirmWith, setConfirmWith] = useState("");   // password, or the texted code
   const [saving, setSaving] = useState(false);
   const [verifySent, setVerifySent] = useState(false);
@@ -57,7 +59,7 @@ export function ProfileForm({ onSaved }) {
     if (!user?.id || filledFor.current === user.id) return;
     filledFor.current = user.id;
     setForm({
-      name: user.name || "", title: user.title || "", about: user.about || "",
+      name: user.name || "", preferred_name: user.preferred_name || "", title: user.title || "", about: user.about || "",
       phone: user.phone || "", email: user.email || "",
     });
   }, [user]);
@@ -116,7 +118,8 @@ export function ProfileForm({ onSaved }) {
     setSaving(true);
     try {
       await api.patch("/auth/profile", {
-        name: form.name.trim(), title: form.title.trim(), about: form.about.trim(), phone: form.phone.trim(),
+        name: form.name.trim(), preferred_name: form.preferred_name.trim(),
+        title: form.title.trim(), about: form.about.trim(), phone: form.phone.trim(),
         ...(phoneChanged ? { phone_code: phoneCode } : {}),
         ...(emailChanged ? {
           email: form.email.trim().toLowerCase(),
@@ -146,6 +149,21 @@ export function ProfileForm({ onSaved }) {
         <label className="label-mono text-muted-foreground" htmlFor="profile-name">Full name</label>
         <input id="profile-name" data-testid="profile-name-input" value={form.name} onChange={set("name")}
           className={inp} placeholder="Your name" maxLength={80} />
+      </div>
+      {/* FEATURE-03 (2026-10-22) — what the greetings call you. Blank is fine:
+          the greeting then uses the first word of the name that is not an
+          initial, so "S Rhea" is already greeted Rhea. The line under it says
+          what the Desk will say, as you type. */}
+      <div>
+        <label className="label-mono text-muted-foreground" htmlFor="profile-preferred-name">Preferred name</label>
+        <input id="profile-preferred-name" data-testid="profile-preferred-name-input" value={form.preferred_name}
+          onChange={set("preferred_name")} className={inp} maxLength={40}
+          placeholder={greetingName({ name: form.name }) || "What should we call you?"} />
+        <p className="label-mono text-muted-foreground mt-1" data-testid="profile-greeting-preview">
+          {greetingName({ name: form.name, preferred_name: form.preferred_name })
+            ? <>We'll greet you as: <span className="font-semibold text-foreground">{timeOfDay()}, {greetingName({ name: form.name, preferred_name: form.preferred_name })}</span></>
+            : "What the greetings on your Desk call you."}
+        </p>
       </div>
       <div>
         <label className="label-mono text-muted-foreground" htmlFor="profile-title">Job title</label>

@@ -97,8 +97,10 @@ def _greeting_for(user: dict) -> str:
         tod = "Good afternoon"
     else:
         tod = "Good evening"
-    first_name = (user.get("name") or "").split(" ")[0] or "there"
-    return f"{tod}, {first_name}"
+    # FEATURE-03 (2026-10-22): the Preferred name, else the first word of the
+    # name that is not an initial — "S Rhea" is greeted Rhea, not S.
+    from shared.names import greeting_name
+    return f"{tod}, {greeting_name(user)}"
 
 
 async def _delayed_count(tid: str, user: dict) -> int:

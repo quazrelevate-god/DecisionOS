@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api, { formatApiError } from "../lib/api";
+import { noteAiConsent } from "../lib/micNotice";
 import { hasPerm, userPerms, PERMISSIONS, PERMISSION_GROUPS } from "../lib/perms";
 import { roleLabel } from "../lib/departments";
 import { PageHeader } from "../components/common";
@@ -204,7 +205,7 @@ function AiConsentCard() {
     // (dev StrictMode mounts twice; a slow read could land after a click).
     let live = true;
     api.get("/tenant/ai-consent")
-      .then((r) => { if (live) setS(r.data); })
+      .then((r) => { if (live) { setS(r.data); noteAiConsent(r.data); } })
       .catch(() => { if (live) setS({ error: true }); });
     return () => { live = false; };
   }, []);
@@ -214,6 +215,7 @@ function AiConsentCard() {
     try {
       const { data } = await api.post("/tenant/ai-consent", { version: s?.current_version, acknowledged: true });
       setS(data);
+      noteAiConsent(data);
       toast.success("AI processing is on");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Couldn't turn AI processing on");
@@ -224,6 +226,7 @@ function AiConsentCard() {
     try {
       const { data } = await api.delete("/tenant/ai-consent");
       setS(data);
+      noteAiConsent(data);
       setConfirmOff(false);
       toast.success("AI processing is off");
     } catch (e) {

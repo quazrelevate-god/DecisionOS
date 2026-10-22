@@ -16,8 +16,8 @@ export function MicDictateButton({ onText, language = "auto", title = "Dictate",
   const chunksRef = useRef([]);
 
   const start = async () => {
-    // Play audit W5 — once, what happens to the audio (lib/micNotice).
-    if (!(await askBeforeMic())) return;
+    // Play audit W5 / App Store 5.1.2(i) — AI consent and where the audio goes, first (lib/micNotice).
+    if (!(await askBeforeMic({ ai: true }))) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream);

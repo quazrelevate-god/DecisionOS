@@ -39,6 +39,7 @@ let _viewerIsOwner = false;
 export function setViewerIsOwner(isOwner) {
   _viewerIsOwner = !!isOwner;
 }
+export const viewerIsOwner = () => _viewerIsOwner;
 
 /** Is this a "the company has not agreed to AI" refusal, in any of its shapes? */
 export function isAiConsentError(x) {
@@ -55,7 +56,7 @@ export function isAiConsentError(x) {
 
 /* On a phone the Settings screen is called Preferences (More → Preferences),
    so the way there has to use the name the person can actually see. */
-const settingsName = () => {
+export const settingsName = () => {
   try { return window.matchMedia("(max-width: 1023.98px)").matches ? "Preferences" : "Settings"; }
   catch { return "Settings"; }
 };

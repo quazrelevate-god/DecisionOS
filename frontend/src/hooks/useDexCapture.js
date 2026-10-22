@@ -324,8 +324,8 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
      instead of being lost. */
   const startRecording = useCallback(async () => {
     if (startingRef.current || mediaRef.current?.state === "recording") return false;
-    // Play audit W5 — once, what happens to the audio (lib/micNotice).
-    if (!(await askBeforeMic())) return false;
+    // Play audit W5 / App Store 5.1.2(i) — AI consent and where the audio goes, first (lib/micNotice).
+    if (!(await askBeforeMic({ ai: true }))) return false;
     if (startingRef.current || mediaRef.current?.state === "recording") return false;
     startingRef.current = true;
     cancelStartRef.current = false;

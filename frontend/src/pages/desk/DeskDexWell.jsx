@@ -46,6 +46,7 @@ import { toastDexOutcome } from "../../lib/dexOutcomeToast";
 import { hasPerm } from "../../lib/perms";
 import { cn } from "../../lib/utils";
 import { useDexCapture } from "../../hooks/useDexCapture";
+import { isMicNoticeOpen } from "../../lib/micNotice";
 import { enableProximity, disableProximity } from "../../lib/native/proximity";
 import { useDexConversation } from "../../hooks/useDexConversation";
 import { InsightWell } from "../../components/neuglass";
@@ -649,11 +650,16 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
        one description of what starting a capture means and this just calls it.
        And if nothing started, the control goes home rather than sitting parked
        on a recording that is not happening. */
+    /* 2026-10-17 — and not while the AI notice or consent step is open: the
+       recording is waiting on that answer (lib/micNotice), and closing the door
+       behind it meant an owner who agreed got a microphone with no door. */
+    const settle = () => {
+      if (isMicNoticeOpen()) { setTimeout(settle, 400); return; }
+      if (!recordingRef.current && !popupOpenRef.current) onClose?.();
+    };
     const t = setTimeout(() => {
       onMic();
-      setTimeout(() => {
-        if (!recordingRef.current && !popupOpenRef.current) onClose?.();
-      }, 500);
+      setTimeout(settle, 500);
     }, 120);
     return () => clearTimeout(t);
     /* [surface, open] AND NOTHING ELSE, deliberately. Written without a

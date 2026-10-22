@@ -15,15 +15,22 @@ swap as the scroll moves, and one easing. The brand palette is the app's
 
 ## The scenes
 
-1. **Hero + Dex** (pinned 360vh). A founder, drawn in three SVG layers at
-   different depths, holds a CSS phone that shows the real Desk. The pointer
-   turns the rig a few degrees (`quickTo` rotationX/Y); the scroll pushes the
-   camera into the phone (`scale` about the phone's centre, then `x/y` to the
-   viewport centre). On the screen the real slide-to-decide frames (13 crops of
-   the slider strip, `assets/seq/`) scrub as the thumb slides; the listening
-   waveform frame follows; the spoken line types into a bubble; Dex's draft
-   rises as a sheet inside the screen (sized in `cqw`); "Approved" stamps; the
-   record card flies to the top-right. Four captions on the left.
+1. **Hero + Dex** (pinned 360vh). A businessman built from ~25,000 dots
+   (`js/figure.js`, three.js Points on sampled spheres, ellipsoids and
+   capsules: head, hair, neck, shoulders, chest, arms, hands, the phone's rim),
+   seen over his right shoulder from behind and above, the camera on the phone
+   in his hands. The phone's screen is the HTML element `#hero-phone`, glued to
+   the 3D screen plane every frame with a CSS `matrix3d` (a four-corner
+   homography of the projected quad), so the real app runs inside the scene in
+   the same perspective. The pointer orbits the camera a few degrees at rest;
+   the scroll dollies it down the screen's normal (`REST` → `ZOOM` pose, eased)
+   until the phone faces us and fills the frame; the dots soften as it does.
+   On the screen the real slide-to-decide frames (13 crops of the slider strip,
+   `assets/seq/`) scrub as the thumb slides; the listening waveform frame
+   follows; the spoken line types into a bubble; Dex's draft rises as a sheet
+   inside the screen (sized in `cqw`); "Approved" stamps; the record card flies
+   to the top-right. Four captions on the left. Ink dots, gold where the
+   phone's glow reaches, silver under the top light.
 2. **Organise** (pinned 280vh, dark). Fifteen spoken scraps plus twelve noise
    chips scattered over the screen gather into three people's lists; each
    scrap turns into its row as it lands; the noise shrinks away; the phone's
@@ -48,9 +55,11 @@ swap as the scroll moves, and one easing. The brand palette is the app's
 
 - Phone layout not done (by request). The pins, the rig's `vh` sizing and the
   three-column scenes all need the ≤900px pass.
-- The founder is a silhouette illustration I drew; if you want a photoreal
-  figure, generate one on a transparent background (prompt in the hand-off
-  message) and drop it in as the body/arm layers; the phone and screen stay live.
+- The founder is procedural (primitives sampled into dots). A sculpted model
+  (a GLB sampled into points) would give a real collar, hair line and hands;
+  the camera, the glued phone and the shader would not change.
+- Tuning the shot without reloading: `__figure.setRest([x,y,z], [tx,ty,tz])`
+  in the console moves the rest camera; bake the result into `REST`.
 - Verified in the desktop pane at 1440×900 and 1920×1080; the in-app pane
   freezes rAF between scrolls, so screenshots were taken with the scrub
   tweens forced to their targets (`window.__settle` in the session), which is

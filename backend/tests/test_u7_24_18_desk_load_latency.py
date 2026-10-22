@@ -71,6 +71,9 @@ def _matches(doc, q):
         elif k == "$and":  # PILOT-1 D's overdue rule is an $and of an $or
             if not all(_matches(doc, sub) for sub in v):
                 return False
+        elif k == "$nor":  # FIX-1: Delayed counts with the task list's own filter
+            if any(_matches(doc, sub) for sub in v):
+                return False
         elif have != v:
             return False
     return True

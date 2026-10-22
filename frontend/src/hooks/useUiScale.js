@@ -125,19 +125,39 @@ export function useUiScale() {
        success. So two rulers, a box and a line of type, and zoom counts as
        landed only when BOTH come back at the scale; anything else takes the
        viewport route, which scales boxes and type together because it is the
-       page being scaled, not the CSS. */
+       page being scaled, not the CSS.
+
+       FIX-4 (2026-10-21) — AND THE TYPE IS MEASURED AGAINST ITSELF, NOT 100px.
+       Android's web view draws all text at the phone's own font size: with
+       the font one step up (1.15) a 100px line is 115px before any zoom. This
+       compared the zoomed line with 100 x the scale, so on any Android phone
+       not at the default font size it read the zoom as failed and took the
+       viewport route — which Android's web view did not follow (MainActivity
+       now lets it), leaving the page at 1.0: every box a quarter too big and
+       the type bigger still. The client saw it on OxygenOS / ColorOS 16
+       phones; reproduced on an Android 16 emulator by moving font size one
+       step. So the line is read twice, under the zoomed body and under
+       <html>, which the zoom does not reach: zoom has landed on type when one
+       is the scale times the other, whatever the font size multiplies both
+       by. The iOS failure above (type not zoomed at all) still reads 1, not
+       the scale, and still takes the viewport route. */
     const zoomLanded = (s) => {
-      const box = document.createElement("div");
-      box.style.cssText = "position:absolute;top:-9999px;left:0;width:100px;height:1px;pointer-events:none";
-      const type = document.createElement("span");
-      type.style.cssText = "position:absolute;top:-9999px;left:0;font:100px/1 monospace;white-space:nowrap;pointer-events:none";
-      type.textContent = "M";
-      document.body.appendChild(box);
-      document.body.appendChild(type);
+      const ruler = (parent, css, text) => {
+        const el = document.createElement(text ? "span" : "div");
+        el.style.cssText = `position:absolute;top:-9999px;left:0;pointer-events:none;${css}`;
+        if (text) el.textContent = "M";
+        parent.appendChild(el);
+        return el;
+      };
+      const TYPE = "font:100px/1 monospace;white-space:nowrap";
+      const box = ruler(document.body, "width:100px;height:1px");
+      const type = ruler(document.body, TYPE, true);
+      const plain = ruler(document.documentElement, TYPE, true);   // outside the zoom
       const boxAt = box.getBoundingClientRect().width / 100;
-      const typeAt = type.getBoundingClientRect().height / 100;
+      const typeAt = type.getBoundingClientRect().height / (plain.getBoundingClientRect().height || 100);
       box.remove();
       type.remove();
+      plain.remove();
       return Math.abs(boxAt - s) <= 0.01 && Math.abs(typeAt - s) <= 0.02;
     };
 

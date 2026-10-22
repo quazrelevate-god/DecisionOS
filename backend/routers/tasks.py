@@ -345,8 +345,29 @@ async def list_tasks(
                         can_approve_any="approvals" in user_perms(user),
                         team_ids=await _team_ids(user) if view == "team" else None,
                         see_all=can_see_all_tasks(user, user_perms(user)))  # ASK-28 TK-08
-    tasks = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # FIX-1 (2026-10-21) — EVERY OPEN TASK, THEN THE NEWEST FINISHED ONES.
+    # This was the 500 newest tasks of any status. In a company with a few
+    # months behind it most of those are finished, so the OLDEST open work —
+    # which is exactly the late work — was the first to fall off the end. The
+    # Desk counts late tasks in the database, so a client's Delayed tile showed
+    # a number and My Work's Overdue, filtering the phone's copy, opened on "No
+    # tasks match these filters". Open work is what the list is for and comes
+    # back whole; finished work is history and stays capped.
+    open_rows, done_rows = await asyncio.gather(
+        db.tasks.find({"$and": [q, {"status": {"$nin": FINISHED_STATUSES}}]}, {"_id": 0})
+        .sort("created_at", -1).to_list(OPEN_TASKS_MAX),
+        db.tasks.find({"$and": [q, {"status": {"$in": FINISHED_STATUSES}}]}, {"_id": 0})
+        .sort("created_at", -1).to_list(FINISHED_TASKS_MAX),
+    )
+    tasks = sorted(open_rows + done_rows, key=lambda t: str(t.get("created_at") or ""), reverse=True)
     return await enrich_tasks(tasks)
+
+
+# FIX-1 — how much of each GET /tasks brings back. The open cap is a guard
+# against a runaway company, not a page size: no real one is near it.
+FINISHED_STATUSES = ["done", "cancelled"]
+OPEN_TASKS_MAX = 2000
+FINISHED_TASKS_MAX = 500
 
 
 @router.get("/tasks/{task_id}")
@@ -741,6 +762,14 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
             updates["due_date"] = _reschedule(_sent, t.get("due_date"))
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        # BUG-04 (XCODITS QA, 2026-10-21): a finished task keeps the date it was
+        # due — that date is how late it was. Moving it afterwards rewrote the
+        # record ("Finished 10 days late" became "on time"). Reopen it first.
+        _reopening = updates.get("status") not in (None, "done", "cancelled")
+        if (t.get("status") in ("done", "cancelled") and not _reopening
+                and updates["due_date"] != t.get("due_date")):
+            raise HTTPException(status_code=400, detail=(
+                "This task is finished, so it keeps the date it was due. Reopen it to move the date."))
     # D1 — stopping a routine. It ends the SERIES, not the piece of work in
     # hand: this task stays open and closing it simply brings nothing after it.
     if updates.pop("stop_repeating", None):
@@ -1040,7 +1069,11 @@ async def _spawn_next_occurrence(user: dict, t: dict) -> Optional[str]:
     rec = t.get("recurrence") or None
     if not rec or not rec.get("every"):
         return None
-    nxt = recurrence_svc.next_due(t.get("due_date") or "", rec["every"], int(rec.get("interval") or 1))
+    # BUG-04 (2026-10-21): the next one that is not already late — a daily
+    # task closed ten days late used to bring one due nine days ago.
+    from shared.due import today_ist
+    nxt = recurrence_svc.next_due_not_late(t.get("due_date") or "", rec["every"],
+                                           int(rec.get("interval") or 1), today_ist())
     if recurrence_svc.series_is_over(rec, nxt):
         return None
     series = rec.get("series_id") or t.get("series_id") or t["id"]
@@ -1385,7 +1418,8 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
         "steps": steps, "progress": _plan_progress(steps),
         "generated_at": existing.get("generated_at") or now_iso(), "updated_at": now_iso(),
     }
-    updates = {"execution_plan": plan}
+    # BUG-04 (XCODITS QA, 2026-10-21): the task itself changed, so it says when.
+    updates = {"execution_plan": plan, "updated_at": plan["updated_at"]}
     # ASK-28: with a checklist, the task's own progress IS the checklist's, so
     # cards, Desk and the drawer's locked % bar all read the same number.
     if steps:
@@ -1404,6 +1438,14 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
                 updates.update({"approved_by": user["id"], "approved_at": now_iso()})
         elif plan["progress"] > 0 and t.get("status") == "todo":
             updates["status"] = "in_progress"
+    # BUG-04 (XCODITS QA, 2026-10-21) — FINISHING BY CHECKLIST IS FINISHING.
+    # Ticking the last step closed the task without the two stamps every other
+    # close writes (update_task, the sign-off): no completed_at, so a task
+    # finished ten days late could not say how late, dropped out of "Hit their
+    # date" and the typical-days measures; and no approval_requested_at when it
+    # went for sign-off instead.
+    updates.update(completion_stamp(t, updates, plan["updated_at"]))
+    updates.update(approval_stamp(t, updates, plan["updated_at"]))
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
     # ASK-29: what changed in the checklist, for the task's timeline — each
     # step ticked or unticked, and accepting or editing the list itself.
@@ -1437,25 +1479,12 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
                               "Completed — every checklist step is done")
         if t.get("decision_id"):
             await add_decision_event(t["decision_id"], f"{t['title']} → done", user["name"], "task")
-        # FIX-007-B (S4-02): this endpoint was the ONE task-completion
-        # path that skipped record_context — a task whose execution plan
-        # ticked to 100% (via save_execution_plan) transitioned status
-        # to "done" here but never wrote to brain_context, so downstream
-        # "how did we handle X?" queries saw a mysterious silence for
-        # every execution-plan-driven completion. Now parity with the
-        # PATCH /tasks/{id} status=done path (see update_task above),
-        # and decision_id is threaded through so decision → task →
-        # outcome is reconstructable.
-        await brain_context.record_context(
-            tenant_id=user["tenant_id"], kind="task_done",
-            title=t.get("title") or "Task completed",
-            outcome="done", why=t.get("description") or "",
-            tags=[t.get("category")] if t.get("category") else [],
-            source_type="task", source_id=task_id,
-            decision_id=t.get("decision_id"),
-            actor_id=user["id"], actor_name=user.get("name") or "",
-            department=user.get("role") or "", visibility="dept",
-        )
+        # FIX-007-B (S4-02) gave this path the Brain record the PATCH close
+        # writes. BUG-04 (2026-10-21): it skipped the rest of what closing sets
+        # off — the workflow advance, the work waiting on this task, the next
+        # occurrence of a routine, the auto-drafted invoice. One hook for every
+        # close (_after_task_done), which writes the Brain record too.
+        await _after_task_done(user, t, task_id)
     return await enrich_task(await db.tasks.find_one(tenant_filter(task_id, user["tenant_id"]), {"_id": 0}))  # FIX-001-C
 
 

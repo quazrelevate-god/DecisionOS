@@ -215,7 +215,11 @@ def test_finance_page_polish():
     ov = fe("pages/finance/FinanceOverview.jsx")
     assert "​" not in ov.lower() and "\\u200B" not in ov
     assert "<wbr />" in ov
-    assert 'toast.success(said.length ? `Filed ${said.join(" · ")}` : "Filed");' in fe("pages/finance/ReviewPanel.js")
+    # BUG-16 (2026-10-21): still only what was filed, with the right plurals
+    # (filedWhat), and now where it went.
+    panel = fe("pages/finance/ReviewPanel.js")
+    assert "toast.success(`Filed${w.text ? ` ${w.text}` : \"\"}${where}`);" in panel
+    assert "PLACES.filter(([k]) => n[k] > 0)" in panel and "n[k] === 1 ? one : many" in panel
 
 
 # G-02, run for real: an invoice not yet due is not scored; one past due is.

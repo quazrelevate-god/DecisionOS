@@ -591,7 +591,9 @@ def test_a_due_date_can_be_moved_from_the_task():
     src = _fe("pages", "MyWork.js")
     assert "function DueLine(" in src
     assert 'api.patch(`/tasks/${task.id}`, { due_date: value })' in src
-    assert "<DueLine t={t} canMove={rights.priority}" in src
+    # BUG-04 (2026-10-21): while the task is open — a finished task keeps the
+    # date it was due (the server refuses the move too).
+    assert "<DueLine t={t} canMove={rights.priority && !isTerminal(t)}" in src
 
 
 def test_blocked_work_looks_blocked_in_the_list():

@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import api, { formatApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { hasPerm } from "../../lib/perms";
 import { lex } from "../../lib/lexicon";
 import { Dialog, DialogContent } from "../../components/ui/dialog";
 import { GlassSelect } from "../../components/neuglass/GlassSelect";
@@ -50,6 +51,37 @@ const isOwnCompany = (name, ownNorm) => {
   const n = normCo(name);
   return !!ownNorm && !!n && (n === ownNorm || n.includes(ownNorm) || ownNorm.includes(n));
 };
+
+/* BUG-16 (XCODITS QA, 2026-10-21) — WHAT AN UPLOAD BECAME, AND WHERE IT IS.
+   Filing said "Filed 1 invoice" for a bill that had just become an expense,
+   and said nothing of where to look; the testers looked under the Inbox's
+   Pending and Filed and found nothing. Built from the counts the commit returns
+   (services/ingestion.commit_ingestion_records): a purchase bill counts as one
+   invoice AND the expense, asset or stock it bought (an asset is also counted
+   as an expense), so the bucket names it, and whatever invoices are left over
+   are sales. `tab` is the Money tab to open for the first of them. */
+const PLACES = [
+  ["expenses", "expense", "expenses", "Expenses"],
+  ["assets", "asset", "assets", "Assets"],
+  ["inventory", "stock item", "stock items", "Inventory"],
+  ["sales", "sales invoice", "sales invoices", "Revenue"],
+  ["payments", "payment", "payments", null],
+  ["tasks", "task", "tasks", null],
+  ["contacts", "contact", "contacts", null],
+];
+const TAB_OF = { Expenses: "expenses", Assets: "assets", Inventory: "inventory", Revenue: "revenue" };
+export function filedWhat(c) {
+  const n = { ...(c || {}) };
+  n.sales = Math.max(0, (n.invoices || 0) - (n.expenses || 0) - (n.inventory || 0));
+  n.expenses = Math.max(0, (n.expenses || 0) - (n.assets || 0));
+  const parts = PLACES.filter(([k]) => n[k] > 0).map(([k, one, many, place]) => ({ n: n[k], word: n[k] === 1 ? one : many, place }));
+  const first = parts.find((x) => x.place);
+  return {
+    text: parts.map((x) => `${x.n} ${x.word}`).join(" · "),
+    place: first?.place || null,
+    tab: first ? TAB_OF[first.place] : null,
+  };
+}
 
 const OPT_LABELS = {
   customer: "Customer", vendor: "Supplier", dealer: "Dealer",
@@ -131,7 +163,8 @@ const withKeys = (recs) => {
 };
 
 export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
-  const { tenant } = useAuth();
+  const { tenant, user } = useAuth();
+  const canLedger = hasPerm(user, "finance");
   const L = lex(tenant);
   const optLabels = { ...OPT_LABELS, customer: L.customer_singular, vendor: L.vendor_singular };
   const currency = tenant?.currency || "INR";
@@ -174,14 +207,31 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
       const clean = {};
       Object.keys(records).forEach((b) => { clean[b] = (records[b] || []).map(({ _key, ...rest }) => rest); });
       const { data } = await api.post(`/ingest/${ingestion.id}/commit`, { records: clean });
-      const c = data.created;
-      // Audit F-06 — "1 invoice · 1 task", not "0 contacts · 1 invoices · ...".
-      const said = [["contacts", "contact"], ["invoices", "invoice"], ["payments", "payment"], ["tasks", "task"]]
-        .filter(([k]) => c?.[k]).map(([k, one]) => `${c[k]} ${c[k] === 1 ? one : k}`);
-      toast.success(said.length ? `Filed ${said.join(" · ")}` : "Filed");
+      // Audit F-06 — "1 expense", not "0 contacts · 1 invoices · ..."; BUG-16 —
+      // and where it is: the Money tab, or for someone who cannot open the
+      // books, the Inbox's Filed, which lists their own uploads.
+      const w = filedWhat(data.created);
+      const where = canLedger ? (w.place ? ` — in ${w.place}` : "") : " — see Inbox › Filed";
+      toast.success(`Filed${w.text ? ` ${w.text}` : ""}${where}`);
       onFiled();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail));
+    } finally {
+      setFiling(false);
+    }
+  };
+
+  /* BUG-16 — Discard closed the panel and left the upload waiting, unseen, for
+     good. Now it is discarded on the server, so the Inbox's Pending (which
+     lists uploads waiting to be filed) no longer offers it. */
+  const discard = async () => {
+    setFiling(true);
+    try {
+      await api.post(`/ingest/${ingestion.id}/discard`);
+      toast.success("Discarded — nothing from it was filed");
+      onCancel();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not discard it");
     } finally {
       setFiling(false);
     }
@@ -214,7 +264,8 @@ export default function ReviewPanel({ ingestion, onFiled, onCancel }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <FilePreview fileUrl={ingestion.file_url} kind={ingestion.kind} filename={ingestion.filename} testid="ingest-review-view-file" />
-          <button type="button" data-testid="ingest-cancel-button" onClick={onCancel} className={cn(SMALL_PILL, "h-10 px-4 text-sm")}>
+          <button type="button" data-testid="ingest-cancel-button" onClick={discard} disabled={filing}
+            className={cn(SMALL_PILL, "h-10 px-4 text-sm disabled:opacity-50")}>
             Discard
           </button>
           <button type="button" data-testid="ingest-file-button" disabled={filing || total === 0} onClick={fileIt}

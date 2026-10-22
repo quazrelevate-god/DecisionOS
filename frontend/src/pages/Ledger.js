@@ -125,7 +125,7 @@ function SectionTabs({ tab, setTab, pendingCount, isMobile, tabs = TABS }) {
 }
 
 // Epic 2 Sprint 4 (E2-25): capture stays one click from every Finance tab.
-function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddExpense }) {
+function QuickCapture({ pendingCount, isMobile, canLedger, tab, onIngested, onOpenInbox, onAddExpense }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const canIngest = hasPerm(user, "data_input");
@@ -145,9 +145,18 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
         toastAiConsentOr(data.error, "Extraction failed: " + (data.error || "unreadable file"));
       } else {
         setActive(data);
-        toast.success("Extracted — review below");
+        /* BUG-16 (XCODITS QA, 2026-10-21) — READ IS NOT SAVED. This said
+           "Extracted" in a success toast, and testers took that as filed;
+           nothing is saved until File it. It waits in the Inbox's Pending
+           until it is filed or discarded. */
+        const found = ["contacts", "invoices", "payments", "tasks"].some((k) => (data.records?.[k] || []).length);
+        if (found) toast("Read it — check the details below, then tap File it to save it.");
+        else toast.error(canLedger
+          ? "Nothing could be read from this file. Discard it, or add it by hand."
+          : "Nothing could be read from this file. Discard it and try a clearer photo.");
       }
       qc.invalidateQueries({ queryKey: ["ingestions"] });
+      qc.invalidateQueries({ queryKey: ["captures-pending"] });
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Upload failed");
     } finally {
@@ -155,12 +164,13 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
     }
   };
   const sfx = isMobile ? "-m" : "";
-  const pick = (key, Icon, label, endpoint, accept, title, capture) => (
+  const pick = (key, Icon, label, endpoint, accept, title, capture, extra) => (
     <label key={key} data-testid={`finance-hero-${key}${sfx}`} title={title}
       className={cn(
         `flex h-11 cursor-pointer items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-white focus-within:ring-2 focus-within:ring-neutral-900/25 ${GLASS_PILL}`,
         isMobile && "justify-center px-3",
         uploading && "pointer-events-none opacity-60",
+        extra,
       )}>
       <Icon size={17} aria-hidden="true" /> {label}
       <input type="file" className="sr-only" accept={accept} {...(capture ? { capture } : {})}
@@ -173,6 +183,15 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
      stays (it knows which tab you are on). Without Data Input there is nothing
      left to show here. */
   if (!canIngest) return null;
+  /* BUG-15 (XCODITS QA, 2026-10-21) — THE PHONE CARD HAS NO WAY-TO-INBOX.
+     It carried a round black tray icon with no visible label: the testers
+     called it the "index box button" and could not tell what it was for. It
+     only switched to the Inbox tab, which sits in the row above it, so on the
+     Inbox (where most staff always are) it did nothing at all. A labelled
+     "3 in Inbox →" pill replaced it for a day; 2026-10-22 (founder): not on
+     the phone either — the Inbox tab already carries the count on its icon.
+     Desktop keeps its pill, shown only when something waits elsewhere. */
+  const showInbox = pendingCount > 0 && tab !== "inbox";
   return (
     <>
       {isMobile ? (
@@ -182,28 +201,20 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
               <p className="text-[15px] font-semibold text-slate-900">Quick capture</p>
               <p className="mt-0.5 text-xs text-slate-500">Upload a bill or receipt and AI reads it for you.</p>
             </div>
-            {canIngest && (
-              <button type="button" onClick={onOpenInbox} data-testid="finance-hero-inbox-m"
-                aria-label={pendingCount > 0 ? `Open Inbox, ${pendingCount} waiting` : "Open Inbox"}
-                className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full ${INK_PILL}`}>
-                <Tray size={16} aria-hidden="true" />
-                {pendingCount > 0 && (
-                  <span aria-hidden="true" className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-orange-500 px-1 text-[10px] font-semibold text-white">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
-            )}
           </div>
           {canIngest && (
             <div className="mt-4 grid grid-cols-2 gap-2">
               {pick("doc", FilePdf, "Upload bill", "/ingest/document", "image/*,application/pdf", "Upload a bill or receipt (PDF or photo)")}
               {pick("photo", Camera, "Photo", "/ingest/document", "image/*", "Take a photo of a receipt", "environment")}
-              <button type="button" data-testid="finance-hero-add-m" onClick={onAddExpense}
-                className={`flex h-11 items-center justify-center gap-2 rounded-pill px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
-                <Plus size={17} aria-hidden="true" /> Add expense
-              </button>
-              {pick("csv", UploadSimple, "CSV / Excel", "/ingest/csv", ".csv,.xlsx,.xls", "Bulk import from CSV or Excel")}
+              {/* BUG-16 — adding an expense by hand needs Finance (the server
+                  refuses it otherwise), so it is offered only to who can. */}
+              {canLedger && (
+                <button type="button" data-testid="finance-hero-add-m" onClick={onAddExpense}
+                  className={`flex h-11 items-center justify-center gap-2 rounded-pill px-3 text-sm font-medium text-slate-700 transition-colors hover:bg-white ${GLASS_PILL}`}>
+                  <Plus size={17} aria-hidden="true" /> Add expense
+                </button>
+              )}
+              {pick("csv", UploadSimple, "CSV / Excel", "/ingest/csv", ".csv,.xlsx,.xls", "Bulk import from CSV or Excel", undefined, !canLedger && "col-span-2")}
             </div>
           )}
           {uploading && <p role="status" className="mt-3 text-xs text-slate-500">Extracting…</p>}
@@ -220,7 +231,7 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
                   as "Upload bill / receipt", which already takes photos. The
                   phone keeps it (above), where it opens the camera. */}
               {pick("csv", UploadSimple, "CSV / Excel", "/ingest/csv", ".csv,.xlsx,.xls", "Bulk import from CSV or Excel")}
-              {pendingCount > 0 && (
+              {showInbox && (
                 <button type="button" data-testid="finance-hero-inbox-badge" onClick={onOpenInbox}
                   className={`flex h-11 items-center gap-2 rounded-pill px-4 text-sm font-medium ${INK_PILL}`}>
                   <Tray size={16} aria-hidden="true" /> {pendingCount} in Inbox <ArrowRight size={13} weight="bold" aria-hidden="true" />
@@ -233,7 +244,8 @@ function QuickCapture({ pendingCount, isMobile, onIngested, onOpenInbox, onAddEx
       )}
       {active && (
         <div className="mb-5" data-testid="finance-hero-review">
-          <ReviewPanel ingestion={active} onFiled={() => { setActive(null); onIngested?.(); }} onCancel={() => setActive(null)} />
+          <ReviewPanel ingestion={active} onFiled={() => { setActive(null); onIngested?.(); }}
+            onCancel={() => { setActive(null); onIngested?.(); }} />
         </div>
       )}
     </>
@@ -332,7 +344,10 @@ export default function Ledger() {
           hero stayed stuck to the top; now it scrolls away with the page. */}
       {/* Desktop keeps the pinned tab strip at the top. On a phone the tabs sit
           under the Finance title instead (2026-09-15, founder) — see below. */}
-      {!isMobile && (
+      {/* BUG-15 — without Finance the only tab is Inbox: a one-cell bar that
+          is always selected and does nothing when tapped. Shown only when
+          there is a choice to make. */}
+      {!isMobile && tabs.length > 1 && (
         <StickyHeader>
           <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} tabs={tabs} />
         </StickyHeader>
@@ -344,7 +359,7 @@ export default function Ledger() {
       {isMobile && (
         <StickyHeader className="mb-5 flex flex-col gap-6" data-testid="finance-mobile-header">
           <h1 className="font-display text-3xl">{t("finance.title")}</h1>
-          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} tabs={tabs} />
+          {tabs.length > 1 && <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} tabs={tabs} />}
         </StickyHeader>
       )}
       <div className="mb-5 lg:mb-6">
@@ -366,8 +381,11 @@ export default function Ledger() {
         </div>
       </div>
 
-      <QuickCapture pendingCount={pendingCount} isMobile={isMobile}
-        onIngested={() => { invalidate(); qc.invalidateQueries({ queryKey: ["captures-pending"] }); }}
+      <QuickCapture pendingCount={pendingCount} isMobile={isMobile} canLedger={canLedger} tab={tab}
+        onIngested={() => {
+          invalidate();
+          ["captures-pending", "captures", "ingestions"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+        }}
         onOpenInbox={() => setTab("inbox")} onAddExpense={() => setAdding("expense")} />
 
       {tab === "overview" && (

@@ -91,6 +91,26 @@ def next_due(current: str, every: str, interval: int = 1) -> Optional[str]:
     return f"{out}T{rest}" if rest else out
 
 
+def next_due_not_late(current: str, every: str, interval: int = 1,
+                      today: Optional[str] = None) -> Optional[str]:
+    """The next occurrence that is not already late (BUG-04, 2026-10-21).
+
+    One live instance per routine (above) means a routine done late is caught
+    up by doing it, not by working through every date it missed: a daily task
+    closed ten days late brought one due nine days ago, born overdue, then
+    another, one close per missed day. The next is the first date of the
+    series on or after `today` (YYYY-MM-DD), counted in whole steps from the
+    date it was due, so a weekly Monday stays on Mondays and "monthly on the
+    31st" on month end.
+    """
+    nxt = next_due(current, every, interval)
+    k = 1
+    while nxt and today and str(nxt)[:10] < today and k < 5000:
+        k += 1
+        nxt = next_due(current, every, interval * k)
+    return nxt
+
+
 def series_is_over(rec: dict, next_date: Optional[str]) -> bool:
     """True when the next occurrence would fall past the series' end date."""
     if not next_date:

@@ -32,7 +32,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useBackDismiss } from "@/hooks/useBackDismiss";
-import { hasPerm } from "@/lib/perms";
+import { canSeeAnyCrm, canSeeBuyers, hasPerm } from "@/lib/perms";
 import { termsAccepted } from "@/lib/legal";
 import { needsOwnerCredentials } from "@/components/auth/OwnerCredentialsGate";
 import { INK_PILL, GLASS_PILL } from "@/components/neuglass/glass";
@@ -42,36 +42,65 @@ import { cn } from "@/lib/utils";
 export const TOUR_VERSION = 1;
 
 /* The two scripts. `target` is one selector or several (the spotlight covers
-   them all); `guide` is the section of the user guide the last step opens. */
-const DECIDER = [
-  {
-    target: ['[data-testid="desk-score-link-phone"]', '[data-testid="desk-kpi-grid"]'],
-    title: "Your company at a glance",
-    body: "Your operating score, and the few numbers that need you: what's late, complaints, money to collect, workflows that are stuck.",
-  },
-  {
-    target: ['[data-testid="desk-phone-card"]'],
-    title: "What's waiting for you",
-    body: "Decisions to approve, tasks to sign off, and things to watch. Tap a row to see it and give your call.",
-  },
-  {
-    target: ['[data-testid="dex-slider-handle"]'],
-    title: "Meet Dex",
-    body: "Swipe right and say what you decided — Dex turns it into tasks, owners and dates for you to approve. Swipe left to ask anything. Slide back to the middle to cancel.",
-    hint: true,
-  },
-  {
-    target: ['[data-testid="dock-slider"]'],
-    title: "Your places",
-    body: "Desk for what needs you, Work for tasks, Money for invoices and bills.",
-  },
-  {
-    target: ['[data-testid="dock-more"]'],
-    title: "Everything else is under More",
-    body: "Approvals, leave, CRM, team — and Preferences, where Help & guide lives whenever you want the full tour.",
-    guide: "start",
-  },
-];
+   them all); `guide` is the section of the user guide the last step opens.
+
+   ACCESS-12 (XCODITS QA, 2026-10-21) — THE DESK'S SCRIPT IS THE PERSON'S OWN.
+   It was one script for everyone who lands on the Desk, and every role lands
+   there (`inbox` is a default permission), so a standard employee was told
+   "Swipe right and say what you decided" — a Decide they do not have: it needs
+   Decide AI (`voice_capture`), and without it the slider is Ask at both ends
+   (DockSlider's askOnly). The same script also listed money to collect,
+   approvals and CRM to people who cannot see them. Now each step says only
+   what this person's screen does, read from the same permissions that draw it
+   (Desk's tiles, DockSlider, the More panel). */
+const join = (items) => items.filter(Boolean).join(", ");
+const upper = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+function deskScript(user) {
+  const can = (key) => hasPerm(user, key);
+  const decides = can("voice_capture");
+  const signsOff = can("decisions_approve") || can("approvals");
+  return [
+    {
+      target: ['[data-testid="desk-score-link-phone"]', '[data-testid="desk-kpi-grid"]'],
+      title: "Your company at a glance",
+      body: `Your operating score, and the few numbers that need you: ${join([
+        "what's late", canSeeBuyers(user) && "complaints", can("finance") && "money to collect",
+        can("workflows") && "workflows that are stuck"])}.`,
+    },
+    {
+      target: ['[data-testid="desk-phone-card"]'],
+      title: "What's waiting for you",
+      body: signsOff
+        ? "Decisions to approve, tasks to sign off, and things to watch. Tap a row to see it and give your call."
+        : "What's waiting on you, and things to watch. Tap a row to see it.",
+    },
+    decides ? {
+      target: ['[data-testid="dex-slider-handle"]'],
+      title: "Meet Dex",
+      body: "Swipe right and say what you decided — Dex turns it into tasks, owners and dates for you to approve. Swipe left to ask anything. Slide back to the middle to cancel.",
+      hint: true,
+      decide: true,
+    } : {
+      target: ['[data-testid="dex-slider-handle"]'],
+      title: "Meet Dex",
+      body: "Swipe either way to ask Dex anything — where a task stands, who has what, what a document says. Slide back to the middle to cancel.",
+      hint: true,
+    },
+    {
+      target: ['[data-testid="dock-slider"]'],
+      title: "Your places",
+      body: `${join(["Desk for what needs you", "Work for tasks",
+        can("finance") ? "Money for invoices and bills" : can("data_input") && "Money to send in a bill"])}.`,
+    },
+    {
+      target: ['[data-testid="dock-more"]'],
+      title: "Everything else is under More",
+      body: `${upper(join([can("approvals") && "approvals", "leave", canSeeAnyCrm(user) && "CRM", "team"]))} — and Preferences, where Help & guide lives whenever you want the full tour.`,
+      guide: "start",
+    },
+  ];
+}
 
 const MEMBER = [
   {
@@ -100,7 +129,7 @@ const MEMBER = [
 
 /** The script for this person on this screen, or null where the tour has nothing to show. */
 export function tourScript(user, path) {
-  if (path === "/inbox" && hasPerm(user, "inbox")) return DECIDER;
+  if (path === "/inbox" && hasPerm(user, "inbox")) return deskScript(user);
   if (path === "/my-work") return MEMBER;
   return null;
 }
@@ -270,7 +299,7 @@ export default function Walkthrough() {
           <div className="mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-slate-700" aria-hidden="true">
             <span className={cn("inline-flex items-center gap-1 rounded-pill px-3 py-1.5", GLASS_PILL)}><ArrowLeft size={12} weight="bold" /> Ask</span>
             <span className="h-6 w-6 rounded-full bg-[hsl(var(--ng-ink))] ring-4 ring-[hsl(var(--ng-gold)/.35)]" />
-            {steps === DECIDER && <span className={cn("inline-flex items-center gap-1 rounded-pill px-3 py-1.5", GLASS_PILL)}>Decide <ArrowRight size={12} weight="bold" /></span>}
+            {step.decide && <span className={cn("inline-flex items-center gap-1 rounded-pill px-3 py-1.5", GLASS_PILL)}>Decide <ArrowRight size={12} weight="bold" /></span>}
           </div>
         )}
         <div className="mt-4 flex items-center gap-2">

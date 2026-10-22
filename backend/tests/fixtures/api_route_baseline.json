@@ -1,6 +1,6 @@
 {
-  "count": 392,
-  "sha": "6c47375747db9a47a1e5c925caa9a0e8574392b3095f6ffa6d1d2aa4691b56a8",
+  "count": 393,
+  "sha": "c1fffda39b34e8561e9c0506d8435bd23e5cd763666be5778c9aaf76b0120ac4",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -302,6 +302,7 @@
     "POST /api/ingest/csv",
     "POST /api/ingest/document",
     "POST /api/ingest/{ingestion_id}/commit",
+    "POST /api/ingest/{ingestion_id}/discard",
     "POST /api/inventory",
     "POST /api/inventory/with-file",
     "POST /api/inventory/{iid}/use",

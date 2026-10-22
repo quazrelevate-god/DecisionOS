@@ -648,12 +648,15 @@ def task_list_query(user: dict, mine: bool = False, view: Optional[str] = None,
 # (co_assignee_ids). The lead is kept because approvals, hand-offs, reassign,
 # least-loaded routing and every workload count already act on assignee_id;
 # the list adds people to the task without moving any of that.
-MAX_CO_ASSIGNEES = 10
+# FIX-2 (2026-10-21): with no limit on how many. The list was cut at 10 here,
+# silently — the eleventh person picked in the task drawer was dropped while
+# the screen said "Added". A task for the whole team is a real task; the
+# company's own people are the only bound.
 
 
 async def clean_co_assignees(tenant_id: str, ids, lead_id: Optional[str]) -> List[str]:
     """The co-assignee list made safe to store: de-duplicated in the order
-    given, never containing the lead, only members of this tenant, capped.
+    given, never containing the lead, only members of this tenant.
     Unknown ids are dropped rather than rejected — the same way an unknown
     assignee_id is treated on create."""
     seen, wanted = set(), []
@@ -666,7 +669,7 @@ async def clean_co_assignees(tenant_id: str, ids, lead_id: Optional[str]) -> Lis
     found = {u["id"] for u in await db.users.find(
         {"id": {"$in": wanted}, "tenant_id": tenant_id}, {"_id": 0, "id": 1}
     ).to_list(len(wanted))}
-    return [i for i in wanted if i in found][:MAX_CO_ASSIGNEES]
+    return [i for i in wanted if i in found]
 
 
 def assignee_ids_of(t: dict) -> List[str]:

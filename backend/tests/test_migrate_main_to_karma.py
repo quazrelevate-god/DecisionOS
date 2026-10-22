@@ -58,9 +58,10 @@ class TestParityWithKarmaSource:
         m = re.search(r'CURRENT_CONSENT_VERSION\s*=\s*"([^"]+)"', self._src("services/ai_consent.py"))
         assert m and m.group(1) == mig.AI_CONSENT_VERSION
 
-    def test_max_co_assignees(self):
-        m = re.search(r"MAX_CO_ASSIGNEES\s*=\s*(\d+)", self._src("services/tasks.py"))
-        assert m and int(m.group(1)) == mig.MAX_CO_ASSIGNEES
+    def test_no_helper_cap_on_either_side(self):
+        # FIX-2: the server keeps every helper, so the migration does too.
+        assert "MAX_CO_ASSIGNEES" not in self._src("services/tasks.py")
+        assert not hasattr(mig, "MAX_CO_ASSIGNEES")
 
     def test_norm_phone(self):
         assert "return _NON_DIGITS.sub(\"\", p)[-10:]" in self._src("services/auth/phone.py")
@@ -261,12 +262,12 @@ class TestTaskTransform:
         assert "co_assignee_ids" not in out
         assert "warn:support_id_dropped_unknown_user" in issue_codes(ctx)
 
-    def test_helper_cap_respected(self):
+    def test_support_id_joins_however_many_helpers(self):
         ctx = make_ctx(tenant_user_ids={"t": {"helper"}})
-        full = [f"h{i}" for i in range(mig.MAX_CO_ASSIGNEES)]
+        full = [f"h{i}" for i in range(25)]
         out = run_pure(mig.transform_task, self.task(support_id="helper", co_assignee_ids=full), ctx)
-        assert out["co_assignee_ids"] == full
-        assert "warn:support_id_dropped_helper_cap" in issue_codes(ctx)
+        assert out["co_assignee_ids"] == full + ["helper"]
+        assert not ctx.stats.issues
 
     def test_production_role_renamed_and_type_preserved(self):
         doc = self.task(

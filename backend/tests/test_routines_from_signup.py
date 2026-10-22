@@ -171,8 +171,12 @@ def test_a_changed_cadence_and_an_outsider_are_handled(with_test_db):
 
 
 @single
-def test_closing_a_routine_brings_the_next_one(with_test_db):
+def test_closing_a_routine_brings_the_next_one(with_test_db, monkeypatch):
     """The loop that makes it a routine: services/recurrence, via the task route."""
+    # Closed on the day it was due (BUG-04: the next one is the first that is
+    # not already late, so "today" decides it).
+    monkeypatch.setattr("shared.due.today_ist", lambda now=None: "2026-09-28")
+
     async def scenario(db):
         from services.routines import apply_setup, setup_view
         from routers.tasks import _spawn_next_occurrence

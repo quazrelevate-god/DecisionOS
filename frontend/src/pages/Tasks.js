@@ -8,7 +8,7 @@ import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 import { timeAgo, fullTime } from "../lib/format";
 import { userPerms } from "../lib/perms";
-import { canAssignPerson, canAssignTeam } from "../lib/taskAccess";
+import { EVERYONE, addPeopleOptions, canAssignPerson, canAssignTeam } from "../lib/taskAccess";
 import { Plus, User, Paperclip, ClockCounterClockwise, X, CloudArrowUp } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
@@ -606,8 +606,12 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                     <>
                       <GlassSelect id="task-helper-add" testid="task-co-assignee-select" variant="field" triggerClassName={`${inp} mt-1.5`}
                         value="" placeholder="+ Add a helper"
-                        onChange={(id) => id && setForm({ ...form, co_assignee_ids: [...form.co_assignee_ids, id] })}
-                        options={helperChoices.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` }))} />
+                        onChange={(id) => id && setForm({
+                          ...form,
+                          // FIX-2 — "Everyone" adds every person offered here at once.
+                          co_assignee_ids: [...form.co_assignee_ids, ...(id === EVERYONE ? helperChoices.map((m) => m.id) : [id])],
+                        })}
+                        options={addPeopleOptions(helperChoices, roleOptions)} />
                       <p className="mt-1 text-xs text-muted-foreground">Helpers see the task in My Tasks and get its updates.</p>
                     </>
                   ) : (

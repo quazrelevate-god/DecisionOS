@@ -40,8 +40,11 @@ async def backfill_completed_at(db) -> None:
     Idempotent: only touches tasks that have no `completed_at` yet, so a
     re-run after a failure picks up where it stopped.
     """
+    # BUG-04 (2026-10-21): None as well as missing — a task reopened (which
+    # clears the stamp to None) and then closed by its checklist was left
+    # with neither, and `$exists: False` never saw it.
     finished = await db.tasks.find(
-        {"status": "done", "completed_at": {"$exists": False}},
+        {"status": "done", "completed_at": None},
         {"_id": 0, "id": 1, "updated_at": 1, "created_at": 1},
     ).to_list(100_000)
     if not finished:

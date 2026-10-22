@@ -241,12 +241,16 @@ class TestTaskCallSitesPassDecisionId:
         add the record_context call and pass decision_id."""
         from routers import tasks as t
         src = inspect.getsource(t.save_execution_plan)
-        assert "record_context(" in src, (
-            "S4-02 regression: save_execution_plan must call "
-            "record_context when auto-completing a task"
+        # BUG-04 (2026-10-21): the checklist close now runs the one hook every
+        # close runs (_after_task_done), which writes the Brain record.
+        assert "await _after_task_done(user, t, task_id)" in src, (
+            "S4-02 regression: save_execution_plan must write the Brain "
+            "record when auto-completing a task"
         )
-        assert 'kind="task_done"' in src
-        assert 'decision_id=t.get("decision_id")' in src
+        hook = inspect.getsource(t._after_task_done)
+        assert "record_context(" in hook
+        assert 'kind="task_done"' in hook
+        assert 'decision_id=t.get("decision_id")' in hook
 
     def test_save_execution_plan_only_writes_when_status_flips_to_done(self):
         """Guard against a stray record_context that would fire on
@@ -255,7 +259,7 @@ class TestTaskCallSitesPassDecisionId:
         from routers import tasks as t
         src = inspect.getsource(t.save_execution_plan)
         idx_done = src.find('if updates.get("status") == "done"')
-        idx_record = src.find("record_context(")
+        idx_record = src.find("_after_task_done(")  # BUG-04: the hook that writes it
         assert idx_done >= 0 and idx_record >= 0
         assert idx_record > idx_done, (
             "S4-02 regression: record_context must be inside the "

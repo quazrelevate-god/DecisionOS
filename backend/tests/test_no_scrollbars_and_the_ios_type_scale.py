@@ -60,7 +60,9 @@ def test_the_zoom_check_measures_type_as_well_as_boxes():
     body = code[code.index("const zoomLanded = (s) =>"):]
     body = body[: body.index("const widenViewport")]
     assert "font:100px/1 monospace" in body
-    assert "type.getBoundingClientRect().height / 100" in body
+    # FIX-4: against the same line outside the zoom, so Android's font size
+    # (which multiplies both) does not read as a failed zoom.
+    assert "type.getBoundingClientRect().height / (plain.getBoundingClientRect().height || 100)" in body
     assert "Math.abs(boxAt - s) <= 0.01 && Math.abs(typeAt - s) <= 0.02" in body
     assert "if (zoomLanded(s)) return;" in code
 

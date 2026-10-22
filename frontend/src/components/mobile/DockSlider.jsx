@@ -348,35 +348,84 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
 /* THE BAR, GROWN INTO A CONVERSATION.
  * It opens to the Desk's black sheet (2026-10-09, founder): the panel's top is
  * the sheet's top edge, on the Desk and on every other page, so it is never a
- * black box of one height standing on a black sheet of another. The transcript
- * scrolls inside it and the page above the line stays visible, which is still
- * the point of it being the dock that grew rather than a screen that arrived.
- * (It was content-sized up to half the screen before this.) */
+ * black box of one height standing on a black sheet of another. The page above
+ * the line stays visible, which is still the point of it being the dock that
+ * grew rather than a screen that arrived.
+ * (It was content-sized up to half the screen before this.)
+ *
+ * 2026-10-22 (founder) — AND IT KEEPS GROWING WITH THE CONVERSATION. It held
+ * that one height for good, so a long answer was read through a letterbox
+ * with most of the screen unused above it. It still OPENS at the sheet's line;
+ * as the conversation outgrows that, the panel grows up the screen with it,
+ * to just under the status bar (TOP_GAP below the safe area), and only then
+ * does the transcript scroll inside. Clearing the conversation brings it back
+ * down. No height transition: on a phone with animations off a CSS transition
+ * on height freezes at its start value (see test-phone notes in Desk.js). */
+const TOP_GAP = 20;   // CSS px left between the status bar and the panel's top
+
+/* The top safe area (status bar, cutout) in screen pixels: a probe sized by
+   --sa-top, which already takes the larger of env() and Android's own inset. */
+function safeTopOnScreen() {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;top:0;left:0;width:1px;height:var(--sa-top,0px);visibility:hidden;pointer-events:none";
+  document.body.appendChild(probe);
+  const h = probe.getBoundingClientRect().height;
+  probe.remove();
+  return h || 0;
+}
+
 function DockAskPanel({ chat, onClose, onOpenDecision, transcribing = false, children }) {
   const navigate = useNavigate();
   const { log = [], busy, attaching = false, retry, canRetry, clear, ask } = chat || {};
   const endRef = React.useRef(null);
   const panelRef = React.useRef(null);
-  /* ITS HEIGHT IS FROM ITS OWN FOOT UP TO THE SHEET'S LINE. The foot is where
-     the dock stands, so the panel is measured from there rather than given a
-     number: whatever inset and safe area the bar sits on, the top lands on
-     the line. Screen pixels both, turned into this element's own CSS pixels
-     by its own zoom (the app draws a phone at 0.8). Before paint, and again
-     on a resize. Too little room to be a conversation — a short landscape
-     screen — and it falls back to its content, under the CSS cap. */
+  const scrollRef = React.useRef(null);
+  const contentRef = React.useRef(null);
+  /* ITS HEIGHT STARTS FROM ITS OWN FOOT UP TO THE SHEET'S LINE. The foot is
+     where the dock stands, so the panel is measured from there rather than
+     given a number: whatever inset and safe area the bar sits on, the top
+     lands on the line. Screen pixels both, turned into this element's own CSS
+     pixels by its own zoom (the app draws a phone at 0.8). Too little room to
+     be a conversation — a short landscape screen — and it falls back to its
+     content, under the CSS cap.
+     THEN IT FOLLOWS THE CONVERSATION (2026-10-22): the larger of that resting
+     height and what the conversation needs, never past the ceiling under the
+     status bar. Measured before paint, on a resize, and whenever the
+     conversation's own size changes (a new message, an answer arriving, a
+     picture loading) — a ResizeObserver on the transcript's content, which is
+     sized by what is in it, not by the panel. */
   React.useLayoutEffect(() => {
     const el = panelRef.current;
     if (!el) return undefined;
     const fit = () => {
       const r = el.getBoundingClientRect();
-      const zoom = el.offsetHeight ? r.height / el.offsetHeight : 1;
-      const h = (r.bottom - deskSheetTop()) / (zoom || 1);
-      if (h >= 160) el.style.height = `${Math.round(h)}px`;
-      else el.style.removeProperty("height");
+      const zoom = (el.offsetHeight ? r.height / el.offsetHeight : 1) || 1;
+      const resting = (r.bottom - deskSheetTop()) / zoom;
+      if (resting < 160) {
+        el.style.removeProperty("height");
+        el.style.removeProperty("max-height");
+        return;
+      }
+      const ceiling = Math.max(resting, (r.bottom - safeTopOnScreen()) / zoom - TOP_GAP);
+      const scroller = scrollRef.current;
+      const content = contentRef.current;
+      let need = resting;
+      if (scroller && content) {
+        const cs = getComputedStyle(scroller);
+        const chrome = el.offsetHeight - scroller.clientHeight;   // header, control, border
+        need = chrome + content.offsetHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      }
+      el.style.maxHeight = `${Math.round(ceiling)}px`;
+      el.style.height = `${Math.round(Math.min(ceiling, Math.max(resting, need)))}px`;
     };
     fit();
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => fit()) : null;
+    if (ro && contentRef.current) ro.observe(contentRef.current);
+    return () => {
+      window.removeEventListener("resize", fit);
+      ro?.disconnect();
+    };
   }, []);
   const [lightbox, setLightbox] = React.useState(null);
   const openFile = React.useCallback((src, name) => setLightbox({ src, name }), []);
@@ -419,38 +468,42 @@ function DockAskPanel({ chat, onClose, onOpenDecision, transcribing = false, chi
 
       {/* The transcript. Bottom-anchored, so a short conversation sits on the
           control rather than floating at the top of a tall empty panel. */}
-      <div className="ng-scroll-quiet min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
-        <div className="flex min-h-full flex-col justify-end gap-2.5">
-          <AnimatePresence initial={false}>
-            {log.map((m, i) => (
-              m.outcome
-                ? <Outcome key={m.id || i} o={m.outcome} onReview={onOpenDecision}
-                    onRetry={() => retry?.()} retryDisabled={!canRetry} />
-                : <Bubble key={m.id || i} m={m} index={i} onOpenFile={openFile} onAsk={(q) => ask?.(q)}
-                    prompt={m.role !== "user" ? log.slice(0, i).reverse().find((p) => p.role === "user")?.text : undefined}
-                    /* Following a citation closes Ask and goes there — the bar
-                       cannot sit open over the page it just sent you to. */
-                    onGo={(to) => { onClose?.(); navigate(to); }} />
-            ))}
-          </AnimatePresence>
-          {/* 2026-10-14 — THE WORDS ARE ON THEIR WAY. Between letting go of the
-              mic and the question going out, the recording is being turned into
-              text, and nothing on screen said so: the panel sat still while the
-              work ran behind it. It says so now, with the app's one loading
-              animation, until Dex's "Thinking…" below takes over. */}
-          {transcribing && !busy && (
-            <div role="status" data-testid="dock-ask-transcribing"
-              className="flex items-center justify-center gap-2 py-1 text-sm font-medium text-white/75">
-              <Loader size={18} color="currentColor" label="Transcribing" /> Transcribing what you said…
-            </div>
-          )}
-          {busy && !attaching && (
-            <Bubble m={{ role: "dex", text: "Thinking…" }} index={log.length} onOpenFile={openFile} />
-          )}
-          {log.some((m) => m.role !== "user") && (
-            <AiNotice className="justify-center pt-1 text-white/50" />
-          )}
-          <div ref={endRef} aria-hidden="true" />
+      <div ref={scrollRef} className="ng-scroll-quiet min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+        <div className="flex min-h-full flex-col justify-end">
+          {/* Sized by what is in it, so the panel can measure the conversation
+              (above); the outer column keeps it on the control while short. */}
+          <div ref={contentRef} className="flex flex-col gap-2.5" data-testid="dock-ask-content">
+            <AnimatePresence initial={false}>
+              {log.map((m, i) => (
+                m.outcome
+                  ? <Outcome key={m.id || i} o={m.outcome} onReview={onOpenDecision}
+                      onRetry={() => retry?.()} retryDisabled={!canRetry} />
+                  : <Bubble key={m.id || i} m={m} index={i} onOpenFile={openFile} onAsk={(q) => ask?.(q)}
+                      prompt={m.role !== "user" ? log.slice(0, i).reverse().find((p) => p.role === "user")?.text : undefined}
+                      /* Following a citation closes Ask and goes there — the bar
+                         cannot sit open over the page it just sent you to. */
+                      onGo={(to) => { onClose?.(); navigate(to); }} />
+              ))}
+            </AnimatePresence>
+            {/* 2026-10-14 — THE WORDS ARE ON THEIR WAY. Between letting go of the
+                mic and the question going out, the recording is being turned into
+                text, and nothing on screen said so: the panel sat still while the
+                work ran behind it. It says so now, with the app's one loading
+                animation, until Dex's "Thinking…" below takes over. */}
+            {transcribing && !busy && (
+              <div role="status" data-testid="dock-ask-transcribing"
+                className="flex items-center justify-center gap-2 py-1 text-sm font-medium text-white/75">
+                <Loader size={18} color="currentColor" label="Transcribing" /> Transcribing what you said…
+              </div>
+            )}
+            {busy && !attaching && (
+              <Bubble m={{ role: "dex", text: "Thinking…" }} index={log.length} onOpenFile={openFile} />
+            )}
+            {log.some((m) => m.role !== "user") && (
+              <AiNotice className="justify-center pt-1 text-white/50" />
+            )}
+            <div ref={endRef} aria-hidden="true" />
+          </div>
         </div>
       </div>
 

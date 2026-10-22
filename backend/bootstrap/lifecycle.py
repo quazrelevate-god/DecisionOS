@@ -502,6 +502,14 @@ async def _bootstrap():
             )
             if _ca == "applied":
                 logger.info("Migration applied: task_completed_at_v1")
+            # BUG-04 (2026-10-21): again, for the tasks closed by ticking the
+            # last checklist step, which until now wrote no finish time.
+            _ca2 = await _apply_migration(
+                db, "task_completed_at_v2", backfill_completed_at,
+                description="Tasks closed by their checklist get completed_at, dated from the activity log",
+            )
+            if _ca2 == "applied":
+                logger.info("Migration applied: task_completed_at_v2")
         except Exception as e:
             logger.exception(f"task_completed_at migration: {e}")
 

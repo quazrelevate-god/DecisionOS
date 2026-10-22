@@ -104,16 +104,31 @@ def _greeting_for(user: dict) -> str:
 
 
 async def _delayed_count(tid: str, user: dict) -> int:
-    """Count tasks past due_date, not done/cancelled. Owner sees all,
-    non-owner sees their own. IST-today so we roll the "delayed" cliff
-    at IST-midnight (E2-56)."""
+    """FIX-1 (2026-10-21) — the late tasks the viewer's My Work lists, and
+    therefore the number on the Delayed tile that opens that list
+    (/my-work?filter=overdue).
+
+    It counted every late task in the company for the owner and the person's
+    own for anyone else, while the tile opens My Work, which leaves out work
+    waiting for the viewer's own sign-off (that is in Approvals) and lists the
+    whole company for "See all tasks". A client read a number on Delayed and
+    opened an empty Overdue list. One definition now, as PILOT-1 C did for
+    Due today: GET /tasks's own filter (services.tasks.task_list_query) for
+    the scope My Work opens the link in —
+      owner, or "See all tasks"  every task in the company   (My Work flips
+                                                              to All for them)
+      everyone else              My tasks: theirs, the ones they help on, and
+                                 unclaimed work in their team's pool
+    narrowed to open work that is late."""
     # PILOT-1 D: the one "late" rule (shared/due.py) — an earlier day, or a
-    # time today that has passed — the rule the screens and the score use, so
-    # the Delayed tile and the score beside it count the same tasks.
-    q = {"tenant_id": tid, "status": {"$nin": ["done", "cancelled"]}, "$and": [overdue_query()]}
-    if user.get("role") != "owner":
-        # ASK-26: a task I am on alongside the lead is mine to deliver too.
-        q["$or"] = [{"assignee_id": user["id"]}, {"co_assignee_ids": user["id"]}]
+    # time today that has passed — the rule the screens and the score use.
+    from core.permissions import user_perms
+    from services.tasks import can_see_all_tasks, task_list_query
+    perms = user_perms(user)
+    see_all = can_see_all_tasks(user, perms)
+    q = task_list_query(user, mine=not see_all, can_approve_any="approvals" in perms, see_all=see_all)
+    q["status"] = {"$nin": ["done", "cancelled"]}
+    q["$and"] = [overdue_query()]
     return await db.tasks.count_documents(q)
 
 
@@ -370,10 +385,15 @@ def _days_between(iso_start: Optional[str], iso_end: Optional[str] = None) -> in
     if not iso_start:
         return 0
     try:
-        d_start = datetime.fromisoformat(iso_start.replace("Z", "+00:00")).date()
+        start = datetime.fromisoformat(iso_start.replace("Z", "+00:00"))
     except (ValueError, TypeError):
         return 0
-    d_end = date.fromisoformat(iso_end) if iso_end else datetime.now(timezone.utc).date()
+    # BUG-04 (XCODITS QA, 2026-10-21): India's calendar at both ends. Today was
+    # UTC's, so between midnight and 05:30 IST every "N days overdue" on the
+    # Desk read one day short; an instant with a zone is read on India's clock.
+    from shared.due import IST
+    d_start = (start.astimezone(IST) if start.tzinfo else start).date()
+    d_end = date.fromisoformat(iso_end) if iso_end else date.fromisoformat(today_ist())
     return max(0, (d_end - d_start).days)
 
 

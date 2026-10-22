@@ -72,25 +72,15 @@ def test_there_is_no_bar():
     assert "p.bar" not in PHONE and "h-1.5" not in PHONE
 
 
-def test_each_move_sits_under_its_own_half():
-    # Two rows either side of one separator, which runs the full height between
-    # the two buttons; Approve under the left half, Open Workflows the right.
+def test_one_button_runs_under_both_halves():
+    # FIX-3 (2026-10-21, founder): the Approve under the left half is gone, and
+    # "Open in Workflows" runs the tile's full width under both halves. The
+    # separator stops at the halves.
     assert 'className="grid grid-cols-[auto_1px_minmax(0,1fr)] grid-rows-[1fr_auto] gap-x-5 gap-y-3"' in PHONE
-    assert "col-start-2 row-span-2 row-start-1 w-px self-stretch" in PHONE
-    action = PHONE[PHONE.index("-next-action`}"):]
-    action = action[: action.index("</button>")]
-    assert "col-start-1 row-start-2" in action
-    # It fills the half without widening it, and always says "Approve" — the
-    # founder: "whatever the workflow stage it is, keep a static approve button".
-    # The real move is still made, and still named for a screen reader.
-    assert "w-0 min-w-full" in action
-    assert '<span className="whitespace-nowrap">Approve</span>' in action
-    assert "nextUp.actionLabel}</span>" not in action, "no stage name on the phone's button"
-    assert 'aria-label={/^approve$/i.test(nextUp.actionLabel) ? "Approve" : `Approve: ${nextUp.actionLabel}`}' in action
-    assert "move.mutate()" in action
-    link = PHONE[PHONE.index("-open`}"):]
-    assert "col-start-3 row-start-2" in link[: link.index("</Link>")]
-    assert "hasMove ? PILL_QUIET : PILL_INK" in PHONE
+    assert "col-start-2 row-start-1 w-px self-stretch" in PHONE
+    assert "row-span-2" not in PHONE
+    assert '{openBoard("col-span-3 row-start-2 px-4")}' in PHONE
+    assert "-next-action" not in PHONE and "Approve" not in PHONE
 
 
 def test_desktop_keeps_everything_it_had():

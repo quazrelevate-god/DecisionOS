@@ -1,5 +1,6 @@
 // The Capture Review Queue — WhatsApp captures reviewed before they become
-// work. Rendered as the Finance page's Inbox tab (CaptureReview).
+// work, and (BUG-16) bills uploaded in the app waiting to be filed. Rendered as
+// the Finance page's Inbox tab (CaptureReview).
 //
 // 2026-09-14 — on the Finance glass with the page rebuild: a status track,
 // white glass cards, tinted status chips that say what they mean, our own
@@ -7,10 +8,12 @@
 // unchanged.
 import { roleLabel } from "../lib/departments";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowsClockwise, ChatText, CheckCircle, FilePdf, PencilSimple, Question, ShieldWarning, Tray, WhatsappLogo, XCircle,
+  ArrowRight, ArrowsClockwise, ChatText, CheckCircle, FilePdf, PencilSimple, Question, Receipt, ShieldWarning, Tray, UploadSimple,
+  WhatsappLogo, XCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import api from "../lib/api";
@@ -22,6 +25,7 @@ import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { DRAWER_FIELD, DRAWER_TRACK, INK_PILL } from "../components/neuglass/glass";
 import { ScrollTabRow } from "../components/neuglass/ScrollTabRow";
 import { CARD, EmptyNote, SMALL_INK, SMALL_PILL, Tag } from "./finance/financeKit";
+import ReviewPanel, { filedWhat } from "./finance/ReviewPanel";
 
 const INPUT = cn(DRAWER_FIELD, "h-10 rounded-xl px-3 py-0 text-sm");
 const LABEL = "mb-1 block text-[11px] font-medium text-slate-500";
@@ -42,6 +46,20 @@ const BUCKETS = [
 ];
 const money = (n) => `₹${Number(n).toLocaleString()}`;
 
+/* BUG-16 (XCODITS QA, 2026-10-21) — BILLS UPLOADED IN THE APP LIVE HERE TOO.
+   "Upload bill" and "Photo" read a bill, then wait for File it. Nothing listed
+   one that was waiting, and someone without Finance never saw again what they
+   had filed — the testers looked here, under Pending and Filed, and found
+   neither. Now Pending also holds the uploads read but not filed (open one to
+   check and file it, or discard it) and Filed the ones filed, saying what they
+   became. The owner and Finance see the company's; anyone else their own
+   (the server scopes it: services/ingestion.upload_scope). */
+const UPLOAD_STATUS = { pending_review: "review", executed: "filed" };
+const EMPTY_HINT = {
+  pending_review: "Bills you upload wait here until they are filed, and WhatsApp messages wait here as AI-drafted items for review.",
+  executed: "What you file from an upload or a WhatsApp message is listed here.",
+};
+
 export default function Captures() {
   return (
     <div>
@@ -60,10 +78,19 @@ export function CaptureReview() {
     queryFn: () => api.get(`/captures?status=${tab}`).then((r) => r.data),
     refetchInterval: 20000,
   });
+  const uploadStatus = UPLOAD_STATUS[tab];
+  const seesUploads = hasPerm(user, "data_input") || hasPerm(user, "finance");
+  const uploadsQ = useQuery({
+    queryKey: ["ingestions", uploadStatus],
+    queryFn: () => api.get(`/ingest?status=${uploadStatus}`).then((r) => r.data),
+    enabled: !!uploadStatus && seesUploads,
+    refetchInterval: 20000,
+  });
+  const uploads = uploadStatus && seesUploads ? uploadsQ.data || [] : [];
+  const loading = isLoading || (!!uploadStatus && seesUploads && uploadsQ.isLoading);
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["captures"] });
-    qc.invalidateQueries({ queryKey: ["captures-pending"] });
-    qc.invalidateQueries({ queryKey: ["tasks"] });
+    ["captures", "captures-pending", "tasks", "ingestions", "expenses", "assets", "inventory", "revenue", "ledger-summary"]
+      .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   };
 
   return (
@@ -80,24 +107,107 @@ export function CaptureReview() {
           open ? INK_PILL : "text-slate-600 hover:bg-white/80 hover:text-slate-900",
         )} />
 
-      {isLoading ? (
+      {loading ? (
         <div className="space-y-3" aria-busy="true">
           {[0, 1].map((i) => <div key={i} className="ds-skeleton h-44 rounded-[1.6rem]" />)}
         </div>
-      ) : isError ? (
+      ) : isError && uploads.length === 0 ? (
         <div className={CARD}>
           <EmptyNote icon={XCircle} title="Couldn't load the queue" hint="You may not review captures for this role, or the connection dropped." />
         </div>
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && uploads.length === 0 ? (
         <div className={CARD}>
-          <EmptyNote icon={Tray} title="Nothing here" hint="WhatsApp messages appear here as AI-drafted items for your review before anything is created." />
+          <EmptyNote icon={Tray} title="Nothing here"
+            hint={EMPTY_HINT[tab] || "WhatsApp messages appear here as AI-drafted items for your review before anything is created."} />
         </div>
       ) : (
         <div className="space-y-4">
+          {uploads.map((u) => <UploadCard key={u.id} u={u} user={user} onChange={refresh} />)}
           {rows.map((c) => <CaptureCard key={c.id} c={c} user={user} onChange={refresh} />)}
         </div>
       )}
     </div>
+  );
+}
+
+/* BUG-16 — one bill uploaded in the app. Waiting: open it to check what was
+   read and file it (the same review panel the Money page opened), or discard
+   it. Filed: what it became and where — a link to that Money tab for someone
+   who can open the books. */
+function UploadCard({ u, user, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const waiting = u.status === "review";
+  const amount = (u.records?.invoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
+    || (u.records?.payments || []).reduce((sum, pm) => sum + (Number(pm.amount) || 0), 0);
+  const by = u.created_by === user?.id ? "You" : (u.created_by_name || "Someone");
+  const what = filedWhat(u.created_counts);
+  const canLedger = hasPerm(user, "finance");
+
+  if (open) {
+    return (
+      <div data-testid={`upload-review-${u.id}`}>
+        <ReviewPanel ingestion={u} onFiled={() => { setOpen(false); onChange(); }} onCancel={() => { setOpen(false); onChange(); }} />
+      </div>
+    );
+  }
+  const discard = async () => {
+    if (!window.confirm("Discard this upload? Nothing from it has been filed.")) return;
+    setBusy(true);
+    try {
+      await api.post(`/ingest/${u.id}/discard`);
+      toast.success("Discarded");
+      onChange();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not discard it");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <article data-testid={`upload-card-${u.id}`} className={`p-4 sm:p-5 ${CARD}`}>
+      <div className="flex items-start gap-3">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-slate-900/[0.04] text-slate-700 ring-1 ring-inset ring-slate-900/[0.06]">
+          {u.kind === "pdf" || u.kind === "image" ? <Receipt size={20} aria-hidden="true" /> : <UploadSimple size={20} aria-hidden="true" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Tag className="normal-case">Uploaded in the app</Tag>
+            {u.doc_type && <Tag>{String(u.doc_type).replace(/_/g, " ")}</Tag>}
+            {waiting && <Tag tone="warn" className="normal-case">not filed yet</Tag>}
+          </div>
+          <p className="mt-1.5 text-xs text-slate-500" title={fullTime(u.created_at)}>
+            {by} · {timeAgo(u.created_at)}
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-[15px] font-semibold leading-snug text-slate-900">{u.summary || u.filename}</p>
+      {amount > 0 && <p className="mt-1 text-xs text-slate-500">Amount: {money(amount)}</p>}
+
+      {waiting ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-900/[0.06] pt-4">
+          <button type="button" data-testid={`upload-open-${u.id}`} disabled={busy} onClick={() => setOpen(true)} className={SMALL_INK}>
+            <CheckCircle size={14} weight="bold" aria-hidden="true" /> Review &amp; file
+          </button>
+          <button type="button" data-testid={`upload-discard-${u.id}`} disabled={busy} onClick={discard} className={cn(SMALL_PILL, "text-rose-700")}>
+            <XCircle size={14} weight="bold" aria-hidden="true" /> Discard
+          </button>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`upload-filed-${u.id}`}>
+          <p className="flex items-center gap-1 text-xs text-emerald-700">
+            <CheckCircle size={13} weight="bold" aria-hidden="true" />
+            Filed{what.text ? ` ${what.text}` : ""}{u.filed_at ? ` · ${timeAgo(u.filed_at)}` : ""}
+          </p>
+          {canLedger && what.tab && (
+            <Link to={`/finance?tab=${what.tab}`} data-testid={`upload-where-${u.id}`} className={SMALL_PILL}>
+              Open {what.place} <ArrowRight size={12} weight="bold" aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 

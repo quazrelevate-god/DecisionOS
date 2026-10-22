@@ -5,22 +5,23 @@
  * Delayed and To collect, the black circular arrow top-right, the same label
  * and the same BigNumeral. What it adds is the width: the left half counts
  * what needs attention across every board, the right half names the one card
- * to pick up and offers the board's own move on it.
+ * to pick up, and one button opens that card on its board.
  *
- * ONE DIFFERENCE, deliberate: the other tiles ARE links — the whole tile
- * navigates. This one cannot be, because it carries a button inside it, so the
- * arrow is the link and the tile itself is a plain surface. Nothing else about
- * it differs.
+ * FIX-3 (2026-10-21, founder) — NO MOVE ON THE DESK, ONE WAY IN. The tile used
+ * to carry the board's own move as well: "Approve" under the left half and
+ * "Open Workflows" under the right, while everything the move was about sat on
+ * the right. The client could not tell which button belonged to the card. And
+ * approving from here meant signing off a stage from a title and a chip, never
+ * having seen the card. So the move is gone: "Open in Workflows" runs the
+ * tile's full width, opens the board on the card the tile names
+ * (/workflows?wf=…&wf_type=…), and the board glows that card — where the whole
+ * card can be read and moved on.
  *
  * The numbers are workflowAttention's (pages/desk/workflowAttention.js); this
  * file only draws them.
  */
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, ArrowUpRight, Check, FlowArrow, SpinnerGap } from "@phosphor-icons/react";
-import { toast } from "sonner";
-import api from "../../lib/api";
+import { ArrowRight, ArrowUpRight, FlowArrow } from "@phosphor-icons/react";
 import { BigNumeral } from "../../components/neuglass";
 import { IconChip } from "../../components/neuglass/IconChip";
 import { CHIP } from "../../components/neuglass/glass";
@@ -36,12 +37,8 @@ const PARTS = [
   { key: "late", label: "late", bar: "bg-ng-accent", dot: "bg-ng-accent" },
 ];
 
-/* THE TWO MOVES ARE ONE PAIR, so they are one recipe. They were written
-   separately and drifted: Approve measured 45 real px against Open Workflows'
-   39, which reads as a mistake rather than as a hierarchy. One fixed height for
-   both — equal, and no taller than the platform's 44pt target once --ui-scale's
-   0.8 lands — with the padding tightened so the pill hugs its label instead of
-   sprawling, and the label itself kept on one line with room either side. */
+/* The button's recipe: one fixed height, no taller than the platform's 44pt
+   target once --ui-scale's 0.8 lands, the label on one line and centred. */
 /* DEX-R1 audit (2026-10-08) — 13px is 10.4pt once the phone's 0.8 lands,
    under HIG's 11pt floor; 15px is 12pt. Desktop keeps 13. */
 const ACTION_PILL =
@@ -49,28 +46,27 @@ const ACTION_PILL =
   + "text-center text-[13px] max-lg:text-[15px] font-medium leading-tight "
   + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline";
 
-/* THE TWO PILLS' TWO WEIGHTS. HIG (buttons › Style): the prominent style goes
-   to the most likely action, and style — not size — says which one that is.
-   They were the other way round: the way OUT ("Open Workflows") wore the ink
-   and the move you can make here wore white. Same shape and size as before, so
-   they still read as the founder's pair; only the emphasis moved to the act. */
+/* FIX-3 — the tile's one action, so it wears the ink: HIG (buttons › Style)
+   gives the prominent style to the most likely action, and it is the only one. */
 const PILL_INK = "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]";
-const PILL_QUIET = "ng-pop text-foreground";
 
-/* THE WIDE ARRANGEMENT'S TWO MOVES ARE CIRCLES, not pills — the founder's
-   call, and the arithmetic is on their side. Two pills were taking 220 CSS px
-   of a 255px column, which is why "PO #221 — Cotton yarn (2 tonnes)" was
-   arriving as "PO #221 — C…": the card's name, the one thing you actually read,
-   was losing its room to two labels you can infer from a tick and an arrow.
-   Two 3.5rem circles take 120px and give the title back a hundred.
+/* FIX-3 — where the button goes: the board, opened on the card the tile names
+   (Workflows.js reads ?wf= and ?wf_type=: it switches to that board, opens the
+   card's stage, brings it into view and glows it). With no card named, the
+   board itself. */
+export function boardLinkFor(nextUp) {
+  if (!nextUp?.id) return "/workflows";
+  return `/workflows?wf=${encodeURIComponent(nextUp.id)}${nextUp.type ? `&wf_type=${encodeURIComponent(nextUp.type)}` : ""}`;
+}
+
+/* THE WIDE ARRANGEMENT'S WAY IN IS A CIRCLE, not a pill — the founder's call:
+   in a 255px column a labelled pill took the room the card's name needed.
 
    THE VISIBLE LABEL GOES, THE ACCESSIBLE ONE DOES NOT. accessibility.md is
    explicit that an icon-only control still needs a name for a screen reader, so
-   each carries the exact words the pill carried — "Approve", "Open Workflows" —
-   as aria-label and as the hover title. A tick for the move and an arrow out
-   for the boards are the two most conventional glyphs there are; this is not
-   the place to be inventive. 3.5rem is 44.8 real pixels once --ui-scale's 0.8
-   lands, which is the platform's target. */
+   it carries the pill's words — "Open in Workflows" — as aria-label and as the
+   hover title. 3.5rem is 44.8 real pixels once --ui-scale's 0.8 lands, which
+   is the platform's target. */
 const ICON_MOVE =
   "grid h-14 w-14 shrink-0 place-items-center rounded-full "
   + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline";
@@ -87,58 +83,20 @@ const REASON_CHIP = {
    "Spend, this…". Dropping it frees a column; this card takes it and comes down
    to the top row's height. More width, less height — so the two moves go side by
    side instead of stacking, which is where the height comes from. */
-export function WorkflowsTile({ attention, loading = false, onMoved, className, wide = false, testid = "kpi-workflows" }) {
-  const qc = useQueryClient();
+export function WorkflowsTile({ attention, loading = false, className, wide = false, testid = "kpi-workflows" }) {
   const phone = useIsMobile();
-  const [busy, setBusy] = useState(false);
   const { needAttention = 0, total = 0, nextUp = null, advancedToday = 0, atRisk = 0 } = attention || {};
   const quiet = !loading && needAttention === 0;
 
-  /* The board's move, from the board's own endpoint — same call the Workflows
-     page makes, so the two cannot diverge. The card refreshes in place: the
-     tile reads the refetched list, nothing navigates. The engine can refuse a
-     move that is not ready (409); the board answers that with an override
-     dialog, which is a conversation this tile has no room for, so it says what
-     the engine said and points at the board. */
-  const move = useMutation({
-    mutationFn: () => api.patch(`/workflows/${nextUp.id}/advance`, {
-      stage: nextUp.nextStage, note: `Moved to ${nextUp.nextStage}`,
-    }),
-    onSuccess: () => {
-      toast.success(`→ ${nextUp.actionLabel?.replace(/^(Advance to|Approve)\s+/, "") || "Moved"}`);
-      qc.invalidateQueries({ queryKey: ["workflows"] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      onMoved?.();
-    },
-    onError: (e) => {
-      const detail = e.response?.data?.detail || "Could not move it";
-      toast.error(e.response?.status === 409
-        ? `${String(detail).replace(/^Stage not ready:\s*/, "")} — open Workflows to move it anyway`
-        : detail);
-    },
-    onSettled: () => setBusy(false),
-  });
-
   const parts = PARTS.map((p) => ({ ...p, n: attention?.[p.key] || 0 })).filter((p) => p.n > 0);
-  // Is there a move to make here? Then it is the prominent pill, not the link.
-  const hasMove = !loading && !quiet && !!nextUp?.actionLabel;
+  // The card the tile names, if it names one: the button opens the board on it.
+  const boardLink = boardLinkFor(!loading && !quiet ? nextUp : null);
 
-  /* The one link on the tile, to the boards. 2026-09-21, founder — a named
-     pill, not a bare circle: "Open Workflows", the same shape, width and
-     height as the move above it, so the two read as a pair — the move you can
-     make here, and the way to the boards. It wears the ink only when there is
-     no move to make; then it IS the most likely action. */
-  const openBoards = (
-    <Link
-      to="/workflows"
-      data-testid={`${testid}-open`}
-      className={cn(ACTION_PILL, hasMove ? PILL_QUIET : PILL_INK)}
-    >
-      {/* The arrow is desktop's. In a 130px column it was the 14px that pushed
-          "Open Workflows" onto a second line while Approve sat on one — the
-          label is the affordance here, and a pill that wraps reads as cramped
-          however equal its height is. */}
-      <span className="whitespace-nowrap">Open Workflows</span>
+  /* FIX-3 — the tile's one button, the full width of the tile and centred,
+     under both halves (the phone and desktop bodies place it). */
+  const openBoard = (place) => (
+    <Link to={boardLink} data-testid={`${testid}-open`} className={cn(ACTION_PILL, PILL_INK, place)}>
+      <span className="whitespace-nowrap">Open in Workflows</span>
       <ArrowRight size={14} weight="bold" aria-hidden="true" className="ng-arrow hidden shrink-0 transition-transform duration-200 lg:block" />
     </Link>
   );
@@ -207,20 +165,20 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                 <span className="min-w-0 truncate">All moving{advancedToday > 0 ? ` · ${advancedToday} advanced today` : ""}</span>
               </p>
               <Link
-                to="/workflows"
+                to={boardLink}
                 data-testid={`${testid}-open`}
-                title="Open Workflows"
-                aria-label="Open Workflows"
-                className={cn(ICON_MOVE, "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]")}
+                title="Open in Workflows"
+                aria-label="Open in Workflows"
+                className={cn(ICON_MOVE, PILL_INK)}
               >
                 <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
               </Link>
             </div>
           ) : nextUp ? (
-            /* The title gets the room the two pills were holding, and gets to
-               use two lines of it — this is the name of the thing waiting on
-               the founder, and an ellipsis in the middle of it is the whole
-               reason this arrangement is being tried. */
+            /* The title gets the room a pill would hold, and gets to use two
+               lines of it — this is the name of the thing waiting on the
+               founder, and an ellipsis in the middle of it is the whole reason
+               this arrangement is being tried. */
             <div className="flex min-w-0 items-center gap-2.5">
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground"
@@ -232,43 +190,26 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
                   {nextUp.reasonLabel}
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {nextUp.actionLabel && (
-                  <button
-                    type="button"
-                    data-testid={`${testid}-next-action`}
-                    disabled={busy || move.isPending}
-                    onClick={() => { setBusy(true); move.mutate(); }}
-                    title={nextUp.actionLabel}
-                    aria-label={nextUp.actionLabel}
-                    className={cn(ICON_MOVE, "ng-pop text-foreground disabled:opacity-50")}
-                  >
-                    {move.isPending
-                      ? <SpinnerGap size={20} weight="bold" aria-hidden="true" className="animate-spin" />
-                      : <Check size={22} weight="bold" aria-hidden="true" />}
-                  </button>
-                )}
-                <Link
-                  to="/workflows"
-                  data-testid={`${testid}-open`}
-                  title="Open Workflows"
-                  aria-label="Open Workflows"
-                  className={cn(ICON_MOVE, "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]")}
-                >
-                  <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
-                </Link>
-              </div>
+              <Link
+                to={boardLink}
+                data-testid={`${testid}-open`}
+                title="Open in Workflows"
+                aria-label="Open in Workflows"
+                className={cn(ICON_MOVE, PILL_INK)}
+              >
+                <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
+              </Link>
             </div>
           ) : (
             /* Nothing waiting: the boards are still one tap away, on their own. */
             <div className="flex min-w-0 items-center justify-between gap-2.5">
               <p className="min-w-0 text-sm text-muted-foreground">Nothing waiting on a move.</p>
               <Link
-                to="/workflows"
+                to={boardLink}
                 data-testid={`${testid}-open`}
-                title="Open Workflows"
-                aria-label="Open Workflows"
-                className={cn(ICON_MOVE, "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]")}
+                title="Open in Workflows"
+                aria-label="Open in Workflows"
+                className={cn(ICON_MOVE, PILL_INK)}
               >
                 <ArrowUpRight size={22} weight="bold" aria-hidden="true" />
               </Link>
@@ -285,16 +226,17 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
      line, the "3 you" legend, the NEXT UP eyebrow, "Workflows —" from the
      label (a screen reader still hears it) and — third pass, 2026-10-14 — the
      bar under the count: "3 / 13 is itself enough". What is left is two halves
-     either side of one separator, each ending in its own move:
-       · LEFT, only as wide as what is in it — the count beside the icon, "Need
-         attention" on one line, and the move (Approve) at its foot;
-       · RIGHT, everything else — the card's chip, name and where it stands,
-         and "Open Workflows" running the half from the separator to the edge.
-     The separator runs the tile's full height between the two buttons, a
-     comfortable gap-x-5 from each side.
+     either side of one separator:
+       · LEFT, only as wide as what is in it — the count beside the icon, and
+         "Need attention" on one line;
+       · RIGHT, everything else — the card's chip, name and where it stands.
+     FIX-3 (2026-10-21): and under both, the tile's one button, "Open in
+     Workflows", the tile's full width — the Approve that sat under the left
+     half is gone (see the top of this file). The separator now stops at the
+     halves.
      A separate body rather than max-lg: classes on the desktop one, the way
      `wide` is: desktop keeps every pixel it had, and this can change without
-     touching it. Same values, same test ids, same mutation. */
+     touching it. Same values, same test ids. */
   if (phone) {
     return (
       <div data-testid={testid} className={cn("ng-stat nm-tile", className)}>
@@ -314,7 +256,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
             </p>
           </div>
 
-          <span aria-hidden="true" className="col-start-2 row-span-2 row-start-1 w-px self-stretch bg-slate-900/10" />
+          <span aria-hidden="true" className="col-start-2 row-start-1 w-px self-stretch bg-slate-900/10" />
 
           <div className="col-start-3 row-start-1 flex min-w-0 flex-col">
             {loading ? (
@@ -348,51 +290,18 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
             )}
           </div>
 
-          {/* The move under the left half — and on a phone it always says
-              "Approve" (2026-10-14, founder: "whatever the workflow stage it is,
-              keep a static approve button"). It still makes the card's own move
-              (Advance to Dispatched, Approve Quotation…), and a screen reader
-              still hears which: the visible word leads the accessible name, so
-              voice control's "tap Approve" keeps working. A fixed short word
-              never widens the half, so the button simply takes the half's width
-              (`w-0 min-w-full`) and the separator stays where "Need attention"
-              put it. While the move is in flight the word stays and a spinner
-              joins it. */}
-          {hasMove && (
-            <button
-              type="button"
-              data-testid={`${testid}-next-action`}
-              disabled={busy || move.isPending}
-              onClick={() => { setBusy(true); move.mutate(); }}
-              aria-label={/^approve$/i.test(nextUp.actionLabel) ? "Approve" : `Approve: ${nextUp.actionLabel}`}
-              className={cn(ACTION_PILL, PILL_INK, "col-start-1 row-start-2 w-0 min-w-full px-3 disabled:opacity-50")}
-            >
-              {move.isPending && <SpinnerGap size={16} weight="bold" aria-hidden="true" className="shrink-0 animate-spin" />}
-              <span className="whitespace-nowrap">Approve</span>
-            </button>
-          )}
-          <Link
-            to="/workflows"
-            data-testid={`${testid}-open`}
-            className={cn(ACTION_PILL, hasMove ? PILL_QUIET : PILL_INK, "col-start-3 row-start-2 px-4")}
-          >
-            <span className="whitespace-nowrap">Open Workflows</span>
-          </Link>
+          {openBoard("col-span-3 row-start-2 px-4")}
         </div>
       </div>
     );
   }
 
   return (
-    /* 2026-09-21, founder — THE NEXT UP HALF RUNS THE CARD'S FULL HEIGHT.
-       It used to start under a header row it shared with the left half, whose
-       only job on this side was the black arrow — so Next up got what was left
-       below it, and a move like "Approve Order Confirmed" wrapped onto two
-       lines inside a 40px pill with no room above or below it. The arrow now
-       sits at the foot of this half, under the move, as a named pill; the
-       half starts at the card's top edge, and the move gets its whole width on
-       one line at 13px — 25-odd characters — growing to a second line with
-       its own padding only where the card is at its narrowest. */
+    /* 2026-09-21, founder — THE NEXT UP HALF RUNS FROM THE CARD'S TOP EDGE:
+       it used to start under a header row whose only job on this side was the
+       black arrow. FIX-3 (2026-10-21): the move that sat at its foot is gone,
+       and "Open in Workflows" runs under both halves (see the top of this
+       file). */
     <div
       data-testid={testid}
       className={cn(
@@ -463,8 +372,7 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
       {/* A hairline between the two halves, as the drawer's sections use. */}
       <span aria-hidden="true" className="w-px self-stretch bg-slate-900/10" />
 
-      {/* RIGHT — the one to pick up (or the quiet line), and at its foot the
-          move and the way to the boards. */}
+      {/* RIGHT — the one to pick up (or the quiet line). */}
       <div className="flex min-w-0 flex-col">
         {loading ? (
           <div className="space-y-2" aria-hidden="true">
@@ -480,8 +388,8 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
           </p>
         ) : nextUp ? (
           <>
-            {/* The eyebrow and the reason share a line, so the card's name,
-                its stage and the move each keep a line of their own. */}
+            {/* The eyebrow and the reason share a line, so the card's name
+                and its stage each keep a line of their own. */}
             {/* THE CHIP WRAPS UNDER THE EYEBROW WHEN THE COLUMN IS NARROW.
                 `shrink-0` beside a `justify-between` eyebrow is fine at the
                 desktop width this was written for; on the phone the column is
@@ -515,26 +423,10 @@ export function WorkflowsTile({ attention, loading = false, onMoved, className, 
           <p className="mt-auto text-sm text-muted-foreground">Nothing waiting on a move.</p>
         )}
 
-        {/* Sized to the row the grid already had: the tiles follow the Dex
-            well's height (Desk.js, KR-8.6), so this half fits inside it rather
-            than making every tile taller. */}
-        <div className={cn("flex gap-2", wide ? "max-lg:flex-row lg:flex-col" : "flex-col",
-          (quiet || !nextUp) && !loading ? "pt-2.5" : "mt-auto pt-2.5")}>
-          {!loading && !quiet && nextUp?.actionLabel && (
-            <button
-              type="button"
-              data-testid={`${testid}-next-action`}
-              disabled={busy || move.isPending}
-              onClick={() => { setBusy(true); move.mutate(); }}
-              title={nextUp.actionLabel}
-              className={cn(ACTION_PILL, PILL_INK, "disabled:opacity-50")}
-            >
-              {move.isPending ? "Moving…" : nextUp.actionLabel}
-            </button>
-          )}
-          {openBoards}
-        </div>
       </div>
+
+      {/* FIX-3 — the tile's one button, under both halves, the tile's width. */}
+      {openBoard("col-span-3")}
     </div>
   );
 }

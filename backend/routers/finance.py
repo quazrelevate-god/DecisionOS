@@ -16,7 +16,7 @@ from services.tasks import enrich_tasks
 from services.inbox import add_inbox_item
 from services.ingestion import (
     ai_extract_document, ai_map_spreadsheet, combine_sheets, _normalise_records, commit_ingestion_records,
-    _classify_ingestion, _tenant_currency, _tenant_name, DOC_MIME,
+    _classify_ingestion, _tenant_currency, _tenant_name, DOC_MIME, upload_scope,
 )
 
 router = APIRouter(prefix="/api")
@@ -149,11 +149,15 @@ async def ingest_csv(file: UploadFile = File(...), user: dict = Depends(require_
 @router.post("/ingest/{ingestion_id}/commit")
 async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
                            user: dict = Depends(require_perm("data_input"))):
-    ing = await db.ingestions.find_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    # BUG-16: only an upload this person may see (their own, or any for the
+    # owner and Finance) — any Data Input holder could file anyone's by id.
+    ing = await db.ingestions.find_one({**upload_scope(user), "id": ingestion_id}, {"_id": 0})
     if not ing:
         raise HTTPException(status_code=404, detail="Ingestion not found")
     if ing.get("status") == "filed":
         raise HTTPException(status_code=400, detail="This upload has already been filed")
+    if ing.get("status") == "discarded":
+        raise HTTPException(status_code=400, detail="This upload was discarded")
     created = await commit_ingestion_records(user["tenant_id"], user["id"], _normalise_records(inp.records),
                                              ingestion_id, ing.get("source", "upload"))
     await db.ingestions.update_one({"id": ingestion_id},
@@ -175,16 +179,47 @@ async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
 @router.get("/ingest")
 # 2026-10-03 RBAC audit: uploaded bills and their amounts were readable by any
 # member. The Finance inbox they belong to is opened by Finance or Data Input.
-async def list_ingestions(user: dict = Depends(require_any_perm("finance", "data_input"))):
-    return await db.ingestions.find({"tenant_id": user["tenant_id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+# BUG-16 (2026-10-21): the Money Inbox's Pending and Filed list these (?status=
+# review / filed), so it is scoped as they are: the company's uploads for the
+# owner and Finance, your own for anyone else (services.ingestion.upload_scope),
+# with who uploaded each.
+async def list_ingestions(status: Optional[str] = None,
+                          user: dict = Depends(require_any_perm("finance", "data_input"))):
+    q = upload_scope(user)
+    if status in ("review", "filed", "failed", "discarded"):
+        q["status"] = status
+    rows = await db.ingestions.find(q, {"_id": 0}).sort("created_at", -1).to_list(50)
+    ids = list({r["created_by"] for r in rows if r.get("created_by")})
+    names = {u["id"]: u.get("name") for u in await db.users.find(
+        {"id": {"$in": ids}, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1, "name": 1}).to_list(len(ids) or 1)} if ids else {}
+    for r in rows:
+        r["created_by_name"] = names.get(r.get("created_by"))
+    return rows
 
 
 @router.get("/ingest/{ingestion_id}")
 async def get_ingestion(ingestion_id: str, user: dict = Depends(require_any_perm("finance", "data_input"))):
-    ing = await db.ingestions.find_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
+    ing = await db.ingestions.find_one({**upload_scope(user), "id": ingestion_id}, {"_id": 0})
     if not ing:
         raise HTTPException(status_code=404, detail="Not found")
     return ing
+
+
+@router.post("/ingest/{ingestion_id}/discard")
+async def discard_ingestion(ingestion_id: str, user: dict = Depends(require_any_perm("finance", "data_input"))):
+    """BUG-16 — Discard on the review panel used to close the panel and leave
+    the upload waiting, unseen. Now it leaves the Inbox's Pending for good.
+    A filed upload is not discarded: what it filed is already in the books."""
+    ing = await db.ingestions.find_one({**upload_scope(user), "id": ingestion_id}, {"_id": 0})
+    if not ing:
+        raise HTTPException(status_code=404, detail="Not found")
+    if ing.get("status") == "filed":
+        raise HTTPException(status_code=400, detail="This upload has already been filed")
+    await db.ingestions.update_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"$set": {
+        "status": "discarded", "discarded_at": now_iso(), "discarded_by": user["id"]}})
+    if ing.get("inbox_id"):
+        await db.inbox.update_one({"id": ing["inbox_id"], "tenant_id": user["tenant_id"]}, {"$set": {"status": "done"}})
+    return {"discarded": True}
 
 
 @router.get("/invoices")

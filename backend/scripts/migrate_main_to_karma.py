@@ -131,7 +131,6 @@ def url_hosts(url: str) -> set[str]:
 LEGACY_ROLE, CANONICAL_ROLE = "production", "operations"  # karma FIX-004-D
 DEMO_OWNER_EMAIL = "owner@sharma.com"  # main's seed_demo account (published password)
 AI_CONSENT_VERSION = "1.0"  # = services/ai_consent.py CURRENT_CONSENT_VERSION (pinned by a test)
-MAX_CO_ASSIGNEES = 10  # = services/tasks.py MAX_CO_ASSIGNEES
 MONEY_FIELDS = ("amount", "amount_paid", "purchase_amount", "unit_cost", "applied")
 
 # Run-wide options transforms may read via ctx.options (set from the CLI).
@@ -267,9 +266,8 @@ def transform_task(doc: dict, ctx: "Ctx") -> dict:
                 pass
             elif sid not in tenant_users:
                 ctx.warn("support_id_dropped_unknown_user", doc, f"support_id={sid} is not a user of this tenant")
-            elif len(helpers) >= MAX_CO_ASSIGNEES:
-                ctx.warn("support_id_dropped_helper_cap", doc, f"already {len(helpers)} helpers")
             else:
+                # FIX-2: karma no longer caps helpers (services/tasks.py).
                 out["co_assignee_ids"] = helpers + [sid]
 
     # Karma's role rename skips tasks, and tasks are matched to people by role.

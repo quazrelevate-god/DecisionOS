@@ -46,6 +46,17 @@ public class MainActivity extends BridgeActivity {
         }
 
         final WebView webView = getBridge().getWebView();
+
+        // FIX-4 (2026-10-21): honour the viewport meta's WIDTH, as Chrome
+        // always does. hooks/useUiScale draws a phone at 0.8, and where CSS
+        // zoom cannot do that it lays the page out wider (width=515 on a 412px
+        // screen) and pins the scale at 0.8. Android's WebView ignores that
+        // width unless wide viewport is on, so the page stayed at 1.0: every
+        // box a quarter too big, as the client saw on OxygenOS / ColorOS 16.
+        // Our pages normally say width=device-width, which lays out exactly as
+        // before with this on.
+        webView.getSettings().setUseWideViewPort(true);
+
         ViewCompat.setOnApplyWindowInsetsListener(webView, (v, insets) -> {
             Insets bars = insets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());

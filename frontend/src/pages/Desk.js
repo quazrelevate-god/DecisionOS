@@ -2081,7 +2081,9 @@ export default function Desk() {
           <StatTile
             icon={HandCoins}
             alert={(m.cash?.overdue || 0) > 0}
-            label="To collect (overdue)"
+            /* 2026-10-22 (founder) — "To collect", no "(overdue)": the figure
+               is still what is overdue, and the page it opens says so. */
+            label="To collect"
             value={m.cash ? inrCompact(m.cash.overdue) : shown(null, m.failed?.summary)}
             urgent={(m.cash?.overdue || 0) > 0}
             to="/finance?tab=revenue&filter=overdue"
@@ -2099,14 +2101,13 @@ export default function Desk() {
               the squat two-column arrangement built when this card had to share
               a short page with a slider; the slider has left and the founder
               asked for the full one back — the split bar, "1 stuck · 8 late",
-              NEXT UP with the stuck card, Advance and Open Workflows. It needs
+              NEXT UP with the stuck card, and Open in Workflows (FIX-3). It needs
               height, which the three tiles above give back (they were scaled up
               with nothing to put in the space). */}
           {seesWorkflows && (
           <WorkflowsTile
             attention={wfAttention}
             loading={workflowsQ.isLoading}
-            onMoved={() => qc.invalidateQueries({ queryKey: ["workflows"] })}
             wide={false}
             className={cn("col-span-3 lg:col-span-2", PHONE_TILE)}
           />

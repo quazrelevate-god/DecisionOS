@@ -9,7 +9,7 @@ import { roleLabel } from "../lib/departments";
 import { PageHeader, Chip, EmptyState, LoadFailed, SkeletonCard, StickyHeader } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { userPerms } from "../lib/perms";
-import { canAssignPerson, canAssignTeam, canSeeAllTasks, taskEditRights } from "../lib/taskAccess";
+import { EVERYONE, addPeopleOptions, canAssignPerson, canAssignTeam, canSeeAllTasks, taskEditRights } from "../lib/taskAccess";
 import { opModel } from "../lib/operatingModel";
 import { toast } from "sonner";
 // WE-14 (2026-08-16): TaskBoard import retired -- the Board sub-tab
@@ -197,6 +197,32 @@ const isOverdue = (t) => {
   if (due.length <= 10) return due < todayYmd();
   return new Date(due) < new Date();
 };
+/* BUG-04 (XCODITS QA, 2026-10-21) — HOW LATE, IN DAYS, AND IT OUTLIVES THE
+   CLOSE. The card said "Overdue" with no number, and the moment a task was
+   finished even that went: a task closed after ten days overdue looked like
+   any other finished task. Now an open task says how many days it is over, and
+   a finished one says how late it finished (or that it was on time), from the
+   date it was due and `completed_at` — the server keeps that date fixed once a
+   task is finished. Same calendar rule as isOverdue: a bare date is due for
+   that whole day, a timestamp is late once its hour has passed. */
+const dayNo = (ymd) => Date.UTC(+ymd.slice(0, 4), +ymd.slice(5, 7) - 1, +ymd.slice(8, 10)) / 86400000;
+const lateness = (t) => {
+  if (!t.due_date || t.status === "cancelled") return null;
+  const due = String(t.due_date);
+  const dueDay = due.length <= 10 ? due : ymdOf(new Date(due));
+  if (t.status === "done") {
+    if (!t.completed_at) return null;
+    const at = new Date(t.completed_at);
+    const late = due.length <= 10 ? ymdOf(at) > due : at > new Date(due);
+    return { finished: true, late, days: late ? Math.max(0, dayNo(ymdOf(at)) - dayNo(dueDay)) : 0 };
+  }
+  if (!isOverdue(t)) return null;
+  return { finished: false, late: true, days: Math.max(0, dayNo(todayYmd()) - dayNo(dueDay)) };
+};
+const daysWord = (n) => `${n} day${n === 1 ? "" : "s"}`;
+const latenessText = (l) => (!l ? "" : l.finished
+  ? (!l.late ? "Finished on time" : l.days > 0 ? `Finished ${daysWord(l.days)} late` : "Finished late")
+  : (l.days > 0 ? `${daysWord(l.days)} overdue` : "Overdue"));
 // ASK-25 — a task waiting for a sign-off: the Approvals view's predicate,
 // shared with the Desk's Task approvals card so the two never disagree.
 const isPendingApproval = (t) => !!t.approval_required && t.approval_status === "pending" && !isTerminal(t);
@@ -1440,7 +1466,20 @@ function DueLine({ t: task, canMove, onSaved, className = "", testid }) {
     );
   }
 
-  const label = <><CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(task.due_date)}</>;
+  /* BUG-04 — beside the date, how late: "10 days overdue", "Finished 10 days
+     late", "Finished on time". */
+  const late = latenessText(lateness(task));
+  const label = (
+    <>
+      <CalendarBlank size={13} weight="bold" aria-hidden="true" /> Due {dueLabel(task.due_date)}
+      {late && (
+        <span data-testid={`task-lateness-${task.id}`}
+          className={lateness(task)?.late ? (task.status === "done" ? "text-amber-800" : "text-red-700") : "text-emerald-700"}>
+          · {late}
+        </span>
+      )}
+    </>
+  );
   if (!canMove) {
     return <span className={`inline-flex items-center gap-1 ${className}`} data-testid={testid}>{label}</span>;
   }
@@ -1728,9 +1767,11 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
           <GlassSelect value="" placeholder="Add a person" icon={UserPlus} disabled={busy}
             ariaLabel="Add a person to this task" testid={`task-people-add-${t.id}`}
             onChange={(id) => {
-              if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
+              // FIX-2 — "Everyone" adds every person this list offers at once.
+              if (id === EVERYONE) save([...co, ...addable.map((m) => m.id)], `Added ${addable.length} people`);
+              else if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
             }}
-            options={addable.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` }))} />
+            options={addPeopleOptions(addable, roleOptions)} />
         )}
       </div>
       {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.decision_id || t.approval_required ? (
@@ -1997,6 +2038,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const workLocked = awaitingApproval || waitingDecision;
   const overdue = isOverdue(t);
   const terminal = isTerminal(t);
+  const late = lateness(t);   // BUG-04
   // ASK-25 — what the card face draws.
   const prio = TIER_OF(t);
   const tone = STATUS_TONE[t.status] || STATUS_TONE.todo;
@@ -2129,6 +2171,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const onPhoto = (e) => {
     const f = e.target.files?.[0];
     if (f) upload(f, "photo");
+    // BUG-14 (2026-10-21): as onEvidence — else the same picture chosen twice
+    // (a retry after a failed upload) fires no change and nothing happens.
+    e.target.value = "";
   };
 
   const onEvidence = (e) => {
@@ -2496,7 +2541,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 2 min ago" line that used to share this row is gone — every
                 change is on the Activity timeline at the bottom instead. */}
             <p className="mt-1.5 hidden flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-500 lg:flex" data-testid={`task-meta-${t.id}`}>
-              <DueLine t={t} canMove={rights.priority} onSaved={onChange} />
+              <DueLine t={t} canMove={rights.priority && !isTerminal(t)} onSaved={onChange} />
               <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} />
             </p>
           </div>
@@ -2592,7 +2637,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                       <ClockCounterClockwise size={14} weight="regular" />
                     </span>
                     <span className="min-w-0 text-sm">
-                      <DueLine t={t} canMove={rights.priority} onSaved={onChange}
+                      <DueLine t={t} canMove={rights.priority && !isTerminal(t)} onSaved={onChange}
                         testid={`task-due-m-${t.id}`} className="text-sm text-slate-700" />
                     </span>
                   </>
@@ -3201,7 +3246,14 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             )}
             {overdue && !terminal && (
               <span data-testid={`overdue-${t.id}`} className={`${PILL} bg-red-50 text-red-700 ring-red-100`}>
-                <Clock size={12} weight="bold" aria-hidden="true" /> Overdue
+                <Clock size={12} weight="bold" aria-hidden="true" /> Overdue{late?.days > 0 ? ` · ${daysWord(late.days)}` : ""}
+              </span>
+            )}
+            {/* BUG-04 — and once it is finished, how late it finished. */}
+            {late?.finished && (
+              <span data-testid={`finished-${late.late ? "late" : "on-time"}-${t.id}`}
+                className={`${PILL} ${late.late ? "bg-amber-50 text-amber-800 ring-amber-100" : "bg-emerald-50 text-emerald-700 ring-emerald-100"}`}>
+                <Clock size={12} weight="bold" aria-hidden="true" /> {latenessText(late)}
               </span>
             )}
             {/* B3 (2026-09-21) — BLOCKED WORK HAS TO LOOK BLOCKED.

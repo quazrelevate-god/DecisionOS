@@ -259,6 +259,29 @@ def bill_gst(inv: dict, buyer_registered: bool) -> dict:
             "tax_total": tax, "input_tax_credit": round(itc, 2)}
 
 
+# ---------------------------------------------------------------------------
+# BUG-16 (XCODITS QA, 2026-10-21): WHOSE UPLOADS YOU SEE. A bill uploaded in
+# the app is read, then waits for its uploader to check it and tap File it.
+# Until now nothing listed it while it waited, and an employee without Finance
+# could file it and never see it again — the client's "filed expense missing
+# from Filed and Pending". The Money Inbox now lists uploads beside the
+# WhatsApp drafts: the owner and Finance see the company's, since they are who
+# reviews money; anyone else sees their own. WhatsApp-sourced rows stay out —
+# that queue already shows those drafts (capture_drafts), filed or not.
+# ---------------------------------------------------------------------------
+def sees_every_upload(user: dict) -> bool:
+    from core import user_perms
+    return user.get("role") == "owner" or "finance" in user_perms(user)
+
+
+def upload_scope(user: dict) -> dict:
+    """The Mongo filter for the uploads this person may see and act on."""
+    q = {"tenant_id": user["tenant_id"], "source": {"$ne": "whatsapp"}}
+    if not sees_every_upload(user):
+        q["created_by"] = user["id"]
+    return q
+
+
 async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, ingestion_id: str, source: str) -> dict:
     from routers.ledger import create_expense, create_asset, create_inventory, guess_asset_category
     from models.contacts import CONTACT_TYPES

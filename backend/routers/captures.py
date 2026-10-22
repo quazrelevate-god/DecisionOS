@@ -95,7 +95,13 @@ async def captures_pending_count(user: dict = Depends(get_current_user)):
     q = {"tenant_id": user["tenant_id"], "status": {"$in": ["pending_review", "needs_attention"]}}
     if user["role"] != "owner":
         q["$or"] = [{"reviewer_role": user["role"]}, {"reviewer_perm": {"$in": list(user_perms(user))}}]
-    return {"count": await db.capture_drafts.count_documents(q)}
+    count = await db.capture_drafts.count_documents(q)
+    # BUG-16 (2026-10-21): the Inbox's Pending also lists bills uploaded in the
+    # app that were read but not filed yet, so its number counts them too.
+    if user["role"] == "owner" or {"finance", "data_input"} & set(user_perms(user)):
+        from services.ingestion import upload_scope
+        count += await db.ingestions.count_documents({**upload_scope(user), "status": "review"})
+    return {"count": count}
 
 
 @router.patch("/captures/{cid}")

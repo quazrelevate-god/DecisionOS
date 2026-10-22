@@ -3,8 +3,20 @@
 // can_assign_team). The server enforces them; the screens only offer what the
 // server will accept, so nobody picks a person and then gets refused.
 import { userPerms } from "./perms";
+import { roleLabel } from "./departments";
 
 const isOwner = (user) => user?.role === "owner";
+
+// FIX-2 (2026-10-21) — the options of a "who else is on this task" picker:
+// everyone you may add, headed by "Everyone" once there are two or more, so a
+// task for the whole team is one pick rather than one per person. EVERYONE is
+// the value the picker hands back for it.
+export const EVERYONE = "__everyone__";
+export function addPeopleOptions(people, roleOptions) {
+  const one = people.map((m) => ({ value: m.id, label: `${m.name} · ${roleLabel(m.role, roleOptions)}` }));
+  if (people.length < 2) return one;
+  return [{ value: EVERYONE, label: `Everyone (${people.length})` }, { label: "People", options: one }];
+}
 
 // All Tasks: the owner, or anyone given "See all tasks".
 export const canSeeAllTasks = (user) => isOwner(user) || userPerms(user).includes("tasks_view_all");

@@ -3469,6 +3469,27 @@ html[data-page="dex"] .app-sky {
             0 2px 4px hsl(216 28% 18% / .13),
             0 12px 22px -10px hsl(216 28% 18% / .32);
     }
+    /* FIX-3 (2026-10-21) — THE CARD A LINK SENT YOU TO (Workflows ?wf=, the
+       Desk's "Open in Workflows"): the tile's own lift, plus a soft gold glow
+       around it — found at a glance, without a hard outline. GOLD, as
+       .ng-new-glow: accent is the alert grammar, and nothing is wrong here;
+       this is simply the one to look at. On the card's own box-shadow rather
+       than an ::after, because on a phone the card clips its overflow and an
+       overlay's glow would be cut at the card's edge. */
+    .ng-bento[data-focus="true"] {
+        box-shadow:
+            inset 0 1px 0 hsl(0 0% 100% / .90),
+            0 0 0 1px hsl(var(--ng-gold) / .55),
+            0 0 16px 2px hsl(var(--ng-gold) / .32),
+            0 6px 14px -6px hsl(216 28% 18% / .26);
+    }
+    .ng-bento[data-focus="true"]:not([role="dialog"]):not([role="alertdialog"]):hover {
+        box-shadow:
+            inset 0 1px 0 hsl(0 0% 100% / .90),
+            0 0 0 1px hsl(var(--ng-gold) / .60),
+            0 0 20px 3px hsl(var(--ng-gold) / .36),
+            0 12px 22px -10px hsl(216 28% 18% / .32);
+    }
     /* Opened: the tile stops hovering and settles, so an expanded card reads
        as a surface you are inside rather than one more thing to click. */
     .ng-bento[data-open="true"],

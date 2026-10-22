@@ -26,6 +26,7 @@ _DB_MODULES = [
     "routers.contacts", "routers.crm", "routers.complaints", "routers.captures",
     "routers.voice_notes", "routers.team", "routers.calendar", "routers.workflows",
     "routers.whatsapp", "routers.brief",
+    "routers.finance",  # BUG-16 (2026-10-21): uploads — list, file, discard
     "services.tasks", "services.operating_score", "services.workflow_engine",
     "services.voice", "services.captures", "services.whatsapp", "services.ingestion",
     "services.inbox", "services.leave", "services.enrich", "services.notifications",

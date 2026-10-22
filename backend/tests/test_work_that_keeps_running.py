@@ -150,9 +150,13 @@ def test_an_ordinary_task_carries_no_cadence(with_test_db):
     assert made.get("recurrence") is None and made.get("series_id") is None
 
 
-def test_finishing_one_brings_the_next(with_test_db):
+def test_finishing_one_brings_the_next(with_test_db, monkeypatch):
     """The rule that makes recurrence need no scheduler: the next occurrence is
     created by the act of finishing this one, so there is only ever one live."""
+    # Closed on the day it was due (BUG-04: the next one is the first that is
+    # not already late, so "today" decides it).
+    monkeypatch.setattr("shared.due.today_ist", lambda now=None: "2026-09-21")
+
     async def scenario(db):
         import routers.tasks as rt
         with _env(db):
@@ -464,3 +468,25 @@ def test_a_deadline_that_passed_earlier_today_is_already_late(with_test_db):
         with_test_db,
         [_open_task("t1", datetime(2026, 9, 21, 9, 0, tzinfo=timezone.utc).isoformat())], now=now)
     assert told == 0
+
+
+def test_a_routine_closed_late_brings_the_next_one_not_already_late(with_test_db, monkeypatch):
+    """BUG-04 (XCODITS QA, 2026-10-21): a weekly routine due 21 Sep and closed
+    on 21 Oct brought one due 28 Sep — a month late the moment it existed. The
+    next is the first Monday of the series that is not already late."""
+    monkeypatch.setattr("shared.due.today_ist", lambda now=None: "2026-10-21")
+
+    async def scenario(db):
+        import routers.tasks as rt
+        with _env(db):
+            await _people(db)
+            first = await rt.create_task(_create(
+                title="Monday stock count", due_date="2026-09-21",
+                repeat_every="week", assignee_id=DOER["id"]), _Bg(), user=OWNER)
+            await rt.update_task(first["id"], _update(status="done"), user=OWNER)
+            return [r for r in await db.tasks.find({"tenant_id": TENANT}, {"_id": 0}).to_list(10)
+                    if r["id"] != first["id"]]
+
+    nxt = with_test_db(scenario)
+    assert [r["due_date"] for r in nxt] == ["2026-10-26"], "the next Monday, still a Monday"
+

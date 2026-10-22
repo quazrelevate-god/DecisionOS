@@ -32,7 +32,7 @@
 // Every other column goes inert — no preventDefault, so the cursor shows
 // "no drop" and the browser refuses the gesture itself. A rule the UI
 // enforces beats the same rule delivered as a red toast after the fact.
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -418,11 +418,14 @@ export default function Workflows() {
   // KR-14.9 — sync tab from ?wf_type= when MyWork's mobile filter dropdown
   // changes it externally. Guard against pipeline drift by validating the
   // key against the current pipeline list before applying.
+  // FIX-3 (2026-10-21): only when the ADDRESS changes. This ran whenever the
+  // tab differed from ?wf_type=, so after arriving by a link that names a
+  // board (the Desk's "Open in Workflows", the score's cards), tapping another
+  // board's tab snapped straight back to the linked one.
+  const pipelineKeys = pipelines.map((p) => p.key).join(",");
   useEffect(() => {
-    if (focusWfType && pipelines.some((p) => p.key === focusWfType) && focusWfType !== tab) {
-      setTab(focusWfType);
-    }
-  }, [focusWfType, pipelines, tab]);
+    if (focusWfType && pipelines.some((p) => p.key === focusWfType)) setTab(focusWfType);
+  }, [focusWfType, pipelineKeys]); // eslint-disable-line react-hooks/exhaustive-deps
   const activeKey = pipelines.some((p) => p.key === tab) ? tab : pipelines[0]?.key;
 
   const { data, isError: boardFailed, refetch: refetchBoard } = useQuery({
@@ -442,14 +445,6 @@ export default function Workflows() {
   const countOf = (key) => (pipelineCounts
     ? (pipelineCounts[key] || 0)
     : (key === activeKey && data ? data.length : null));
-
-  useEffect(() => {
-    if (!focusWf || !data) return;
-    const timer = setTimeout(() => {
-      document.getElementById(`workflow-card-${focusWf}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [focusWf, data]);
 
   const pipeline = pipelines.find((p) => p.key === activeKey) || pipelines[0];
   const stages = pipeline?.stages || [];
@@ -472,6 +467,23 @@ export default function Workflows() {
   const toggleStage = useCallback((key) => {
     setOpenStages((s) => ({ ...s, [key]: !s[key] }));
   }, []);
+  /* ?wf= — the card a link sent you to (the Desk's "Open in Workflows" names
+     one): its stage opens (on a phone every stage starts folded, so the card
+     was there but hidden), it is brought into view, and it glows
+     (data-focus below). FIX-3 (2026-10-21): ONCE per card. This ran on every
+     refetch of the board, so moving any card pulled the page back to this
+     one. */
+  const focusedFor = useRef(null);
+  useEffect(() => {
+    if (!focusWf || !data || focusedFor.current === focusWf) return;
+    const card = data.find((w) => w.id === focusWf);
+    if (!card) return;
+    focusedFor.current = focusWf;
+    setOpenStages((s) => ({ ...s, [card.stage]: true }));
+    setTimeout(() => {
+      document.getElementById(`workflow-card-${focusWf}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 350);
+  }, [focusWf, data]);
   const [busyId, setBusyId] = useState(null);
   // ASK-2 fix: workflow card queued for delete-confirmation. Set from the
   // trash-icon click; cleared by the AlertDialog's Cancel / after delete.
@@ -875,11 +887,12 @@ export default function Workflows() {
                            the height floors rather than fixes, so a short card
                            is short. The scroller keeps its fixed 256px track
                            from lg up, where several columns are side by side. */
+                        /* FIX-3 — the card a link sent you to glows (index.css,
+                           .ng-bento[data-focus]): soft, not an outline. */
+                        data-focus={w.id === focusWf ? "true" : undefined}
                         className={`ng-bento group cursor-grab p-3 active:cursor-grabbing w-full min-h-[220px] lg:w-64 lg:h-[260px] lg:shrink-0 flex flex-col overflow-hidden text-left lg:h-auto lg:w-auto lg:overflow-visible lg:p-3.5 ${
                           dragging ? "opacity-40" : ""
-                        } ${busyId === w.id ? "opacity-60" : ""} ${
-                          w.id === focusWf ? "ring-2 ring-ng-ink ring-offset-2" : ""
-                        }`}
+                        } ${busyId === w.id ? "opacity-60" : ""}`}
                       >
                         <div className="flex items-start gap-2">
                           <DotsSixVertical size={15} weight="bold" aria-hidden="true"

@@ -125,4 +125,31 @@
       post the notification to the tray.
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      BUG-14 (XCODITS QA, 2026-10-21) · THE CAMERA BUTTONS OPEN THE CAMERA.
+
+      The testers reported "no permission request when uploading". No prompt
+      is right: the system photo and document pickers need no permission on
+      Android 13+, and asking for media access would be wrong for Play. What
+      was actually broken sat behind it. Money › Photo, a task's camera and
+      Dex's Photo are inputs with capture="environment", which Capacitor
+      (BridgeWebChromeClient) opens with an IMAGE_CAPTURE intent — but only
+      after asking the package manager whether a camera app exists. Since
+      targetSdk 30 an app cannot see other apps unless it says which intents it
+      means to use, so the answer was "none" and Capacitor fell back to the
+      gallery without a word. Reproduced on the Android 16 emulator: logcat
+      "AppsFilter … com.android.camera2 BLOCKED", then "Media capture intent
+      could not be launched. Falling back to default file picker."
+
+      This is visibility, not a permission: nothing to grant, nothing to
+      declare to Play. CAMERA stays undeclared on purpose — the camera app
+      holds that permission, and declaring it here would make Capacitor demand
+      it from the person first and fail silently if they said no.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
 </manifest>

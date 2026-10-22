@@ -1,111 +1,106 @@
-import { ADMIN_BTN, ADMIN_H2, ADMIN_H3, ADMIN_SEL, CARD_BASE } from "./adminStyle";
-// Billing & subscriptions (Epic 10 Sprint 4). Razorpay / INR.
-// MRR + revenue, plan mix, per-tenant plan with admin override/comp, reconciliation.
-import { useState, useEffect, useCallback } from "react";
-import api, { formatApiError } from "../../lib/api";
-import { toast } from "sonner";
-import { Spinner, ArrowClockwise, CurrencyInr } from "@phosphor-icons/react";
-
-const CARD = `${CARD_BASE} p-4`;
-const H2 = ADMIN_H2;
-const H3 = ADMIN_H3;
-const BTN = ADMIN_BTN;
-const SEL = ADMIN_SEL;
-const PLANS = ["trial", "starter", "business", "enterprise", "grandfathered"];
-
-function Money({ v }) { return <span className="font-display">₹{Number(v || 0).toLocaleString("en-IN")}</span>; }
+import { CARD_BASE } from "./adminStyle";
+// Billing (Epic 10 Sprint 4; redesigned 2026-10-22). Razorpay, in rupees.
+// What we earn, the plan mix, whether payments reconcile, and every
+// workspace's plan. A plan used to change straight from a dropdown in this
+// list -- one slip changed the wrong company. It changes on the workspace's
+// own page now, with a reason that goes into the audit log.
+import { useMemo, useState } from "react";
+import { ArrowClockwise, CurrencyInr, WarningCircle } from "@phosphor-icons/react";
+import {
+  useAdmin, useAdminGet, fmtInr, fmtNum, fmtDate, Btn, Chip, planChip, SearchField, AdminPage, Panel, Loading,
+  Empty, LoadError, Stat, DataTable,
+} from "./adminUi";
+import { planLabel, humanize } from "./adminLabels";
 
 export function BillingSection() {
-  const [ov, setOv] = useState(null);
-  const [tenants, setTenants] = useState(null);
-  const [recon, setRecon] = useState(null);
+  const { go } = useAdmin();
+  const ov = useAdminGet("/admin/billing/overview");
+  const tn = useAdminGet("/admin/billing/tenants");
+  const rc = useAdminGet("/admin/billing/reconciliation");
+  const [q, setQ] = useState("");
+  const reload = () => { ov.reload(); tn.reload(); rc.reload(); };
 
-  const load = useCallback(async () => {
-    try {
-      const [o, t, r] = await Promise.all([
-        api.get("/admin/billing/overview"),
-        api.get("/admin/billing/tenants"),
-        api.get("/admin/billing/reconciliation"),
-      ]);
-      setOv(o.data); setTenants(t.data.tenants); setRecon(r.data);
-    } catch (e) { toast.error(formatApiError(e)); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  const rows = useMemo(() => tn.data?.tenants || [], [tn.data]);
+  const shown = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return term ? rows.filter((t) => `${t.name} ${planLabel(t.plan)}`.toLowerCase().includes(term)) : rows;
+  }, [rows, q]);
 
-  const setPlan = async (tid, plan) => {
-    const reason = window.prompt(`Set plan to "${plan}" — reason (audited):`, "");
-    if (reason === null) return;
-    try {
-      await api.patch(`/admin/billing/tenants/${tid}/plan`, { plan, reason });
-      toast.success("Plan updated"); load();
-    } catch (e) { toast.error(formatApiError(e)); }
-  };
-
-  if (!ov || !tenants || !recon) {
-    return <div className="flex items-center gap-2 text-slate-600 font-mono text-sm py-10 justify-center"><Spinner size={16} className="animate-spin" /> Loading…</div>;
-  }
-  const ts = (s) => (s ? String(s).slice(0, 10) : "—");
+  const o = ov.data;
+  const r = rc.data;
+  const columns = [
+    { key: "name", label: "Workspace", render: (t) => (
+      <div className="flex items-center gap-2"><span className="font-medium text-slate-900">{t.name}</span>{t.suspended && <Chip tone="bad">Suspended</Chip>}</div>
+    ) },
+    { key: "plan", label: "Plan", sortValue: (t) => planLabel(t.plan), render: (t) => planChip(t.plan) },
+    { key: "lifetime_revenue_inr", label: "Paid so far", align: "right", render: (t) => fmtInr(t.lifetime_revenue_inr) },
+    { key: "payments", label: "Payments", align: "right", mobile: false },
+    { key: "last_payment", label: "Last payment", mobile: false, render: (t) => fmtDate(t.last_payment) },
+    { key: "seat_limit_override", label: "Seats", align: "right", mobile: false, render: (t) => t.seat_limit_override ?? "Plan" },
+  ];
 
   return (
-    <div data-testid="admin-billing">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={H2}>Billing & Subscriptions</h2>
-        <button onClick={load} className={BTN + " border-slate-900/15 text-slate-600 hover:text-slate-900 flex items-center gap-1.5"}>
-          <ArrowClockwise size={13} /> Refresh
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <div className={CARD}><CurrencyInr size={18} className="text-[#116329] mb-2" weight="bold" /><div className="font-display text-3xl text-slate-900"><Money v={ov.mrr_inr} /></div><div className={H3 + " mt-1 mb-0"}>MRR</div></div>
-        <div className={CARD}><div className="font-display text-3xl text-slate-900"><Money v={ov.arr_inr} /></div><div className={H3 + " mt-1 mb-0"}>ARR</div></div>
-        <div className={CARD}><div className="font-display text-3xl text-slate-900">{ov.paying_tenants}<span className="text-slate-600 text-lg">/{ov.total_tenants}</span></div><div className={H3 + " mt-1 mb-0"}>Paying tenants</div></div>
-        <div className={CARD}><div className="font-display text-3xl text-slate-900"><Money v={ov.revenue.all_time.revenue_inr} /></div><div className={H3 + " mt-1 mb-0"}>Revenue (all-time)</div></div>
-      </div>
-
-      {!ov.razorpay_configured && (
-        <p className="font-mono text-[11px] text-[#7d4e00] mb-4">Razorpay prices not configured — MRR uses plan list prices only.</p>
+    <AdminPage title="Billing" subtitle="Revenue, plans and payments, in rupees" testid="admin-billing"
+      actions={<Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reload}>Refresh</Btn>}>
+      {ov.error && !o ? <LoadError what="billing" onRetry={ov.reload} /> : !o ? <Loading /> : (
+        <>
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat label="Monthly recurring revenue" value={fmtInr(o.mrr_inr)} sub="List price of paying plans" />
+            <Stat label="Annual run rate" value={fmtInr(o.arr_inr)} />
+            <Stat label="Paying workspaces" value={`${fmtNum(o.paying_tenants)} of ${fmtNum(o.total_tenants)}`} />
+            <Stat label="Collected" value={fmtInr(o.revenue.all_time.revenue_inr)} sub={`${fmtInr(o.revenue.last_30d.revenue_inr)} in the last 30 days`} />
+          </div>
+          {!o.razorpay_configured && (
+            <p className="mb-4 flex items-center gap-2 text-xs text-[#7d4e00]"><WarningCircle size={14} weight="fill" /> Razorpay prices aren&apos;t configured, so revenue uses list prices only.</p>
+          )}
+          <div className="mb-6 grid gap-4 lg:grid-cols-2">
+            <Panel title="Plan mix">
+              <table className="w-full text-sm">
+                <tbody>
+                  {o.by_plan.map((p) => (
+                    <tr key={p.plan} className="border-t border-slate-900/[0.05] first:border-0">
+                      <td className="py-2 text-slate-800">{planLabel(p.plan)}</td>
+                      <td className="py-2 text-right text-xs tabular-nums text-slate-500">{p.tenants} × {fmtInr(p.price_inr)}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-900">{fmtInr(p.mrr_inr)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+            <Panel title="Do payments reconcile?">
+              {!r ? <Loading /> : (
+                <dl className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate-500">Payment events recorded</dt>
+                    <dd className="text-right text-slate-900">{Object.keys(r.by_event).length ? Object.entries(r.by_event).map(([k, v]) => `${humanize(k)} ${v.count}`).join(" · ") : "None yet"}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate-500">Payments with no workspace</dt>
+                    <dd>{r.unmatched_count ? <Chip tone="bad">{r.unmatched_count}</Chip> : <Chip tone="good">None</Chip>}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-slate-500">Failed or halted</dt>
+                    <dd>{r.failed_or_halted.length ? <Chip tone="bad">{r.failed_or_halted.length}</Chip> : <Chip tone="good">None</Chip>}</dd>
+                  </div>
+                </dl>
+              )}
+            </Panel>
+          </div>
+        </>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4 mb-5">
-        <div className={CARD}>
-          <div className={H3}>Plan mix</div>
-          <table className="w-full text-sm">
-            <tbody>
-              {ov.by_plan.map((p) => (
-                <tr key={p.plan} className="border-t border-slate-900/5">
-                  <td className="py-1.5 text-slate-700">{p.plan}</td>
-                  <td className="py-1.5 text-slate-600 font-mono text-xs text-right">{p.tenants} × ₹{p.price_inr.toLocaleString("en-IN")}</td>
-                  <td className="py-1.5 text-slate-900 text-right font-mono">₹{p.mrr_inr.toLocaleString("en-IN")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className={CARD}>
-          <div className={H3}>Reconciliation</div>
-          <div className="text-slate-600 text-sm">Events recorded: {Object.entries(recon.by_event).map(([k, v]) => `${k} (${v.count})`).join(", ") || "none yet"}</div>
-          <div className="text-slate-600 text-sm mt-1">Unmatched (no tenant): <span className={recon.unmatched_count ? "text-[#b91c1c]" : "text-[#116329]"}>{recon.unmatched_count}</span></div>
-          <div className="text-slate-600 text-sm mt-1">Failed / halted: {recon.failed_or_halted.length}</div>
-        </div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-slate-900">Every workspace</h2>
+        <SearchField value={q} onChange={setQ} placeholder="Search workspaces" className="w-full sm:w-64" testid="billing-search" />
       </div>
-
-      <div className={H3}>Workspaces</div>
-      <div className="border border-slate-900/10 divide-y divide-slate-900/5 max-h-[26rem] overflow-y-auto rounded-xl">
-        {tenants.map((t) => (
-          <div key={t.id} className="flex items-center justify-between px-3 py-2 bg-slate-900/[0.06]">
-            <div>
-              <div className="text-slate-900 text-sm">{t.name} {t.suspended && <span className="text-[#b91c1c] text-xs">· suspended</span>}</div>
-              <div className="font-mono text-[10px] text-slate-600">
-                lifetime ₹{t.lifetime_revenue_inr.toLocaleString("en-IN")} · {t.payments} payment(s) · last {ts(t.last_payment)}
-                {t.seat_limit_override != null ? ` · seats ${t.seat_limit_override}` : ""}
-              </div>
-            </div>
-            <select value={t.plan} onChange={(e) => setPlan(t.id, e.target.value)} className={SEL} data-testid={`plan-${t.id}`}>
-              {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-        ))}
-      </div>
-    </div>
+      {tn.error && !tn.data ? <LoadError what="workspaces" onRetry={tn.reload} /> : !tn.data ? <Loading /> : (
+        <div className={CARD_BASE}>
+          <DataTable rows={shown} columns={columns} onRowClick={(t) => go(`workspaces/${t.id}`)} rowTestid={(t) => `billing-row-${t.id}`}
+            initialSort={{ key: "lifetime_revenue_inr", dir: "desc" }}
+            empty={<Empty icon={CurrencyInr} title="No workspace matches." />} />
+        </div>
+      )}
+      <p className="mt-3 text-xs text-slate-500">To change a plan, open the workspace and use Change plan.</p>
+    </AdminPage>
   );
 }

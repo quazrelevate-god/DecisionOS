@@ -1,650 +1,690 @@
-import { ADMIN_BTN, ADMIN_H2, CARD_BASE } from "./adminStyle";
+import { CARD_BASE } from "./adminStyle";
 import { roleLabel } from "../../lib/departments";
-import { useState, useEffect, useCallback } from "react";
-import api, { formatApiError } from "../../lib/api";
+/* The admin console's own sections (2026-10-22, admin redesign): Overview,
+ * Workspaces, Users, AI usage, AI keys, Audit log, Health. The Workspaces list
+ * opens WorkspacePage; Health now carries what Observability did; the Audit
+ * log carries the view-as sessions. Test workspaces are left out of lists and
+ * totals by default (services/admin_workspaces on the server). */
+import { useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
+import api from "../../lib/api";
+import { ConfirmAction } from "../../components/common";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
 import {
-  Buildings, Users, Brain, CheckSquare, Lightning, ArrowsClockwise,
-  PencilSimple, Prohibit, ArrowClockwise, ShieldCheck, Spinner, Circle,
-  SignIn, SignOut, Key as KeyIcon, ClockCounterClockwise,
-  ChartBar, CurrencyDollar, WarningCircle, Coins, Trash,
+  Buildings, Users, ArrowClockwise, PencilSimple, Prohibit, ShieldCheck, Key as KeyIcon, WarningCircle,
+  CheckCircle, Lifebuoy, Flag, CurrencyInr, Eye, Hourglass, Pulse, ClockCounterClockwise, ArrowSquareOut,
+  Flask, Storefront, ChartBar,
 } from "@phosphor-icons/react";
+import {
+  useAdmin, useAdminGet, usePersisted, errText, fmtNum, fmtInr, fmtUsd, usdToInr, fmtDate, fmtDateTime, fmtAgo,
+  Btn, Chip, statusChip, planChip, SearchField, Segmented, Toggle, RowMenu, AdminPage, Panel, Loading, Empty,
+  LoadError, Stat, DataTable, ReasonDialog, LinkOut, ADMIN_FIELD,
+} from "./adminUi";
+import {
+  PLAN_OPTIONS, planLabel, providerLabel, keySourceLabel, keyStatus, healthOk, healthLabel, humanize,
+  auditLabel, AUDIT_GROUPS,
+} from "./adminLabels";
+import { WorkspacePage } from "./WorkspacePage";
+import { ImpersonationSection } from "./ImpersonationSection";
 
-// --- shared bits ------------------------------------------------------------
-const STATUS_COLORS = {
-  active: "#116329",
-  fallback: "#7d4e00",
-  out_of_credits: "#cf222e",
-  invalid: "#cf222e",
-  error: "#cf222e",
-  not_set: "#57606a",
-};
+// --- Overview -----------------------------------------------------------------------------
+const ATTENTION = [
+  { key: "outages", one: "AI provider problem", many: "AI provider problems", to: "health", icon: WarningCircle, tone: "bad" },
+  { key: "open_tickets", one: "support ticket waiting", many: "support tickets waiting", to: "support", icon: Lifebuoy },
+  { key: "open_reports", one: "report to review", many: "reports to review", to: "reports", icon: Flag },
+  { key: "failed_payments", one: "failed payment (30 days)", many: "failed payments (30 days)", to: "billing", icon: CurrencyInr, tone: "bad" },
+  { key: "trials_ending", one: "trial ends this week", many: "trials end this week", to: "workspaces?plan=trial", icon: Hourglass },
+  { key: "live_view_as", one: "live view-as session", many: "live view-as sessions", to: "audit?view=sessions", icon: Eye },
+];
 
-function StatusBadge({ status, detail }) {
-  const color = STATUS_COLORS[status] || "#57606a";
-  const label = (status || "unknown").replace(/_/g, " ");
-  return (
-    <span
-      title={detail || ""}
-      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider px-2 py-1 border"
-      style={{ color, borderColor: `${color}55`, background: `${color}12` }}
-    >
-      <Circle size={7} weight="fill" style={{ color }} />
-      {label}
-    </span>
-  );
-}
-
-const CARD = `${CARD_BASE} p-5`;
-const H2 = ADMIN_H2;
-const BTN = ADMIN_BTN;
-
-function Loading() {
-  return (
-    <div className="flex items-center gap-2 text-slate-600 font-mono text-sm py-10 justify-center">
-      <Spinner size={16} className="animate-spin" /> Loading…
-    </div>
-  );
-}
-
-// --- Overview ---------------------------------------------------------------
 export function OverviewSection() {
-  const [m, setM] = useState(null);
-  useEffect(() => {
-    api.get("/admin/metrics").then((r) => setM(r.data)).catch(() => {});
-  }, []);
-  if (!m) return <Loading />;
-  const cards = [
-    { k: "tenants", label: "Workspaces", icon: Buildings, v: m.tenants },
-    { k: "users", label: "Users", icon: Users, v: m.users },
-    { k: "decisions", label: "Decisions", icon: Brain, v: m.decisions },
-    { k: "tasks", label: "Tasks", icon: CheckSquare, v: m.tasks },
-    { k: "captures", label: "Captures", icon: Lightning, v: m.captures },
-    { k: "workflows", label: "Workflows", icon: ArrowsClockwise, v: m.workflows },
-    { k: "contacts", label: "People", icon: Users, v: m.contacts },
-    { k: "tasks_done", label: "Tasks Done", icon: CheckSquare, v: m.tasks_done },
-  ];
+  const { go } = useAdmin();
+  const [includeTest, setIncludeTest] = usePersisted("overview_include_test", false);
+  const { data: o, error, reload } = useAdminGet(`/admin/overview?include_test=${includeTest}`);
+
+  if (error && !o) return <AdminPage title="Overview" testid="admin-overview"><LoadError what="the overview" onRetry={reload} /></AdminPage>;
+  if (!o) return <AdminPage title="Overview" testid="admin-overview"><Loading /></AdminPage>;
+
+  const w = o.last_7_days;
+  const rate = o.usd_inr;
+  const waiting = ATTENTION.filter((a) => (o.needs_attention[a.key] || 0) > 0);
+  const subtitle = includeTest
+    ? `${o.workspaces.total} workspaces, test workspaces included`
+    : `${o.workspaces.total} customer workspaces${o.workspaces.test_hidden ? ` · ${o.workspaces.test_hidden} test workspaces left out` : ""}`;
+
   return (
-    <div data-testid="admin-overview">
-      <h2 className={H2 + " mb-5"}>Platform Metrics</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {cards.map((c) => (
-          <div key={c.k} className={CARD} data-testid={`metric-${c.k}`}>
-            <c.icon size={20} className="text-[#b91c1c] mb-3" weight="bold" />
-            <div className="font-display text-4xl text-slate-900 ">{c.v}</div>
-            <div className="font-mono text-[11px] uppercase tracking-widest text-slate-600 mt-1">{c.label}</div>
-          </div>
-        ))}
+    <AdminPage title="Overview" subtitle={subtitle} testid="admin-overview"
+      actions={<Toggle checked={includeTest} onChange={setIncludeTest} label="Include test workspaces" testid="overview-include-test" />}>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Panel title="Needs attention" className="lg:col-span-2" testid="overview-attention">
+          {waiting.length === 0 ? (
+            <div className="flex items-center gap-3 rounded-xl bg-emerald-600/[0.06] px-4 py-4 text-sm text-[#116329]">
+              <CheckCircle size={20} weight="fill" /> Nothing needs you right now.
+            </div>
+          ) : (
+            <ul className="-mx-2 space-y-0.5">
+              {waiting.map((a) => {
+                const n = o.needs_attention[a.key];
+                return (
+                  <li key={a.key}>
+                    <button type="button" onClick={() => go(a.to)} data-testid={`attention-${a.key}`}
+                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-slate-900/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25">
+                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${a.tone === "bad" ? "bg-[#cf222e]/[0.08] text-[#b91c1c]" : "bg-slate-500/[0.08] text-slate-600"}`}>
+                        <a.icon size={16} weight="bold" />
+                      </span>
+                      <span className="min-w-0 flex-1 text-sm text-slate-800">
+                        <strong className="font-semibold tabular-nums text-slate-900">{n}</strong> {n === 1 ? a.one : a.many}
+                      </span>
+                      <span className="text-xs text-slate-400">Open</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Panel>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3">
+          <Stat label="Active workspaces · 7 days" value={fmtNum(w.active_workspaces.now)} change={w.active_workspaces.change}
+            sub={`vs ${w.active_workspaces.before} the week before`} onClick={() => go("workspaces")} testid="stat-active" />
+          <Stat label="New sign-ups · 7 days" value={fmtNum(w.signups.now)} change={w.signups.change}
+            sub={`vs ${w.signups.before} the week before`} onClick={() => go("workspaces")} testid="stat-signups" />
+          <Stat label="AI spend · 7 days" value={fmtInr(usdToInr(w.ai_cost_usd.now, rate))} good="down"
+            change={usdToInr(w.ai_cost_usd.change, rate)} formatChange={fmtInr}
+            sub={`${fmtUsd(w.ai_cost_usd.now)} at ₹${rate}/$`} onClick={() => go("usage")} testid="stat-ai" />
+          <Stat label="Monthly recurring revenue" value={fmtInr(o.mrr_inr)}
+            sub={`${o.paying_workspaces} paying workspace${o.paying_workspaces === 1 ? "" : "s"}`} onClick={() => go("billing")} testid="stat-mrr" />
+        </div>
       </div>
-      {m.suspended_users > 0 && (
-        <p className="mt-4 font-mono text-xs text-[#7d4e00]">{m.suspended_users} suspended user(s)</p>
-      )}
-    </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <Panel title="Most active this week" hint="By actions recorded in the last 7 days">
+          {o.most_active.length === 0 ? <Empty compact title="No activity this week." /> : (
+            <ol className="-mx-2">
+              {o.most_active.map((t, i) => (
+                <li key={t.id}>
+                  <button type="button" onClick={() => go(`workspaces/${t.id}`)}
+                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-900/[0.04]">
+                    <span className="w-4 text-xs tabular-nums text-slate-400">{i + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{t.name}</span>
+                    <span className="text-xs tabular-nums text-slate-500">{fmtNum(t.actions)} actions</span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Panel>
+        <Panel title="Gone quiet" hint="Active 2 to 8 weeks ago, nothing since">
+          {o.gone_quiet.length === 0 ? <Empty compact title="No one has gone quiet." /> : (
+            <ul className="-mx-2">
+              {o.gone_quiet.map((t) => (
+                <li key={t.id}>
+                  <button type="button" onClick={() => go(`workspaces/${t.id}`)}
+                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-900/[0.04]">
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{t.name}</span>
+                    <span className="text-xs text-slate-500">{fmtAgo(t.last_activity)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+        <Panel title="Trials ending this week">
+          {o.trials_ending.length === 0 ? <Empty compact title="No trials end this week." /> : (
+            <ul className="-mx-2">
+              {o.trials_ending.map((t) => (
+                <li key={t.id}>
+                  <button type="button" onClick={() => go(`workspaces/${t.id}`)}
+                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-900/[0.04]">
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{t.name}</span>
+                    <span className="text-xs text-slate-500">{fmtAgo(t.trial_ends_at)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+    </AdminPage>
   );
 }
 
-// --- AI Keys ----------------------------------------------------------------
+// --- Workspaces --------------------------------------------------------------------------
+export function WorkspacesSection({ id }) {
+  if (id) return <WorkspacePage id={id} />;
+  return <WorkspaceList />;
+}
+
+function WorkspaceList() {
+  const { go, canWrite } = useAdmin();
+  const location = useLocation();
+  const { data, error, reload, setData } = useAdminGet("/admin/tenants");
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
+  const [plan, setPlan] = useState(() => new URLSearchParams(location.search).get("plan") || "");
+  const [hideTest, setHideTest] = usePersisted("hide_test_workspaces", true);
+
+  const rows = useMemo(() => data?.tenants || [], [data]);
+  const testCount = rows.filter((t) => t.is_test).length;
+  const shown = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return rows.filter((t) => (!hideTest || !t.is_test)
+      && (status === "all" || (status === "suspended" ? t.suspended : !t.suspended))
+      && (!plan || (t.plan || "") === plan)
+      && (!term || `${t.name} ${t.industry} ${t.id}`.toLowerCase().includes(term)));
+  }, [rows, q, status, plan, hideTest]);
+
+  const flag = (id, isTest) => setData((d) => ({
+    ...d, tenants: d.tenants.map((x) => (x.id === id ? { ...x, is_test: isTest, test_reason: "Marked by an admin" } : x)),
+  }));
+  const markTest = async (t, isTest) => {
+    try {
+      await api.post(`/admin/tenants/${t.id}/test-flag`, { is_test: isTest });
+      flag(t.id, isTest);
+      toast.success(isTest ? `${t.name} is marked as a test workspace` : `${t.name} is marked as a customer`, {
+        action: {
+          label: "Undo",
+          onClick: () => api.post(`/admin/tenants/${t.id}/test-flag`, { is_test: !isTest })
+            .then(() => flag(t.id, !isTest)).catch((e) => toast.error(errText(e))),
+        },
+      });
+    } catch (e) { toast.error(errText(e)); }
+  };
+
+  const columns = [
+    { key: "name", label: "Workspace", render: (t) => (
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium text-slate-900">{t.name}</span>
+          {t.is_test && <Chip title={t.test_reason}>Test</Chip>}
+        </div>
+        <div className="truncate text-xs text-slate-500">{t.industry && t.industry !== "—" ? t.industry : "No industry set"}</div>
+      </div>
+    ) },
+    { key: "plan", label: "Plan", sortValue: (t) => planLabel(t.plan), render: (t) => (
+      <div>{planChip(t.plan)}{t.plan === "trial" && t.trial_ends_at && <div className="mt-1 hidden text-[11px] text-slate-500 md:block">Ends {fmtDate(t.trial_ends_at)}</div>}</div>
+    ) },
+    { key: "users", label: "Users", align: "right" },
+    { key: "tasks", label: "Tasks", align: "right", mobile: false },
+    { key: "decisions", label: "Decisions", align: "right", mobile: false },
+    { key: "last_activity", label: "Last active", render: (t) => <span title={fmtDateTime(t.last_activity)}>{fmtAgo(t.last_activity)}</span> },
+    { key: "created_at", label: "Created", mobile: false, render: (t) => fmtDate(t.created_at) },
+    { key: "suspended", label: "Status", sortValue: (t) => (t.suspended ? 1 : 0), render: (t) => statusChip(t.suspended) },
+    { key: "_menu", label: "", sortable: false, className: "w-10", render: (t) => (
+      <RowMenu testid={`tenant-menu-${t.id}`} items={[
+        { label: "Open", icon: ArrowSquareOut, onSelect: () => go(`workspaces/${t.id}`) },
+        { label: "Mark as test workspace", icon: Flask, hidden: !canWrite || t.is_test, onSelect: () => markTest(t, true), testid: `tenant-mark-test-${t.id}` },
+        { label: "Mark as customer", icon: Storefront, hidden: !canWrite || !t.is_test, onSelect: () => markTest(t, false), testid: `tenant-mark-customer-${t.id}` },
+      ]} />
+    ) },
+  ];
+
+  return (
+    <AdminPage title="Workspaces" testid="admin-tenants"
+      subtitle={data ? `${shown.length} of ${rows.length}${hideTest && testCount ? ` · ${testCount} test workspaces hidden` : ""}` : null}
+      actions={<Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reload}>Refresh</Btn>}>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <SearchField value={q} onChange={setQ} placeholder="Search by name, industry or id" testid="tenants-search" className="w-full sm:w-72" />
+        <Segmented value={status} onChange={setStatus} ariaLabel="Status" testid="tenants-status"
+          options={[{ value: "all", label: "All" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }]} />
+        <div className="w-44">
+          <GlassSelect value={plan} onChange={setPlan} ariaLabel="Plan" testid="tenants-plan" triggerClassName="h-10 text-sm"
+            options={[{ value: "", label: "Every plan" }, ...PLAN_OPTIONS]} />
+        </div>
+        <div className="sm:ml-auto"><Toggle checked={hideTest} onChange={setHideTest} label="Hide test workspaces" testid="tenants-hide-test" /></div>
+      </div>
+      {error && !data ? <LoadError what="workspaces" onRetry={reload} /> : !data ? <Loading /> : (
+        <div className={CARD_BASE}>
+          <DataTable rows={shown} columns={columns} onRowClick={(t) => go(`workspaces/${t.id}`)}
+            rowTestid={(t) => `tenant-row-${t.id}`} initialSort={{ key: "last_activity", dir: "desc" }}
+            empty={<Empty icon={Buildings} title={rows.length ? "No workspace matches." : "No workspaces yet."}
+              hint={rows.length ? "Clear the search or the filters to see more." : "Workspaces appear here when a company signs up."} />} />
+        </div>
+      )}
+    </AdminPage>
+  );
+}
+
+// --- Users ------------------------------------------------------------------------------
+export function UsersSection() {
+  const { go, canWrite } = useAdmin();
+  const { data, error, reload } = useAdminGet("/admin/users");
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
+  const [hideTest, setHideTest] = usePersisted("hide_test_people", true);
+  const [suspending, setSuspending] = useState(null);
+  const [resetting, setResetting] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const rows = useMemo(() => data?.users || [], [data]);
+  const testCount = rows.filter((u) => u.is_test).length;
+  const shown = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return rows.filter((u) => (!hideTest || !u.is_test)
+      && (status === "all" || (status === "suspended" ? u.suspended : !u.suspended))
+      && (!term || `${u.name} ${u.email} ${u.phone} ${u.tenant_name}`.toLowerCase().includes(term)));
+  }, [rows, q, status, hideTest]);
+
+  const act = async (u, action, body, done) => {
+    setBusy(true);
+    try {
+      await api.post(`/admin/users/${u.id}/${action}`, body);
+      toast.success(done);
+      setSuspending(null); setResetting(null);
+      reload();
+    } catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
+  };
+
+  const columns = [
+    { key: "name", label: "Name", render: (u) => (
+      <div className="min-w-0">
+        <div className="flex items-center gap-2"><span className="truncate font-medium text-slate-900">{u.name || "No name"}</span>{u.is_test && <Chip>Test</Chip>}</div>
+        <div className="truncate text-xs text-slate-500">{u.email || u.phone || "—"}</div>
+      </div>
+    ) },
+    { key: "tenant_name", label: "Workspace", render: (u) => (u.tenant_id ? <LinkOut onClick={() => go(`workspaces/${u.tenant_id}`)}>{u.tenant_name}</LinkOut> : "—") },
+    { key: "role", label: "Role", sortValue: (u) => roleLabel(u.role), render: (u) => roleLabel(u.role) },
+    { key: "created_at", label: "Joined", mobile: false, render: (u) => fmtDate(u.created_at) },
+    { key: "suspended", label: "Status", sortValue: (u) => (u.suspended ? 1 : 0), render: (u) => statusChip(u.suspended) },
+    { key: "_menu", label: "", sortable: false, className: "w-10", render: (u) => (
+      <RowMenu testid={`user-menu-${u.id}`} items={[
+        { label: "Open workspace", icon: ArrowSquareOut, hidden: !u.tenant_id, onSelect: () => go(`workspaces/${u.tenant_id}`) },
+        { label: "Reset access to role defaults", icon: ArrowClockwise, hidden: !canWrite, onSelect: () => setResetting(u), testid: `reset-access-${u.id}` },
+        { label: "Reactivate", icon: CheckCircle, hidden: !canWrite || !u.suspended, onSelect: () => act(u, "reactivate", undefined, `${u.name || u.email} can sign in again`), testid: `reactivate-${u.id}` },
+        { label: "Suspend…", icon: Prohibit, danger: true, separatorBefore: true, hidden: !canWrite || u.suspended || u.role === "owner", onSelect: () => setSuspending(u), testid: `suspend-${u.id}` },
+      ]} />
+    ) },
+  ];
+
+  return (
+    <AdminPage title="Users" testid="admin-users"
+      subtitle={data ? `${shown.length} of ${rows.length} people with a sign-in${hideTest && testCount ? ` · ${testCount} test accounts hidden` : ""}` : null}
+      actions={<Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reload}>Refresh</Btn>}>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <SearchField value={q} onChange={setQ} placeholder="Search name, email, phone or workspace" testid="users-search" className="w-full sm:w-80" />
+        <Segmented value={status} onChange={setStatus} ariaLabel="Status" testid="users-status"
+          options={[{ value: "all", label: "All" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }]} />
+        <div className="sm:ml-auto"><Toggle checked={hideTest} onChange={setHideTest} label="Hide test accounts" testid="users-hide-test" /></div>
+      </div>
+      {error && !data ? <LoadError what="users" onRetry={reload} /> : !data ? <Loading /> : (
+        <div className={CARD_BASE}>
+          <DataTable rows={shown} columns={columns} rowTestid={(u) => `user-row-${u.id}`}
+            onRowClick={(u) => u.tenant_id && go(`workspaces/${u.tenant_id}`)} initialSort={{ key: "created_at", dir: "desc" }}
+            empty={<Empty icon={Users} title="No one matches." hint="Clear the search or the filters to see more." />} />
+        </div>
+      )}
+      <ReasonDialog open={!!suspending} onOpenChange={(v) => !v && setSuspending(null)} busy={busy} danger
+        title={suspending ? `Suspend ${suspending.name || suspending.email}?` : ""}
+        description="They are signed out and can't sign in until reactivated. Their work stays in the workspace."
+        confirmLabel="Suspend" busyLabel="Suspending…" testid="user-suspend-dialog"
+        onConfirm={(reason) => act(suspending, "suspend", { reason }, `${suspending.name || suspending.email} is suspended`)} />
+      <ConfirmAction open={!!resetting} onOpenChange={() => setResetting(null)} busy={busy} danger={false}
+        title={resetting ? `Reset ${resetting.name || resetting.email}'s access?` : ""}
+        description="Any permissions set just for them are removed, and they get their role's defaults."
+        confirmLabel="Reset access" busyLabel="Resetting…" cancelLabel="Keep as is"
+        onConfirm={() => act(resetting, "reset-access", undefined, "Access reset to role defaults")} testid="user-reset-confirm" />
+    </AdminPage>
+  );
+}
+
+// --- AI usage -----------------------------------------------------------------------------
+const RANGES = [
+  { value: "today", label: "Today" }, { value: "7d", label: "7 days" }, { value: "30d", label: "30 days" }, { value: "all", label: "All time" },
+];
+const PROVIDER_FILTER = ["all", "sarvam", "anthropic", "emergent", "openai", "gemini"];
+
+export function UsageSection() {
+  const { go } = useAdmin();
+  const [range, setRange] = useState("30d");
+  const [provider, setProvider] = useState("all");
+  const [hideTest, setHideTest] = usePersisted("hide_test_workspaces", true);
+  const { data, error, reload } = useAdminGet(`/admin/usage?range=${range}&provider=${provider}&include_test=${!hideTest}`);
+  const rate = data?.usd_inr || 84;
+  const maxCost = Math.max(0.0001, ...(data?.by_provider || []).map((p) => p.cost_estimate));
+
+  const columns = [
+    { key: "tenant_name", label: "Workspace", render: (w) => (
+      <div className="flex items-center gap-2">
+        {w.tenant_id ? <LinkOut onClick={() => go(`workspaces/${w.tenant_id}`)}>{w.tenant_name}</LinkOut> : <span className="text-slate-600">{w.tenant_name}</span>}
+        {w.is_test && <Chip>Test</Chip>}
+      </div>
+    ) },
+    { key: "calls", label: "AI calls", align: "right", render: (w) => fmtNum(w.calls) },
+    { key: "tokens_in", label: "Tokens in", align: "right", mobile: false, render: (w) => fmtNum(w.tokens_in) },
+    { key: "tokens_out", label: "Tokens out", align: "right", mobile: false, render: (w) => fmtNum(w.tokens_out) },
+    { key: "cost_estimate", label: "Cost", align: "right", render: (w) => <span title={fmtUsd(w.cost_estimate)}>{fmtInr(usdToInr(w.cost_estimate, rate))}</span> },
+  ];
+
+  return (
+    <AdminPage title="AI usage" testid="admin-usage"
+      subtitle="What AI cost us, by provider and by workspace">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <Segmented value={range} onChange={setRange} options={RANGES} ariaLabel="Period" testid="usage-range" />
+        <div className="w-52">
+          <GlassSelect value={provider} onChange={setProvider} ariaLabel="Provider" testid="usage-provider" triggerClassName="h-10 text-sm"
+            options={PROVIDER_FILTER.map((p) => ({ value: p, label: p === "all" ? "Every provider" : providerLabel(p) }))} />
+        </div>
+        <div className="sm:ml-auto"><Toggle checked={hideTest} onChange={setHideTest} label="Hide test workspaces" testid="usage-hide-test" /></div>
+      </div>
+      {error && !data ? <LoadError what="AI usage" onRetry={reload} /> : !data ? <Loading /> : (
+        <>
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Stat label="AI calls" value={fmtNum(data.totals.calls)} testid="usage-total-calls" />
+            <Stat label="Tokens" value={fmtNum(data.totals.tokens_total)} testid="usage-total-tokens" />
+            <Stat label="Estimated cost" value={fmtInr(usdToInr(data.totals.cost, rate))} sub={`${fmtUsd(data.totals.cost)} at ₹${rate}/$`} testid="usage-total-cost" />
+          </div>
+          {data.by_provider.length > 0 && (
+            <Panel title="By provider" hint={hideTest ? "Test workspaces left out" : null} className="mb-4" testid="usage-by-provider">
+              <ul className="space-y-3">
+                {data.by_provider.map((p) => (
+                  <li key={p.provider} data-testid={`usage-provider-card-${p.provider}`}>
+                    <div className="flex items-baseline justify-between gap-3 text-sm">
+                      <span className="font-medium text-slate-800">{providerLabel(p.provider)}</span>
+                      <span className="tabular-nums text-slate-900">{fmtInr(usdToInr(p.cost_estimate, rate))}</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-500/[0.1]">
+                      <div className="h-full rounded-full bg-slate-800" style={{ width: `${Math.max(2, (p.cost_estimate / maxCost) * 100)}%` }} />
+                    </div>
+                    <div className="mt-1 text-xs tabular-nums text-slate-500">{fmtNum(p.calls)} call{p.calls === 1 ? "" : "s"} · {fmtNum(p.tokens_total)} tokens</div>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+          <div className={CARD_BASE}>
+            <DataTable rows={data.workspaces} columns={columns} rowKey="tenant_id" initialSort={{ key: "cost_estimate", dir: "desc" }}
+              rowTestid={(w) => `usage-row-${w.tenant_id || "system"}`}
+              empty={<Empty icon={ChartBar} title="No AI use in this period." hint="Try a longer period." />} />
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Estimates, not invoices: text is counted at about four characters a token, voice by audio length. Providers bill in dollars;
+            shown at ₹{rate} to the dollar (set it in <button type="button" onClick={() => go("config")} className="underline underline-offset-2">Config</button>).
+          </p>
+        </>
+      )}
+    </AdminPage>
+  );
+}
+
+// --- AI keys ------------------------------------------------------------------------------
 export function AiKeysSection() {
-  const [keys, setKeys] = useState(null);
+  const { isSuper } = useAdmin();
+  const { data, error, reload } = useAdminGet("/admin/ai-keys");
   const [status, setStatus] = useState({});
   const [testing, setTesting] = useState(false);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState("");
-
-  const load = useCallback(() => {
-    api.get("/admin/ai-keys").then((r) => setKeys(r.data.keys)).catch(() => {});
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  const [saving, setSaving] = useState(false);
 
   const test = async () => {
     setTesting(true);
     try {
-      const { data } = await api.get("/admin/ai-keys/status");
-      const map = {
-        sarvam: data.sarvam,
-        anthropic: data.anthropic, openai: data.openai, gemini: data.gemini,
-        wa_access_token: data.whatsapp, wa_phone_number_id: data.whatsapp,
-      };
-      setStatus(map);
-    } catch (e) {
-      toast.error("Status check failed");
-    } finally {
-      setTesting(false);
-    }
+      const { data: s } = await api.get("/admin/ai-keys/status");
+      setStatus({ sarvam: s.sarvam, anthropic: s.anthropic, openai: s.openai, gemini: s.gemini,
+        wa_access_token: s.whatsapp, wa_phone_number_id: s.whatsapp });
+    } catch (e) { toast.error(errText(e)); } finally { setTesting(false); }
   };
 
   const save = async (provider) => {
+    setSaving(true);
     try {
       await api.put("/admin/ai-keys", { [provider]: draft });
-      toast.success(draft ? "Key updated" : "Reverted to environment default");
-      setEditing(null);
-      setDraft("");
-      load();
-    } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail));
-    }
+      toast.success(draft ? "Key saved" : "Back on the server default");
+      setEditing(null); setDraft(""); reload();
+    } catch (e) { toast.error(errText(e)); } finally { setSaving(false); }
   };
 
-  if (!keys) return <Loading />;
   return (
-    <div data-testid="admin-ai-keys">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className={H2}>AI Provider Keys</h2>
-        <button
-          data-testid="test-all-keys"
-          onClick={test}
-          disabled={testing}
-          className={BTN + " border-[#cf222e] text-[#b91c1c] hover:bg-[#cf222e] hover:text-white flex items-center gap-2"}
-        >
-          {testing ? <Spinner size={13} className="animate-spin" /> : <ArrowClockwise size={13} />}
-          {testing ? "Testing…" : "Test All Keys"}
-        </button>
-      </div>
-      <div className="space-y-3">
-        {keys.map((k) => (
-          <div key={k.provider} className={CARD} data-testid={`ai-key-${k.provider}`}>
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="min-w-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="font-display text-slate-900 text-sm ">{k.label}</span>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-slate-600 border border-slate-900/15 px-2 py-0.5 rounded-xl">
-                    {k.source === "custom" ? "custom" : k.source === "env" ? "env default" : "not set"}
-                  </span>
-                  {status[k.provider] && <StatusBadge status={status[k.provider].status} detail={status[k.provider].detail} />}
-                </div>
-                <div className="font-mono text-xs text-slate-600 mt-2">{k.masked || "— not set —"}</div>
-                {k.note && <div className="font-mono text-[10px] text-[#7d4e00] mt-1">{k.note}</div>}
-              </div>
-              <button
-                data-testid={`edit-key-${k.provider}`}
-                onClick={() => { setEditing(k.provider); setDraft(""); }}
-                className={BTN + " border-slate-900/20 text-slate-600 hover:border-slate-900/50 flex items-center gap-1.5 shrink-0"}
-              >
-                <PencilSimple size={13} /> Update
-              </button>
-            </div>
-            {editing === k.provider && (
-              <div className="mt-4 pt-4 border-t border-slate-900/10 space-y-3" data-testid={`edit-panel-${k.provider}`}>
-                <input
-                  data-testid={`key-input-${k.provider}`}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Paste new key value (leave empty to revert to env default)"
-                  className="w-full bg-white border border-slate-900/15 text-slate-900 px-3 py-2.5 font-mono text-xs focus:border-[#cf222e] focus:outline-none rounded-xl"
-                />
-                <div className="flex gap-2">
-                  <button
-                    data-testid={`save-key-${k.provider}`}
-                    onClick={() => save(k.provider)}
-                    className={BTN + " bg-[#cf222e] border-[#cf222e] text-white hover:bg-[#a40e26]"}
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={() => { setEditing(null); setDraft(""); }}
-                    className={BTN + " border-slate-900/20 text-slate-600 hover:border-slate-900/40"}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// --- Usage / credit consumption per workspace -------------------------------
-const RANGES = [
-  { key: "today", label: "Today" },
-  { key: "7d", label: "7 Days" },
-  { key: "30d", label: "30 Days" },
-  { key: "all", label: "All Time" },
-];
-const PROVIDERS = [
-  { key: "all", label: "All" },
-  { key: "sarvam", label: "Sarvam STT" },
-  { key: "anthropic", label: "Claude" },
-  { key: "emergent", label: "Claude (Emergent)" },
-  { key: "openai", label: "OpenAI STT" },
-  { key: "gemini", label: "Gemini OCR" },
-];
-const PROVIDER_LABEL = {
-  sarvam: "Sarvam voice (Indic STT)", anthropic: "Claude (your key)", emergent: "Claude (Emergent)",
-  openai: "OpenAI transcription", gemini: "Gemini document OCR", unknown: "Unknown",
-};
-
-function fmtNum(n) {
-  if (n == null) return "0";
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + "k";
-  return String(n);
-}
-
-export function UsageSection() {
-  const [range, setRange] = useState("30d");
-  const [provider, setProvider] = useState("all");
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    api.get(`/admin/usage?range=${range}&provider=${provider}`)
-      .then((r) => { setData(r.data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [range, provider]);
-
-  return (
-    <div data-testid="admin-usage">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h2 className={H2}>AI Credit Usage</h2>
-        <div className="flex gap-1" data-testid="usage-range">
-          {RANGES.map((r) => (
-            <button key={r.key} data-testid={`usage-range-${r.key}`} onClick={() => setRange(r.key)}
-              className={`font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border transition-colors ${
-                range === r.key ? "bg-[#cf222e] border-[#cf222e] text-white" : "border-slate-900/20 text-slate-600 hover:border-slate-900/40"} rounded-xl`}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="flex gap-1 mb-4 flex-wrap" data-testid="usage-provider-filter">
-        {PROVIDERS.map((p) => (
-          <button key={p.key} data-testid={`usage-provider-${p.key}`} onClick={() => setProvider(p.key)}
-            className={`font-mono text-[10px] uppercase tracking-wider px-2.5 py-1 border transition-colors ${
-              provider === p.key ? "bg-slate-900/[0.06] border-slate-900/40 text-slate-900" : "border-slate-900/10 text-slate-600 hover:border-slate-900/25"} rounded-xl`}>
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <p className="font-mono text-[11px] text-slate-600 mb-5">
-        Covers all providers — Sarvam (Indic voice transcription), Claude (text), OpenAI (voice fallback) & Gemini (document OCR). Costs are estimates
-        (tokens ≈ chars/4; STT by audio duration), not exact provider billing.
-      </p>
-      {loading || !data ? <Loading /> : (
-        <>
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className={CARD} data-testid="usage-total-calls">
-              <ChartBar size={20} className="text-[#b91c1c] mb-2" weight="bold" />
-              <div className="font-display text-3xl text-slate-900 ">{fmtNum(data.totals.calls)}</div>
-              <div className="font-mono text-[11px] uppercase tracking-widest text-slate-600 mt-1">AI Calls</div>
-            </div>
-            <div className={CARD} data-testid="usage-total-tokens">
-              <Coins size={20} className="text-[#7d4e00] mb-2" weight="bold" />
-              <div className="font-display text-3xl text-slate-900 ">{fmtNum(data.totals.tokens_total)}</div>
-              <div className="font-mono text-[11px] uppercase tracking-widest text-slate-600 mt-1">Tokens</div>
-            </div>
-            <div className={CARD} data-testid="usage-total-cost">
-              <CurrencyDollar size={20} className="text-[#116329] mb-2" weight="bold" />
-              <div className="font-display text-3xl text-slate-900 ">${data.totals.cost.toFixed(2)}</div>
-              <div className="font-mono text-[11px] uppercase tracking-widest text-slate-600 mt-1">Est. Cost</div>
-            </div>
-          </div>
-
-          {data.by_provider && data.by_provider.length > 0 && (
-            <div className="mb-6" data-testid="usage-by-provider">
-              <h3 className="font-mono text-[11px] uppercase tracking-widest text-slate-600 mb-3">By Provider</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {data.by_provider.map((p) => (
-                  <div key={p.provider} className={CARD} data-testid={`usage-provider-card-${p.provider}`}>
-                    <div className="font-display text-slate-900 text-xs ">{PROVIDER_LABEL[p.provider] || p.provider}</div>
-                    <div className="font-mono text-[11px] text-slate-600 mt-2">{fmtNum(p.calls)} calls · {fmtNum(p.tokens_total)} tok</div>
-                    <div className="font-mono text-sm text-[#116329] mt-1">${p.cost_estimate.toFixed(4)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {data.workspaces.length === 0 ? (
-            <div className={CARD + " text-slate-600 font-mono text-sm"}>No AI usage recorded in this period.</div>
-          ) : (
-            <div className="overflow-x-auto border border-slate-900/10 rounded-xl">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-slate-900/[0.06] font-mono text-[10px] uppercase tracking-widest text-slate-600">
-                    <th className="p-3">Workspace</th><th className="p-3 text-right">Calls</th>
-                    <th className="p-3 text-right">Tokens In</th><th className="p-3 text-right">Tokens Out</th>
-                    <th className="p-3 text-right">Total</th><th className="p-3 text-right">Est. Cost</th>
-                  </tr>
-                </thead>
-                <tbody className="font-mono text-xs text-slate-700">
-                  {data.workspaces.map((w) => (
-                    <tr key={w.tenant_id || "system"} className="border-t border-slate-900/5 hover:bg-slate-900/[0.03]" data-testid={`usage-row-${w.tenant_id || "system"}`}>
-                      <td className="p-3 text-slate-900 font-semibold">{w.tenant_name}</td>
-                      <td className="p-3 text-right">{fmtNum(w.calls)}</td>
-                      <td className="p-3 text-right text-slate-600">{fmtNum(w.tokens_in)}</td>
-                      <td className="p-3 text-right text-slate-600">{fmtNum(w.tokens_out)}</td>
-                      <td className="p-3 text-right text-[#7d4e00]">{fmtNum(w.tokens_total)}</td>
-                      <td className="p-3 text-right text-[#116329]">${w.cost_estimate.toFixed(4)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-// --- Tenants ----------------------------------------------------------------
-export function TenantsSection() {
-  const [rows, setRows] = useState(null);
-  const [toDelete, setToDelete] = useState(null); // tenant row pending delete confirmation
-  const [confirmText, setConfirmText] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const load = useCallback(() => {
-    api.get("/admin/tenants").then((r) => setRows(r.data.tenants)).catch(() => {});
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  const act = async (id, action) => {
-    try {
-      await api.post(`/admin/tenants/${id}/${action}`);
-      toast.success(action === "suspend" ? "Workspace suspended" : "Workspace reactivated");
-      load();
-    } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail));
-    }
-  };
-
-  const nameMatches = toDelete && confirmText.trim().toLowerCase() === toDelete.name.trim().toLowerCase();
-
-  const doDelete = async () => {
-    if (!toDelete || !nameMatches) return;
-    setDeleting(true);
-    try {
-      const { data } = await api.delete(`/admin/tenants/${toDelete.id}`);
-      toast.success(`"${toDelete.name}" permanently deleted (${data.total_removed} records wiped)`);
-      setToDelete(null); setConfirmText("");
-      load();
-    } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail));
-    } finally { setDeleting(false); }
-  };
-
-  if (!rows) return <Loading />;
-  const fmt = (d) => (d ? new Date(d).toLocaleDateString() : "—");
-  return (
-    <div data-testid="admin-tenants">
-      <h2 className={H2 + " mb-5"}>Workspaces ({rows.length})</h2>
-      <div className="overflow-x-auto border border-slate-900/10 rounded-xl">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-slate-900/[0.06] font-mono text-[10px] uppercase tracking-widest text-slate-600">
-              <th className="p-3">Workspace</th><th className="p-3">Industry</th>
-              <th className="p-3 text-right">Users</th><th className="p-3 text-right">Decisions</th>
-              <th className="p-3 text-right">Tasks</th><th className="p-3">Created</th>
-              <th className="p-3">Status</th><th className="p-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="font-mono text-xs text-slate-700">
-            {rows.map((t) => (
-              <tr key={t.id} className="border-t border-slate-900/5 hover:bg-slate-900/[0.03]" data-testid={`tenant-row-${t.id}`}>
-                <td className="p-3 text-slate-900 font-semibold">{t.name}</td>
-                <td className="p-3 text-slate-600">{t.industry}</td>
-                <td className="p-3 text-right">{t.users}</td>
-                <td className="p-3 text-right">{t.decisions}</td>
-                <td className="p-3 text-right">{t.tasks}</td>
-                <td className="p-3 text-slate-600">{fmt(t.created_at)}</td>
-                <td className="p-3">
-                  {t.suspended
-                    ? <span className="text-[#b91c1c]">suspended</span>
-                    : <span className="text-[#116329]">active</span>}
-                </td>
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    {t.suspended ? (
-                      <button data-testid={`tenant-reactivate-${t.id}`} onClick={() => act(t.id, "reactivate")}
-                        className={BTN + " border-[#116329]/50 text-[#116329] hover:bg-[#116329]/10 py-1 flex items-center gap-1"}>
-                        <ArrowClockwise size={12} /> Reactivate
-                      </button>
-                    ) : (
-                      <button data-testid={`tenant-suspend-${t.id}`} onClick={() => act(t.id, "suspend")}
-                        className={BTN + " border-[#cf222e]/50 text-[#b91c1c] hover:bg-[#cf222e]/10 py-1 flex items-center gap-1"}>
-                        <Prohibit size={12} /> Suspend
-                      </button>
-                    )}
-                    <button data-testid={`tenant-delete-${t.id}`} onClick={() => { setToDelete(t); setConfirmText(""); }}
-                      title="Permanently delete this workspace and all its data"
-                      className={BTN + " border-slate-900/15 text-slate-600 hover:border-[#cf222e]/60 hover:text-[#b91c1c] hover:bg-[#cf222e]/10 py-1 flex items-center gap-1"}>
-                      <Trash size={12} /> Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Permanent-delete confirmation — requires typing the workspace name */}
-      {toDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4" data-testid="tenant-delete-modal">
-          <div className="w-full max-w-md border border-[#cf222e]/40 bg-slate-900/[0.06] p-6 rounded-xl">
-            <div className="flex items-center gap-2 mb-3 text-[#b91c1c]">
-              <WarningCircle size={20} weight="fill" />
-              <h3 className="font-display text-base ">Delete workspace</h3>
-            </div>
-            <p className="font-mono text-xs text-slate-600 leading-relaxed mb-2">
-              This permanently deletes <span className="text-slate-900 font-semibold">{toDelete.name}</span> — all{" "}
-              {toDelete.users} user(s), {toDelete.tasks} task(s), {toDelete.decisions} decision(s), invoices, files and
-              every other record. <span className="text-[#b91c1c]">This cannot be undone.</span>
-            </p>
-            <p className="font-mono text-[11px] uppercase tracking-wider text-slate-600 mt-4 mb-1.5">
-              Type <span className="text-slate-900 normal-case tracking-normal">{toDelete.name}</span> to confirm
-            </p>
-            <input
-              autoFocus
-              data-testid="tenant-delete-confirm-input"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") doDelete(); }}
-              placeholder={toDelete.name}
-              className="w-full bg-white border border-slate-900/15 px-3 py-2.5 font-mono text-xs text-slate-900 placeholder:text-slate-300 focus:outline-none focus:border-[#cf222e]/60 rounded-xl"
-            />
-            <div className="flex items-center justify-end gap-2 mt-5">
-              <button data-testid="tenant-delete-cancel" onClick={() => { setToDelete(null); setConfirmText(""); }}
-                className={BTN + " border-slate-900/20 text-slate-600 hover:border-slate-900/50"}>
-                Cancel
-              </button>
-              <button
-                data-testid="tenant-delete-confirm"
-                onClick={doDelete}
-                disabled={!nameMatches || deleting}
-                className={BTN + " border-[#cf222e] bg-[#cf222e]/15 text-[#b91c1c] hover:bg-[#cf222e]/25 flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"}>
-                {deleting ? <Spinner size={13} className="animate-spin" /> : <Trash size={13} />}
-                {deleting ? "Deleting…" : "Delete forever"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- Users ------------------------------------------------------------------
-export function UsersSection() {
-  const [rows, setRows] = useState(null);
-  const load = useCallback(() => {
-    api.get("/admin/users").then((r) => setRows(r.data.users)).catch(() => {});
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  const act = async (id, action) => {
-    try {
-      await api.post(`/admin/users/${id}/${action}`);
-      toast.success(`User ${action}d`);
-      load();
-    } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail));
-    }
-  };
-
-  if (!rows) return <Loading />;
-  return (
-    <div data-testid="admin-users">
-      <h2 className={H2 + " mb-5"}>Users ({rows.length})</h2>
-      <div className="overflow-x-auto border border-slate-900/10 rounded-xl">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-slate-900/[0.06] font-mono text-[10px] uppercase tracking-widest text-slate-600">
-              <th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Workspace</th>
-              <th className="p-3">Role</th><th className="p-3">Status</th><th className="p-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="font-mono text-xs text-slate-700">
-            {rows.map((u) => (
-              <tr key={u.id} className="border-t border-slate-900/5 hover:bg-slate-900/[0.03]" data-testid={`user-row-${u.id}`}>
-                <td className="p-3 text-slate-900 font-semibold">{u.name || "—"}</td>
-                <td className="p-3 text-slate-600">{u.email || "—"}</td>
-                <td className="p-3 text-slate-600">{u.tenant_name}</td>
-                <td className="p-3 text-slate-600">{roleLabel(u.role)}</td>
-                <td className="p-3">
-                  {u.suspended
-                    ? <span className="text-[#b91c1c]">suspended</span>
-                    : <span className="text-[#116329]">active</span>}
-                </td>
-                <td className="p-3">
-                  <div className="flex gap-1.5">
-                    {u.role !== "owner" && (u.suspended ? (
-                      <button data-testid={`reactivate-${u.id}`} onClick={() => act(u.id, "reactivate")}
-                        className={BTN + " border-[#116329]/50 text-[#116329] hover:bg-[#116329]/10 py-1 flex items-center gap-1"}>
-                        <ArrowClockwise size={12} /> Reactivate
-                      </button>
-                    ) : (
-                      <button data-testid={`suspend-${u.id}`} onClick={() => act(u.id, "suspend")}
-                        className={BTN + " border-[#cf222e]/50 text-[#b91c1c] hover:bg-[#cf222e]/10 py-1 flex items-center gap-1"}>
-                        <Prohibit size={12} /> Suspend
-                      </button>
-                    ))}
-                    <button data-testid={`reset-access-${u.id}`} onClick={() => act(u.id, "reset-access")}
-                      className={BTN + " border-slate-900/20 text-slate-600 hover:border-slate-900/40 py-1"}>
-                      Reset Access
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// --- Audit Log --------------------------------------------------------------
-const AUDIT_META = {
-  login: { icon: SignIn, color: "#57606a" },
-  logout: { icon: SignOut, color: "#57606a" },
-  update_ai_keys: { icon: KeyIcon, color: "#7d4e00" },
-  suspend_user: { icon: Prohibit, color: "#cf222e" },
-  reactivate_user: { icon: ArrowClockwise, color: "#116329" },
-  suspend_tenant: { icon: Prohibit, color: "#cf222e" },
-  reactivate_tenant: { icon: ArrowClockwise, color: "#116329" },
-  delete_tenant: { icon: Trash, color: "#cf222e" },
-  reset_access: { icon: ArrowsClockwise, color: "#6ea8ff" },
-};
-
-export function AuditSection() {
-  const [rows, setRows] = useState(null);
-  const load = useCallback(() => {
-    api.get("/admin/audit").then((r) => setRows(r.data.entries)).catch(() => {});
-  }, []);
-  useEffect(() => { load(); }, [load]);
-  if (!rows) return <Loading />;
-  const fmt = (d) => (d ? new Date(d).toLocaleString() : "—");
-  return (
-    <div data-testid="admin-audit">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className={H2}>Audit Log</h2>
-        <button
-          data-testid="audit-refresh"
-          onClick={load}
-          className={BTN + " border-slate-900/20 text-slate-600 hover:border-slate-900/50 flex items-center gap-1.5"}
-        >
-          <ArrowClockwise size={13} /> Refresh
-        </button>
-      </div>
-      {rows.length === 0 ? (
-        <div className={CARD + " text-slate-600 font-mono text-sm"}>No admin activity recorded yet.</div>
-      ) : (
-        <div className="border border-slate-900/10 rounded-xl">
-          {rows.map((e, i) => {
-            const meta = AUDIT_META[e.action] || { icon: ClockCounterClockwise, color: "#57606a" };
+    <AdminPage title="AI keys" testid="admin-ai-keys"
+      subtitle="The keys the platform calls AI providers with. A key set here wins over the server default."
+      actions={<Btn data-testid="test-all-keys" icon={ArrowClockwise} busy={testing} onClick={test}>{testing ? "Checking…" : "Check every key"}</Btn>}>
+      {error && !data ? <LoadError what="the keys" onRetry={reload} /> : !data ? <Loading /> : (
+        <div className={`${CARD_BASE} divide-y divide-slate-900/[0.06]`}>
+          {data.keys.map((k) => {
+            const st = status[k.provider] && keyStatus(status[k.provider].status);
             return (
-              <div
-                key={e.id}
-                data-testid={`audit-row-${i}`}
-                className="flex items-start gap-3 p-4 border-b border-slate-900/5 last:border-0 hover:bg-slate-900/[0.03]"
-              >
-                <div
-                  className="w-8 h-8 shrink-0 flex items-center justify-center border"
-                  style={{ borderColor: `${meta.color}55`, background: `${meta.color}12` }}
-                >
-                  <meta.icon size={15} weight="bold" style={{ color: meta.color }} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-mono text-sm text-slate-800">{e.message}</div>
-                  <div className="font-mono text-[11px] text-slate-600 mt-0.5">
-                    {e.admin_email} · <span className="uppercase tracking-wider">{(e.action || "").replace(/_/g, " ")}</span>
+              <div key={k.provider} className="p-5" data-testid={`ai-key-${k.provider}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[15px] font-medium text-slate-900">{k.label}</span>
+                      <Chip tone={k.source === "not_set" ? "neutral" : "info"}>{keySourceLabel(k.source)}</Chip>
+                      {st && <Chip tone={st.tone} title={status[k.provider].detail}>{st.label}</Chip>}
+                    </div>
+                    <div className="mt-1.5 font-mono text-xs text-slate-500">{k.masked || "No key"}</div>
+                    {k.note && <div className="mt-1 text-xs text-slate-500">{k.note}</div>}
+                    {st && status[k.provider].detail && st.tone !== "good" && <div className="mt-1 text-xs text-[#b91c1c]">{status[k.provider].detail}</div>}
                   </div>
+                  {isSuper && editing !== k.provider && (
+                    <Btn size="sm" icon={PencilSimple} data-testid={`edit-key-${k.provider}`} onClick={() => { setEditing(k.provider); setDraft(""); }}>Replace</Btn>
+                  )}
                 </div>
-                <div className="font-mono text-[11px] text-slate-600 shrink-0 whitespace-nowrap">{fmt(e.created_at)}</div>
+                {editing === k.provider && (
+                  <form onSubmit={(e) => { e.preventDefault(); save(k.provider); }} className="mt-4 space-y-3" data-testid={`edit-panel-${k.provider}`}>
+                    <input data-testid={`key-input-${k.provider}`} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus
+                      placeholder="Paste the new key" autoComplete="off" className={`${ADMIN_FIELD} font-mono`} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Btn type="submit" variant="primary" size="sm" busy={saving} disabled={!draft} data-testid={`save-key-${k.provider}`}>Save key</Btn>
+                      {k.source === "custom" && <Btn size="sm" busy={saving} onClick={() => { setDraft(""); save(k.provider); }}>Use the server default</Btn>}
+                      <Btn size="sm" variant="ghost" onClick={() => { setEditing(null); setDraft(""); }}>Cancel</Btn>
+                    </div>
+                  </form>
+                )}
               </div>
             );
           })}
         </div>
       )}
-    </div>
+      {!isSuper && <p className="mt-3 text-xs text-slate-500">Only a super admin can replace a key.</p>}
+    </AdminPage>
   );
 }
 
-// --- Health -----------------------------------------------------------------
-export function HealthSection() {
-  const [h, setH] = useState(null);
-  useEffect(() => {
-    api.get("/admin/health").then((r) => setH(r.data)).catch(() => {});
-  }, []);
-  if (!h) return <Loading />;
-  const ok = (v) => v === "ok" || v === "running" || v === "configured";
-  const rows = [
-    { label: "Database", v: h.database.status },
-    { label: "Follow-up Scheduler", v: h.scheduler.status, detail: h.scheduler.detail },
-    { label: "Emergent LLM Key", v: h.emergent_key },
+// --- Audit log ------------------------------------------------------------------------------
+export function AuditSection() {
+  const { go } = useAdmin();
+  const location = useLocation();
+  const view = new URLSearchParams(location.search).get("view") === "sessions" ? "sessions" : "actions";
+  return (
+    <AdminPage title="Audit log" testid="admin-audit"
+      subtitle="Everything an admin did, and every session where an admin looked through a customer's eyes"
+      actions={<Segmented value={view} onChange={(v) => go(v === "sessions" ? "audit?view=sessions" : "audit", { replace: true })}
+        options={[{ value: "actions", label: "Admin actions" }, { value: "sessions", label: "View-as sessions" }]} testid="audit-view" />}>
+      {view === "sessions" ? <ImpersonationSection embedded /> : <AuditActions />}
+    </AdminPage>
+  );
+}
+
+function AuditActions() {
+  const { data, error, reload } = useAdminGet("/admin/audit?limit=500");
+  const [q, setQ] = useState("");
+  const [group, setGroup] = useState("");
+  const rows = useMemo(() => data?.entries || [], [data]);
+  const shown = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const g = AUDIT_GROUPS.find((x) => x.value === group);
+    return rows.filter((e) => (!g?.match || g.match(e.action || ""))
+      && (!term || `${e.message} ${e.admin_email} ${auditLabel(e.action)}`.toLowerCase().includes(term)));
+  }, [rows, q, group]);
+  const columns = [
+    { key: "created_at", label: "When", className: "whitespace-nowrap", render: (e) => <span title={fmtDateTime(e.created_at)}>{fmtAgo(e.created_at)}</span> },
+    { key: "action", label: "What", sortValue: (e) => auditLabel(e.action), render: (e) => (
+      <div className="min-w-0">
+        <div className="font-medium text-slate-900">{auditLabel(e.action)}</div>
+        <div className="text-xs text-slate-500 [overflow-wrap:anywhere]">{e.message}</div>
+      </div>
+    ) },
+    { key: "admin_email", label: "Who", mobile: false, render: (e) => <span className="text-slate-600">{e.admin_email || "—"}</span> },
   ];
   return (
-    <div data-testid="admin-health">
-      <h2 className={H2 + " mb-5"}>System Health</h2>
-      <div className="grid gap-3 md:grid-cols-3">
-        {rows.map((r) => (
-          <div key={r.label} className={CARD} data-testid={`health-${r.label}`}>
-            <div className="flex items-center gap-2 mb-2">
-              {ok(r.v) ? <ShieldCheck size={18} className="text-[#116329]" weight="fill" />
-                : <Circle size={14} weight="fill" className="text-[#b91c1c]" />}
-              <span className="font-display text-slate-900 text-sm ">{r.label}</span>
-            </div>
-            <div className="font-mono text-xs uppercase" style={{ color: ok(r.v) ? "#116329" : "#cf222e" }}>{r.v}</div>
-            {r.detail && <div className="font-mono text-[10px] text-slate-600 mt-1">{r.detail}</div>}
-          </div>
-        ))}
+    <>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <SearchField value={q} onChange={setQ} placeholder="Search what happened or who did it" testid="audit-search" className="w-full sm:w-80" />
+        <div className="w-52">
+          <GlassSelect value={group} onChange={setGroup} ariaLabel="Kind of action" testid="audit-group" triggerClassName="h-10 text-sm"
+            options={AUDIT_GROUPS.map(({ value, label }) => ({ value, label }))} />
+        </div>
+        <Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reload} className="sm:ml-auto" data-testid="audit-refresh">Refresh</Btn>
       </div>
-      <h3 className="font-mono text-[11px] uppercase tracking-widest text-slate-600 mt-8 mb-3">AI Provider Key Source</h3>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {Object.entries(h.ai_providers).map(([k, v]) => (
-          <div key={k} className={CARD}>
-            <div className="font-display text-slate-900 text-xs ">{k}</div>
-            <div className="font-mono text-[11px] text-slate-600 mt-1 uppercase">{v}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+      {error && !data ? <LoadError what="the audit log" onRetry={reload} /> : !data ? <Loading /> : (
+        <div className={CARD_BASE}>
+          <DataTable rows={shown} columns={columns} pageSize={50} initialSort={{ key: "created_at", dir: "desc" }}
+            rowTestid={(e) => `audit-row-${e.id}`}
+            empty={<Empty icon={ClockCounterClockwise} title={rows.length ? "Nothing matches." : "No admin activity yet."} />} />
+        </div>
+      )}
+      {rows.length >= 500 && <p className="mt-3 text-xs text-slate-500">Showing the latest 500 entries.</p>}
+    </>
   );
 }
 
+// --- Health (with what Observability showed) ---------------------------------------------
+const OBS_RANGES = [{ value: "1h", label: "1 hour" }, { value: "24h", label: "24 hours" }, { value: "7d", label: "7 days" }, { value: "30d", label: "30 days" }];
+
+export function HealthSection() {
+  const { go } = useAdmin();
+  const [range, setRange] = useState("24h");
+  const health = useAdminGet("/admin/health");
+  const alerts = useAdminGet("/admin/alerts");
+  const rel = useAdminGet(`/admin/observability/reliability?range=${range}`);
+  const errs = useAdminGet(`/admin/observability/errors?range=${range}`);
+  const out = useAdminGet("/admin/observability/outages");
+  const reloadAll = () => { health.reload(); alerts.reload(); rel.reload(); errs.reload(); out.reload(); };
+
+  const h = health.data;
+  const active = alerts.data?.active || [];
+  const r = rel.data;
+  const pct = (v) => `${((v || 0) * 100).toFixed(1)}%`;
+
+  const tiles = h ? [
+    { label: "Database", v: h.database.status },
+    { label: "Scheduler", v: h.scheduler.status, detail: h.scheduler.detail },
+    { label: "Emergent key", v: h.emergent_key },
+    { label: "AI providers", v: active.length ? "problem" : "ok", detail: active.length ? `${active.length} problem${active.length > 1 ? "s" : ""}` : "No problems reported" },
+  ] : [];
+
+  const ProviderTable = ({ title, rows, label }) => (
+    <Panel title={title}>
+      {!rows?.length ? <Empty compact title="No AI calls in this window." /> : (
+        <table className="w-full text-sm">
+          <thead><tr className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
+            <th className="pb-2 text-left font-semibold">Name</th><th className="pb-2 text-right font-semibold">Calls</th>
+            <th className="pb-2 text-right font-semibold">Errors</th><th className="pb-2 text-right font-semibold">Avg time</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((x) => (
+              <tr key={x.key} className="border-t border-slate-900/[0.05]">
+                <td className="py-2 text-slate-800">{label(x.key)}</td>
+                <td className="py-2 text-right tabular-nums text-slate-600">{fmtNum(x.calls)}</td>
+                <td className={`py-2 text-right tabular-nums ${x.errors ? "text-[#b91c1c]" : "text-slate-400"}`}>{x.errors}</td>
+                <td className="py-2 text-right tabular-nums text-slate-600">{fmtNum(x.avg_latency_ms)} ms</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  );
+
+  return (
+    <AdminPage title="Health" testid="admin-health" subtitle="Is the platform working, and is AI answering?"
+      actions={<Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reloadAll}>Refresh</Btn>}>
+      {health.error && !h ? <LoadError what="health" onRetry={health.reload} /> : !h ? <Loading /> : (
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {tiles.map((t) => {
+            const ok = healthOk(t.v);
+            return (
+              <div key={t.label} className={`${CARD_BASE} p-5`} data-testid={`health-${t.label}`}>
+                <div className="flex items-center gap-2">
+                  {ok ? <ShieldCheck size={18} weight="fill" className="text-[#116329]" /> : <WarningCircle size={18} weight="fill" className="text-[#b91c1c]" />}
+                  <span className="text-sm font-medium text-slate-900">{t.label}</span>
+                </div>
+                <div className={`mt-2 text-sm ${ok ? "text-[#116329]" : "text-[#b91c1c]"}`}>{healthLabel(t.v)}</div>
+                {t.detail && <div className="mt-0.5 text-xs text-slate-500">{t.detail}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {active.length > 0 && (
+        <Panel title="AI provider problems" className="mb-4 ring-[#cf222e]/20" testid="health-alerts"
+          actions={<Btn size="sm" icon={KeyIcon} onClick={() => go("ai-keys")}>Open AI keys</Btn>}>
+          <ul className="space-y-2">
+            {active.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <Chip tone="bad">{providerLabel(a.provider)}</Chip>
+                <span className="text-slate-800">{humanize(a.status)}</span>
+                <span className="text-xs text-slate-500">since {fmtAgo(a.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-slate-500">Replace or clear the key in AI keys to restore service. Customers may see AI features fail until then.</p>
+        </Panel>
+      )}
+
+      {h && (
+        <Panel title="Where each key comes from" className="mb-6">
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(h.ai_providers).map(([k, v]) => (
+              <Chip key={k} tone={v === "not_set" ? "neutral" : "info"}>{providerLabel(k)} · {keySourceLabel(v)}</Chip>
+            ))}
+          </div>
+        </Panel>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><Pulse size={18} /> AI reliability</h2>
+        <Segmented value={range} onChange={setRange} options={OBS_RANGES} ariaLabel="Window" testid="health-range" />
+      </div>
+      {rel.error && !r ? <LoadError what="AI reliability" onRetry={rel.reload} /> : !r ? <Loading /> : (
+        <>
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat label="AI calls" value={fmtNum(r.calls)} />
+            <Stat label="Failed" value={pct(r.error_rate)} sub={`${fmtNum(r.errors)} calls`} />
+            <Stat label="Answered by a fallback" value={pct(r.degraded_rate)} />
+            <Stat label="Slowest 5% take" value={`${fmtNum(r.latency_ms.p95)} ms`} sub={`Typical ${fmtNum(r.latency_ms.p50)} ms`} />
+          </div>
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <ProviderTable title="By provider" rows={r.by_provider} label={providerLabel} />
+            <ProviderTable title="By task" rows={r.by_task.slice(0, 12)} label={humanize} />
+          </div>
+        </>
+      )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Recent AI errors">
+          {!errs.data ? <Loading /> : errs.data.count === 0 ? (
+            <div className="flex items-center gap-2 py-3 text-sm text-[#116329]"><CheckCircle size={18} weight="fill" /> No AI errors in this window.</div>
+          ) : (
+            <ul className="max-h-72 divide-y divide-slate-900/[0.05] overflow-y-auto">
+              {errs.data.errors.map((e, i) => (
+                <li key={i} className="py-2.5">
+                  <div className="text-sm text-slate-800">{humanize(e.task)} <span className="text-xs text-slate-500">· {providerLabel(e.engine)} {e.model ? `· ${e.model}` : ""}</span></div>
+                  <div className="mt-0.5 text-xs text-[#b91c1c] [overflow-wrap:anywhere]">{e.error || "No message recorded"}</div>
+                  <div className="text-[11px] text-slate-400">{fmtDateTime(e.created_at)}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+        <Panel title="Provider outages">
+          {!out.data ? <Loading /> : out.data.outages.length === 0 ? <Empty compact title="No outages recorded." /> : (
+            <ul className="max-h-72 divide-y divide-slate-900/[0.05] overflow-y-auto">
+              {out.data.outages.map((o, i) => (
+                <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+                  <div>
+                    <div className="text-sm text-slate-800">{providerLabel(o.provider)} · {humanize(o.status)}</div>
+                    <div className="text-[11px] text-slate-400">{fmtDateTime(o.created_at)}</div>
+                  </div>
+                  {o.resolved ? <Chip tone="good">Resolved</Chip> : <Chip tone="bad">Ongoing</Chip>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+    </AdminPage>
+  );
+}
 

@@ -162,6 +162,9 @@ _PUBLIC_EXACT = {
     # 2026-10-08 (Play audit C1) -- reporting an AI question during signup,
     # before an account exists. ai_output only, IP rate limited (routers/reports.py).
     "/api/reports/public",
+    # 2026-10-22 (admin redesign) -- an invited admin sets their own password.
+    # The link is the key: 256-bit token stored as a hash, single use, 7 days.
+    "/api/invites/admin/{token}/accept",
 }
 
 

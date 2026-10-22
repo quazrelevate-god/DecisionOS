@@ -106,8 +106,9 @@ def test_what_is_left_of_each_local_copy_is_a_call_to_the_one(rel, call):
     ("pages/OperatingScore.js", ">{peer.role}<"),
     # the platform admin console looks at other people's companies
     ("pages/admin/AdminSections.js", "uppercase text-white/50\">{u.role}"),
-    ("pages/admin/Tenant360Section.js", "· {u.role}</span>"),
-    ("pages/admin/Tenant360Section.js", "· {m.role}</span>"),
+    # Tenant360Section.js became WorkspacePage.js in the 2026-10-22 admin redesign
+    ("pages/admin/WorkspacePage.js", "· {u.role}</span>"),
+    ("pages/admin/WorkspacePage.js", "· {m.role}</span>"),
 ])
 def test_the_stored_key_is_not_rendered(rel, raw):
     assert raw not in src(rel), f"{rel} still prints the key"
@@ -117,7 +118,7 @@ def test_the_stored_key_is_not_rendered(rel, raw):
     "pages/MyWork.js", "pages/Leave.js",
     "components/StageWorkReview.js", "components/Layout.js", "pages/Team.js",
     "pages/OperatingScore.js", "pages/admin/AdminSections.js",
-    "pages/admin/Tenant360Section.js",
+    "pages/admin/WorkspacePage.js", "pages/admin/ImpersonationSection.js",
 ])
 def test_every_screen_that_names_a_role_imports_the_one_function(rel):
     s = src(rel)

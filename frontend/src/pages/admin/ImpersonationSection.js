@@ -1,89 +1,79 @@
-import { ADMIN_BTN, ADMIN_H2, CARD_BASE } from "./adminStyle";
-// Support impersonation management (Epic 10 Sprint 2).
-// Lists impersonation sessions (live / expired / revoked) and lets a super-admin
-// end a live session immediately. Starting a session happens from Tenant 360.
+import { CARD_BASE } from "./adminStyle";
+// View-as sessions (Epic 10 Sprint 2; inside the Audit log since the
+// 2026-10-22 admin redesign). Every session an admin opened to see a workspace
+// as one of its people: live, expired or ended. A session is started from the
+// workspace's page and asks why first.
 import { roleLabel } from "../../lib/departments";
-import { useState, useEffect, useCallback } from "react";
-import api, { formatApiError } from "../../lib/api";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Spinner, Circle, Prohibit, ArrowClockwise } from "@phosphor-icons/react";
+import api from "../../lib/api";
+import { ConfirmAction } from "../../components/common";
+import { ArrowClockwise, Eye, Prohibit } from "@phosphor-icons/react";
+import { useAdmin, useAdminGet, errText, fmtAgo, fmtDateTime, Btn, Chip, Empty, Loading, LoadError, LinkOut } from "./adminUi";
 
-const CARD = `${CARD_BASE} p-5`;
-const H2 = ADMIN_H2;
-const BTN = ADMIN_BTN;
-const COLORS = { live: "#116329", expired: "#57606a", revoked: "#cf222e" };
+const STATUS = { live: { label: "Live", tone: "good" }, expired: { label: "Expired", tone: "neutral" }, revoked: { label: "Ended early", tone: "bad" } };
 
 export function ImpersonationSection() {
-  const [rows, setRows] = useState(null);
-  const [active, setActive] = useState(0);
+  const { go, canWrite } = useAdmin();
+  const { data, error, reload } = useAdminGet("/admin/impersonation");
+  const [ending, setEnding] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const revoke = async () => {
+    setBusy(true);
     try {
-      const r = await api.get("/admin/impersonation");
-      setRows(r.data.sessions);
-      setActive(r.data.active);
-    } catch (e) { toast.error(formatApiError(e)); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  const revoke = async (id) => {
-    try {
-      await api.post(`/admin/impersonation/${id}/revoke`);
-      toast.success("Impersonation session ended");
-      load();
-    } catch (e) { toast.error(formatApiError(e)); }
+      await api.post(`/admin/impersonation/${ending.id}/revoke`);
+      toast.success("The session is ended");
+      setEnding(null); reload();
+    } catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
   };
 
-  if (!rows) {
-    return (
-      <div className="flex items-center gap-2 text-slate-600 font-mono text-sm py-10 justify-center">
-        <Spinner size={16} className="animate-spin" /> Loading…
-      </div>
-    );
-  }
-
-  const ts = (s) => (s ? String(s).slice(0, 16).replace("T", " ") : "—");
+  if (error && !data) return <LoadError what="view-as sessions" onRetry={reload} />;
+  if (!data) return <Loading />;
+  const rows = data.sessions || [];
 
   return (
     <div data-testid="admin-impersonation">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={H2}>Impersonation</h2>
-        <button onClick={load} className={BTN + " border-slate-900/15 text-slate-600 hover:text-slate-900 flex items-center gap-1.5"}>
-          <ArrowClockwise size={13} /> Refresh
-        </button>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-600">
+          {data.active ? <><strong className="font-semibold text-slate-900">{data.active}</strong> live now. </> : "None live now. "}
+          Read-only sessions can look but every change is blocked.
+        </p>
+        <Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reload}>Refresh</Btn>
       </div>
-      <p className="font-mono text-[11px] text-slate-600 mb-4">
-        {active} live session(s). Start a session from <span className="text-slate-600">Tenant 360</span>. Read-only
-        sessions can view a workspace but every write is blocked; all grants + revokes are in the Audit Log.
-      </p>
-      <div className="space-y-2">
-        {rows.map((s) => (
-          <div key={s.id} className={CARD + " flex items-center justify-between"}>
-            <div>
-              <div className="text-slate-900 text-sm flex items-center gap-2">
-                <Circle size={8} weight="fill" style={{ color: COLORS[s.status] || "#57606a" }} />
-                {s.target_name} <span className="text-slate-600 text-xs">· {roleLabel(s.target_role)}</span>
-                <span className="text-slate-600 text-xs">@ {s.tenant_name}</span>
-                {s.read_only && <span className="font-mono text-[9px] uppercase text-[#7d4e00] border border-[#7d4e00]/40 px-1.5 py-0.5 rounded-xl">read-only</span>}
-              </div>
-              <div className="font-mono text-[10px] text-slate-600 mt-1">
-                by {s.admin_email} · {ts(s.granted_at)} → {ts(s.expires_at)} · {s.status}
-                {s.reason ? ` · ${s.reason}` : ""}
-              </div>
-            </div>
-            {s.status === "live" && (
-              <button
-                onClick={() => revoke(s.id)}
-                data-testid={`revoke-${s.id}`}
-                className={BTN + " border-[#cf222e]/50 text-[#b91c1c] hover:bg-[#cf222e]/10 flex items-center gap-1.5"}
-              >
-                <Prohibit size={13} /> End
-              </button>
-            )}
-          </div>
-        ))}
-        {rows.length === 0 && <div className="font-mono text-xs text-slate-600 py-6 text-center">No impersonation sessions yet.</div>}
-      </div>
+      {rows.length === 0 ? (
+        <div className={CARD_BASE}><Empty icon={Eye} title="No one has viewed a workspace as its people yet."
+          hint="Start a session from a workspace's page, under More." /></div>
+      ) : (
+        <ul className={`${CARD_BASE} divide-y divide-slate-900/[0.06]`}>
+          {rows.map((s) => {
+            const st = STATUS[s.status] || { label: s.status, tone: "neutral" };
+            return (
+              <li key={s.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium text-slate-900">{s.target_name}</span>
+                    <span className="text-slate-500">{roleLabel(s.target_role)} at</span>
+                    <LinkOut onClick={() => go(`workspaces/${s.tenant_id}`)}>{s.tenant_name}</LinkOut>
+                    <Chip tone={st.tone}>{st.label}</Chip>
+                    {s.read_only && <Chip>Read-only</Chip>}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {s.admin_email} · started {fmtAgo(s.granted_at)} · {s.status === "live" ? `ends ${fmtDateTime(s.expires_at)}` : `ended ${fmtDateTime(s.expires_at)}`}
+                  </div>
+                  {s.reason && <div className="mt-1 text-xs text-slate-600">“{s.reason}”</div>}
+                </div>
+                {s.status === "live" && canWrite && (
+                  <Btn size="sm" variant="danger" icon={Prohibit} onClick={() => setEnding(s)} data-testid={`revoke-${s.id}`}>End now</Btn>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <ConfirmAction open={!!ending} onOpenChange={() => setEnding(null)} busy={busy}
+        title="End this session now?" description={ending ? `${ending.admin_email} stops seeing ${ending.tenant_name} at once.` : ""}
+        confirmLabel="End the session" busyLabel="Ending…" cancelLabel="Leave it" onConfirm={revoke} testid="revoke-confirm" />
     </div>
   );
 }

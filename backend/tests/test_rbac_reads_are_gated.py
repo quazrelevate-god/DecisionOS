@@ -114,7 +114,8 @@ def routes():
 
 
 PUBLIC_READS = {"/api/health", "/api/", "/api/brochure", "/api/auth/email/verify/{token}",
-                "/api/auth/invite/{token}", "/api/onboarding/draft/{draft_id}", "/api/webhooks/whatsapp"}
+                "/api/auth/invite/{token}", "/api/onboarding/draft/{draft_id}", "/api/webhooks/whatsapp",
+                "/api/invites/admin/{token}"}  # 2026-10-22: an admin invite link (the token is the key)
 
 
 def test_every_read_is_gated_or_on_the_reviewed_list(routes):

@@ -9,11 +9,14 @@ from __future__ import annotations
 from services.tenant_ai_keys import TENANT_PUBLIC
 
 import asyncio
+import re
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from core import db, get_platform_admin
+from services.admin_workspaces import is_test_tenant, test_reason
+from services.platform_config import usd_inr_rate
 
 router = APIRouter(prefix="/api/admin")
 
@@ -40,7 +43,9 @@ async def admin_search(q: str = Query("", min_length=0), admin: dict = Depends(g
     q = (q or "").strip()
     if len(q) < 2:
         return {"query": q, "tenants": [], "users": []}
-    rx = {"$regex": q, "$options": "i"}
+    # Escaped (2026-10-22): what is typed is text to find, not a pattern —
+    # "a+b@x.com" or "(" no longer errors or matches the wrong thing.
+    rx = {"$regex": re.escape(q), "$options": "i"}
     tenants = await db.tenants.find(
         {"$or": [{"name": rx}, {"company_name": rx}, {"id": q}]},
         {"_id": 0, "id": 1, "name": 1, "company_name": 1, "plan": 1, "suspended": 1, "created_at": 1},
@@ -116,7 +121,12 @@ async def admin_tenant_360(tenant_id: str, admin: dict = Depends(get_platform_ad
             "ai_setup_status": t.get("ai_setup_status", {}),
             "roles": t.get("roles", []),
             "gst": t.get("gst"),
+            # 2026-10-22 (admin redesign): the workspace page shows the trial's
+            # end and whether this is one of our test workspaces.
+            "trial_ends_at": t.get("trial_ends_at"),
+            "is_test": is_test_tenant(t), "test_reason": test_reason(t),
         },
+        "usd_inr": await usd_inr_rate(),
         "counts": {
             "users": users, "active_members": active_members, "decisions": decisions,
             "tasks": tasks, "tasks_done": tasks_done, "captures": captures,

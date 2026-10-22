@@ -1,93 +1,147 @@
-import { ADMIN_BTN, ADMIN_H2, ADMIN_H3, ADMIN_INP, ADMIN_SEL, CARD_BASE } from "./adminStyle";
-// Announcements & comms (Epic 10 Sprint 8).
-// Create in-app broadcasts / maintenance banners (audience all / plan / tenant),
-// activate/deactivate, delete, and email to targeted owners.
-import { useState, useEffect, useCallback } from "react";
-import api, { formatApiError } from "../../lib/api";
+import { CARD_BASE, ADMIN_H3 } from "./adminStyle";
+// Announcements (Epic 10 Sprint 8; redesigned 2026-10-22). In-app banners for
+// everyone, one plan or one workspace; switch on and off, email to owners.
+// The audience used to be typed as a code ("plan:starter", "tenant:<id>");
+// it is picked from lists now and reads back in words.
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import api from "../../lib/api";
 import { ConfirmAction } from "../../components/common";
-import { Spinner, ArrowClockwise, Plus, Trash, PaperPlaneRight } from "@phosphor-icons/react";
+import { GlassSelect } from "../../components/neuglass/GlassSelect";
+import { ArrowClockwise, Plus, Trash, PaperPlaneRight, Megaphone, Eye, EyeSlash } from "@phosphor-icons/react";
+import {
+  useAdmin, useAdminGet, errText, fmtAgo, Btn, Chip, Segmented, Toggle, RowMenu, AdminPage, Panel, Loading, Empty,
+  LoadError, ADMIN_FIELD,
+} from "./adminUi";
+import { PLAN_OPTIONS, planLabel, announceKindLabel, announceKindTone } from "./adminLabels";
 
-const CARD = `${CARD_BASE} p-4`;
-const H2 = ADMIN_H2;
-const H3 = ADMIN_H3;
-const BTN = ADMIN_BTN;
-const SEL = ADMIN_SEL;
-const INP = ADMIN_INP;
-const KIND_COLOR = { info: "#0969da", warning: "#7d4e00", maintenance: "#cf222e" };
+const BLANK = { title: "", body: "", kind: "info", audience: "all", dismissible: true };
+const KINDS = ["info", "warning", "maintenance"].map((k) => ({ value: k, label: announceKindLabel(k) }));
 
 export function AnnouncementsSection() {
-  const [rows, setRows] = useState(null);
-  const [form, setForm] = useState({ title: "", body: "", kind: "info", audience: "all", dismissible: true });
+  const { canWrite } = useAdmin();
+  const { data, error, reload } = useAdminGet("/admin/announcements");
+  const tenants = useAdminGet("/admin/tenants");
+  const [form, setForm] = useState(BLANK);
+  const [who, setWho] = useState("all");      // all | plan | tenant
+  const [plan, setPlan] = useState("starter");
+  const [tenant, setTenant] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [pendingDel, setPendingDel] = useState(null);
+  const [pendingEmail, setPendingEmail] = useState(null);
 
-  const load = useCallback(async () => {
-    try { const r = await api.get("/admin/announcements"); setRows(r.data.announcements); }
-    catch (e) { toast.error(formatApiError(e)); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
+  const names = useMemo(() => Object.fromEntries((tenants.data?.tenants || []).map((t) => [t.id, t.name])), [tenants.data]);
+  const audienceWords = (a) => {
+    if (!a || a === "all") return "Everyone";
+    if (a.startsWith("plan:")) return `${planLabel(a.slice(5))} plan`;
+    if (a.startsWith("tenant:")) return names[a.slice(7)] || "One workspace";
+    return a;
+  };
+  const audience = who === "plan" ? `plan:${plan}` : who === "tenant" ? (tenant ? `tenant:${tenant}` : "") : "all";
 
   const create = async (e) => {
     e.preventDefault();
-    try { await api.post("/admin/announcements", form); toast.success("Announcement created"); setForm({ title: "", body: "", kind: "info", audience: "all", dismissible: true }); load(); }
-    catch (err) { toast.error(formatApiError(err)); }
+    if (!audience) { toast.error("Pick the workspace to show it to"); return; }
+    setCreating(true);
+    try {
+      await api.post("/admin/announcements", { ...form, audience });
+      toast.success(`“${form.title}” is live for ${audienceWords(audience).toLowerCase() === "everyone" ? "everyone" : audienceWords(audience)}`);
+      setForm(BLANK); setWho("all"); setTenant("");
+      reload();
+    } catch (err) { toast.error(errText(err)); } finally { setCreating(false); }
   };
-  const toggle = async (a) => { try { await api.patch(`/admin/announcements/${a.id}`, { active: !a.active }); load(); } catch (e) { toast.error(formatApiError(e)); } };
+  const toggle = async (a) => {
+    try { await api.patch(`/admin/announcements/${a.id}`, { active: !a.active }); toast.success(a.active ? "Switched off" : "Switched on"); reload(); }
+    catch (e) { toast.error(errText(e)); }
+  };
   /* 2026-10-02 — both of these asked through window.confirm, which some embed
      contexts answer false with nothing drawn: the operator saw no question and
      no result. The second one sends REAL EMAIL to real owners, so a question
      that can fail to appear is not a question. */
-  const [pendingDel, setPendingDel] = useState(null);
-  const [pendingEmail, setPendingEmail] = useState(null);
   const del = async (id) => {
     setPendingDel(null);
-    try { await api.delete(`/admin/announcements/${id}`); load(); } catch (e) { toast.error(formatApiError(e)); }
+    try { await api.delete(`/admin/announcements/${id}`); toast.success("Announcement deleted"); reload(); } catch (e) { toast.error(errText(e)); }
   };
   const email = async (a) => {
     setPendingEmail(null);
-    try { const r = await api.post(`/admin/announcements/${a.id}/email`); toast.success(`Emailed ${r.data.sent}/${r.data.targets} owners`); }
-    catch (e) { toast.error(formatApiError(e)); }
+    try { const r = await api.post(`/admin/announcements/${a.id}/email`); toast.success(`Emailed ${r.data.sent} of ${r.data.targets} owners`); }
+    catch (e) { toast.error(errText(e)); }
   };
 
-  if (!rows) return <div className="flex items-center gap-2 text-slate-600 font-mono text-sm py-10 justify-center"><Spinner size={16} className="animate-spin" /> Loading…</div>;
-  const ts = (s) => (s ? String(s).slice(0, 16).replace("T", " ") : "—");
+  const rows = data?.announcements || [];
 
   return (
-    <div data-testid="admin-announcements">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={H2}>Announcements</h2>
-        <button onClick={load} className={BTN + " border-slate-900/15 text-slate-600 hover:text-slate-900 flex items-center gap-1.5"}><ArrowClockwise size={13} /> Refresh</button>
-      </div>
+    <AdminPage title="Announcements" subtitle="Banners inside the app, for everyone, one plan or one workspace" testid="admin-announcements"
+      actions={<Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reload}>Refresh</Btn>}>
+      <div className="grid gap-4 lg:grid-cols-5">
+        {canWrite && (
+          <Panel title="New announcement" className="h-fit lg:col-span-2">
+            <form onSubmit={create} className="space-y-4">
+              <label className="block">
+                <span className={ADMIN_H3 + " block"}>Title</span>
+                <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="e.g. Scheduled maintenance on Sunday, 2–3 am" className={ADMIN_FIELD} data-testid="announce-title" />
+              </label>
+              <label className="block">
+                <span className={ADMIN_H3 + " block"}>Message (optional)</span>
+                <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} rows={3}
+                  placeholder="What people should know or do" className={`${ADMIN_FIELD} resize-y`} />
+              </label>
+              <div>
+                <span className={ADMIN_H3 + " block"}>Kind</span>
+                <GlassSelect value={form.kind} onChange={(v) => setForm({ ...form, kind: v })} options={KINDS} ariaLabel="Kind" testid="announce-kind" triggerClassName="h-11 text-sm" />
+              </div>
+              <div>
+                <span className={ADMIN_H3 + " block"}>Show it to</span>
+                <Segmented value={who} onChange={setWho} ariaLabel="Audience" testid="announce-who"
+                  options={[{ value: "all", label: "Everyone" }, { value: "plan", label: "A plan" }, { value: "tenant", label: "One workspace" }]} />
+                {who === "plan" && (
+                  <div className="mt-2"><GlassSelect value={plan} onChange={setPlan} options={PLAN_OPTIONS} ariaLabel="Plan" triggerClassName="h-11 text-sm" /></div>
+                )}
+                {who === "tenant" && (
+                  <div className="mt-2">
+                    <GlassSelect value={tenant} onChange={setTenant} placeholder={tenants.data ? "Choose a workspace" : "Loading workspaces…"}
+                      ariaLabel="Workspace" testid="announce-tenant" triggerClassName="h-11 text-sm"
+                      options={(tenants.data?.tenants || []).filter((t) => !t.is_test).map((t) => ({ value: t.id, label: t.name }))} />
+                  </div>
+                )}
+              </div>
+              <Toggle checked={form.dismissible} onChange={(v) => setForm({ ...form, dismissible: v })} label="People can close it" />
+              <Btn type="submit" variant="primary" icon={Plus} busy={creating} disabled={!form.title.trim()} className="w-full">Publish</Btn>
+            </form>
+          </Panel>
+        )}
 
-      <form onSubmit={create} className={CARD + " mb-4 space-y-2"}>
-        <div className={H3}>New announcement</div>
-        <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" className={INP + " w-full"} />
-        <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} placeholder="Body (optional)" rows={2} className={INP + " w-full"} />
-        <div className="flex flex-wrap gap-2 items-center">
-          <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} className={SEL}>
-            {["info", "warning", "maintenance"].map((k) => <option key={k} value={k}>{k}</option>)}
-          </select>
-          <input value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })} placeholder="audience: all | plan:starter | tenant:<id>" className={INP + " flex-1 min-w-[16rem]"} />
-          <label className="flex items-center gap-1.5 font-mono text-[11px] text-slate-600"><input type="checkbox" checked={form.dismissible} onChange={(e) => setForm({ ...form, dismissible: e.target.checked })} className="accent-[#cf222e]" /> dismissible</label>
-          <button type="submit" className={BTN + " border-[#116329]/50 text-[#116329] hover:bg-[#116329]/10 flex items-center gap-1"}><Plus size={12} /> Create</button>
+        <div className={canWrite ? "lg:col-span-3" : "lg:col-span-5"}>
+          {error && !data ? <LoadError what="announcements" onRetry={reload} /> : !data ? <Loading /> : rows.length === 0 ? (
+            <div className={CARD_BASE}><Empty icon={Megaphone} title="No announcements yet." hint="Publish one to show a banner inside the app." /></div>
+          ) : (
+            <ul className={`${CARD_BASE} divide-y divide-slate-900/[0.06]`}>
+              {rows.map((a) => (
+                <li key={a.id} className="flex items-start gap-3 px-5 py-4" data-testid={`announcement-${a.id}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-slate-900">{a.title}</span>
+                      <Chip tone={announceKindTone(a.kind)}>{announceKindLabel(a.kind)}</Chip>
+                      {a.live ? <Chip tone="good">Showing</Chip> : <Chip>Off</Chip>}
+                    </div>
+                    {a.body && <p className="mt-1 line-clamp-2 text-sm text-slate-600">{a.body}</p>}
+                    <div className="mt-1 text-xs text-slate-500">{audienceWords(a.audience)} · {fmtAgo(a.created_at)}{a.dismissible === false ? " · can't be closed" : ""}</div>
+                  </div>
+                  {canWrite && (
+                    <RowMenu testid={`announcement-menu-${a.id}`} items={[
+                      { label: a.active ? "Switch off" : "Switch on", icon: a.active ? EyeSlash : Eye, onSelect: () => toggle(a) },
+                      { label: "Email it to owners…", icon: PaperPlaneRight, onSelect: () => setPendingEmail(a) },
+                      { label: "Delete…", icon: Trash, danger: true, separatorBefore: true, onSelect: () => setPendingDel(a) },
+                    ]} />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      </form>
-
-      <div className="space-y-2">
-        {rows.map((a) => (
-          <div key={a.id} className={CARD + " flex items-center justify-between"} style={{ borderLeft: `3px solid ${KIND_COLOR[a.kind] || "#57606a"}` }}>
-            <div>
-              <div className="text-slate-900 text-sm">{a.title} <span className="font-mono text-[9px] uppercase" style={{ color: KIND_COLOR[a.kind] }}>{a.kind}</span></div>
-              <div className="font-mono text-[10px] text-slate-600 mt-0.5">{a.audience} · {a.live ? <span className="text-[#116329]">live</span> : <span className="text-slate-600">off</span>} · {ts(a.created_at)}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => toggle(a)} className={BTN + (a.active ? " border-[#7d4e00]/50 text-[#7d4e00]" : " border-[#116329]/50 text-[#116329]")}>{a.active ? "Disable" : "Enable"}</button>
-              <button onClick={() => setPendingEmail(a)} title="Email to targeted owners" className={BTN + " border-slate-900/15 text-slate-600 hover:text-slate-900"}><PaperPlaneRight size={13} /></button>
-              <button onClick={() => setPendingDel(a)} className={BTN + " border-[#cf222e]/50 text-[#b91c1c] hover:bg-[#cf222e]/10"}><Trash size={13} /></button>
-            </div>
-          </div>
-        ))}
-        {rows.length === 0 && <div className="font-mono text-xs text-slate-600 py-6 text-center">No announcements.</div>}
       </div>
+
       <ConfirmAction
         open={!!pendingDel}
         onOpenChange={() => setPendingDel(null)}
@@ -102,13 +156,12 @@ export function AnnouncementsSection() {
         open={!!pendingEmail}
         onOpenChange={() => setPendingEmail(null)}
         title="Send this as real email?"
-        description={pendingEmail ? `“${pendingEmail.title}” goes to every targeted owner's inbox. Email cannot be unsent.` : ""}
+        description={pendingEmail ? `“${pendingEmail.title}” goes to the inbox of every owner in ${audienceWords(pendingEmail.audience).toLowerCase() === "everyone" ? "every workspace" : audienceWords(pendingEmail.audience)}. Email cannot be unsent.` : ""}
         confirmLabel="Send the email"
         cancelLabel="Not now"
         danger={false}
         onConfirm={() => email(pendingEmail)}
         testid="admin-announcement-email-confirm" />
-
-    </div>
+    </AdminPage>
   );
 }

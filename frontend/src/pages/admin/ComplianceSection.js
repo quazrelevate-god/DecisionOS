@@ -1,230 +1,186 @@
-import { ADMIN_BTN, ADMIN_H2, ADMIN_H3, ADMIN_INP, CARD_BASE } from "./adminStyle";
-// Compliance & data ops (Epic 9 Sprint 9 -- DPDP / GDPR).
-// Per-tenant data export, retention policy, consent export, and the
-// structured export-before-delete workflow, plus a platform retention sweep.
-import { useState, useEffect, useCallback } from "react";
-import api, { formatApiError } from "../../lib/api";
+import { ADMIN_H3 } from "./adminStyle";
+// Compliance (Epic 9 Sprint 9 — DPDP / GDPR; redesigned 2026-10-22).
+// The data-rights desk: find a workspace or a person and hand over what we
+// hold (access requests), or erase a workspace with a receipt (erasure). Plus
+// the platform-wide retention sweep. Each workspace's own retention policy
+// is set on its page.
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { saveFile } from "../../lib/native/files";
+import api from "../../lib/api";
 import { ConfirmAction } from "../../components/common";
+import { ArrowClockwise, DownloadSimple, Trash, Broom, Buildings, User, Scales } from "@phosphor-icons/react";
 import {
-  Spinner, ArrowClockwise, MagnifyingGlass, DownloadSimple, Scales,
-  Warning, Trash, Broom,
-} from "@phosphor-icons/react";
+  useAdmin, useAdminGet, errText, fmtNum, fmtDateTime, downloadJSON, Btn, Chip, SearchField, AdminPage, Panel, Loading,
+  Empty, LoadError, LinkOut,
+} from "./adminUi";
+import { planLabel } from "./adminLabels";
 
-const CARD = `${CARD_BASE} p-4`;
-const H2 = ADMIN_H2;
-const H3 = ADMIN_H3;
-const BTN = ADMIN_BTN;
-const INP = ADMIN_INP;
-
-async function downloadJSON(obj, name) {
-  try {
-    await saveFile(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }), name);
-  } catch (e) {
-    // The export arrived; it is the browser that could not hand it over as a file.
-    console.error("compliance: building the download failed", e);
-    toast.error("Couldn't save the file. The export was fetched — try again, or use another browser.");
-  }
-}
+const saved = (ok, what) => (ok ? toast.success(what) : toast.error("Couldn't save the file. The export was fetched; try again, or use another browser."));
 
 export function ComplianceSection() {
+  const { go, canWrite, isSuper } = useAdmin();
+  const sweep = useAdminGet("/admin/retention/status");
   const [q, setQ] = useState("");
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
-  const [sel, setSel] = useState(null);           // {id, name}
-  const [ret, setRet] = useState(null);           // retention detail for sel
+  const [sel, setSel] = useState(null);           // { kind: "workspace"|"person", id, name, tenant_id? }
   const [busy, setBusy] = useState("");
-  const [sweep, setSweep] = useState(null);       // retention/status
-
-  const loadSweep = useCallback(async () => {
-    try { const r = await api.get("/admin/retention/status"); setSweep(r.data); }
-    catch (e) { toast.error(formatApiError(e)); }
-  }, []);
-  useEffect(() => { loadSweep(); }, [loadSweep]);
-
-  const search = async (e) => {
-    e?.preventDefault();
-    if (!q.trim()) return;
-    setSearching(true);
-    try { const r = await api.get(`/admin/search?q=${encodeURIComponent(q.trim())}`); setResults(r.data); }
-    catch (err) { toast.error(formatApiError(err)); }
-    finally { setSearching(false); }
-  };
-
-  const pick = async (t) => {
-    setSel({ id: t.id, name: t.name || t.company_name || t.id });
-    setRet(null);
-    try { const r = await api.get(`/admin/tenants/${t.id}/retention`); setRet(r.data); }
-    catch (e) { toast.error(formatApiError(e)); }
-  };
-
-  const doExport = async () => {
-    setBusy("export");
-    try {
-      const r = await api.get(`/admin/tenants/${sel.id}/export`);
-      downloadJSON(r.data, `export_${sel.name}_${sel.id}.json`);
-      toast.success(`Exported ${r.data.total_records} records`);
-    } catch (e) { toast.error(formatApiError(e)); } finally { setBusy(""); }
-  };
-
-  const doConsent = async () => {
-    setBusy("consent");
-    try {
-      const r = await api.get(`/admin/tenants/${sel.id}/consent-export`);
-      downloadJSON(r.data, `consent_${sel.name}_${sel.id}.json`);
-      toast.success("Consent + audit trail exported");
-    } catch (e) { toast.error(formatApiError(e)); } finally { setBusy(""); }
-  };
-
-  const saveRetention = async () => {
-    setBusy("retention");
-    try {
-      const p = ret.policy;
-      await api.put(`/admin/tenants/${sel.id}/retention`, {
-        enabled: p.enabled, ttl_days: p.ttl_days, collections: p.collections,
-      });
-      toast.success("Retention policy saved");
-      const r = await api.get(`/admin/tenants/${sel.id}/retention`); setRet(r.data);
-      loadSweep();
-    } catch (e) { toast.error(formatApiError(e)); } finally { setBusy(""); }
-  };
-
-  /* 2026-10-02 — these two were guarded by window.confirm, an OS dialog that
-     some embed contexts answer FALSE with nothing drawn. For a wipe that is
-     the safe direction to fail, but the operator sees no question at all and
-     assumes the click missed -- so the most dangerous button in the product
-     was also the one most likely to look dead, and be pressed again. Asked in
-     the app now, like everywhere else. */
+  /* 2026-10-02 — the wipe and the live sweep were guarded by window.confirm,
+     an OS dialog that some embed contexts answer FALSE with nothing drawn:
+     the most dangerous button in the product looked dead, and got pressed
+     again. Asked in the app now, like everywhere else. */
   const [pending, setPending] = useState(null);   // "delete" | "sweep" | null
 
-  const deleteWithExport = async () => {
-    setPending(null);
-    setBusy("delete");
-    try {
-      const r = await api.post(`/admin/tenants/${sel.id}/delete-with-export`);
-      downloadJSON(r.data.export, `erasure_receipt_${sel.name}_${sel.id}.json`);
-      toast.success(`Deleted — ${r.data.deletion.total_removed} records wiped (receipt downloaded)`);
-      setSel(null); setRet(null); setResults(null);
-    } catch (e) { toast.error(formatApiError(e)); } finally { setBusy(""); }
-  };
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) { setResults(null); return undefined; }
+    let gone = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try { const r = await api.get(`/admin/search?q=${encodeURIComponent(term)}`); if (!gone) setResults(r.data); }
+      catch (e) { if (!gone) toast.error(errText(e)); }
+      finally { if (!gone) setSearching(false); }
+    }, 250);
+    return () => { gone = true; clearTimeout(t); };
+  }, [q]);
 
-  const runSweep = async (live) => {
-    if (live && pending !== "sweep") { setPending("sweep"); return; }
-    setPending(null);
-    setBusy("sweep");
-    try {
-      const r = await api.post(`/admin/retention/run?dry_run=${live ? "false" : "true"}`);
-      toast.success(`${live ? "Purged" : "Would purge"} ${r.data.total_purged} rows across ${r.data.tenants_with_policy} tenant(s)`);
-      loadSweep();
-    } catch (e) { toast.error(formatApiError(e)); } finally { setBusy(""); }
+  const run = async (key, fn) => {
+    setBusy(key);
+    try { await fn(); } catch (e) { toast.error(errText(e)); } finally { setBusy(""); }
   };
-
-  const setPol = (patch) => setRet((r) => ({ ...r, policy: { ...r.policy, ...patch } }));
-  const toggleCol = (c) => setPol({
-    collections: ret.policy.collections.includes(c)
-      ? ret.policy.collections.filter((x) => x !== c)
-      : [...ret.policy.collections, c],
+  const exportWorkspace = () => run("export", async () => {
+    const r = await api.get(`/admin/tenants/${sel.id}/export`);
+    saved(await downloadJSON(r.data, `export_${sel.name}_${sel.id}.json`), `Downloaded ${fmtNum(r.data.total_records)} records`);
   });
+  const exportConsent = () => run("consent", async () => {
+    const r = await api.get(`/admin/tenants/${sel.id}/consent-export`);
+    saved(await downloadJSON(r.data, `consent_${sel.name}_${sel.id}.json`), "Consent and audit records downloaded");
+  });
+  const exportPerson = () => run("dsar", async () => {
+    const r = await api.get(`/admin/users/${sel.id}/dsar`);
+    saved(await downloadJSON(r.data, `person_${sel.name}_${sel.id}.json`), `Downloaded ${fmtNum(r.data.total_records)} records about ${sel.name}`);
+  });
+  const deleteWithExport = () => run("delete", async () => {
+    setPending(null);
+    const r = await api.post(`/admin/tenants/${sel.id}/delete-with-export`);
+    await downloadJSON(r.data.export, `erasure_receipt_${sel.name}_${sel.id}.json`);
+    toast.success(`${sel.name} is erased (${fmtNum(r.data.deletion.total_removed)} records). The receipt downloaded.`);
+    setSel(null); setResults(null); setQ("");
+    sweep.reload();
+  });
+  const runSweep = (live) => {
+    if (live && pending !== "sweep") { setPending("sweep"); return; }
+    run("sweep", async () => {
+      setPending(null);
+      const r = await api.post(`/admin/retention/run?dry_run=${live ? "false" : "true"}`);
+      toast.success(`${live ? "Deleted" : "Would delete"} ${fmtNum(r.data.total_purged)} rows across ${r.data.tenants_with_policy} workspace(s)`);
+      sweep.reload();
+    });
+  };
+
+  const s = sweep.data;
+  const policies = (s?.policies || []).filter((p) => p.enabled);
 
   return (
-    <div data-testid="admin-compliance">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className={H2}><Scales size={18} className="inline mb-1 mr-1.5" />Compliance &amp; Data Ops</h2>
-        <button onClick={loadSweep} className={BTN + " border-slate-900/15 text-slate-600 hover:text-slate-900"}><ArrowClockwise size={13} /> Refresh</button>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4">
-        {/* Left: find a workspace + act on it */}
+    <AdminPage title="Compliance" testid="admin-compliance"
+      subtitle="Data requests under India's DPDP Act (and GDPR), and automatic clean-up of old data">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
-          <form onSubmit={search} className={CARD}>
-            <div className={H3}>Find a workspace</div>
-            <div className="flex gap-2">
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name / id / owner email" className={INP + " flex-1"} />
-              <button type="submit" className={BTN + " border-[#0969da]/50 text-[#0969da]"}>{searching ? <Spinner size={13} className="animate-spin" /> : <MagnifyingGlass size={13} />} Search</button>
-            </div>
-            {results && (
-              <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
-                {(results.tenants || []).map((t) => (
-                  <button key={t.id} onClick={() => pick(t)} className={`w-full text-left px-2 py-1.5 font-mono text-[11px] border ${sel?.id === t.id ? "border-[#0969da] text-slate-900" : "border-slate-900/10 text-slate-600 hover:text-slate-900"} rounded-xl`}>
-                    {t.name || t.company_name || t.id} <span className="text-slate-600">· {t.id.slice(0, 8)}</span>
-                  </button>
+          <Panel title="Data requests" hint="Find the workspace or person the request is about">
+            <SearchField value={q} onChange={setQ} placeholder="Workspace name, person's name, email or phone" testid="compliance-search" />
+            {searching && <div className="mt-3 text-xs text-slate-500">Searching…</div>}
+            {results && !searching && (
+              <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto">
+                {results.tenants.map((t) => (
+                  <li key={`t-${t.id}`}>
+                    <button type="button" onClick={() => setSel({ kind: "workspace", id: t.id, name: t.name })}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm ${sel?.id === t.id ? "bg-slate-900/[0.07]" : "hover:bg-slate-900/[0.04]"}`}>
+                      <Buildings size={16} className="text-slate-500" />
+                      <span className="min-w-0 flex-1 truncate text-slate-900">{t.name}</span>
+                      <span className="text-xs text-slate-500">{planLabel(t.plan)}</span>
+                    </button>
+                  </li>
                 ))}
-                {(!results.tenants || results.tenants.length === 0) && <div className="font-mono text-[11px] text-slate-600">No workspaces.</div>}
-              </div>
+                {results.users.map((u) => (
+                  <li key={`u-${u.id}`}>
+                    <button type="button" onClick={() => setSel({ kind: "person", id: u.id, name: u.name || u.email || u.phone, tenant_id: u.tenant_id, tenant_name: u.tenant_name })}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm ${sel?.id === u.id ? "bg-slate-900/[0.07]" : "hover:bg-slate-900/[0.04]"}`}>
+                      <User size={16} className="text-slate-500" />
+                      <span className="min-w-0 flex-1 truncate text-slate-900">{u.name || u.email || u.phone}</span>
+                      <span className="truncate text-xs text-slate-500">{u.tenant_name}</span>
+                    </button>
+                  </li>
+                ))}
+                {results.tenants.length + results.users.length === 0 && <li className="px-3 py-3 text-sm text-slate-500">Nothing matches.</li>}
+              </ul>
             )}
-          </form>
+          </Panel>
 
-          {sel && (
-            <div className={CARD}>
-              <div className={H3}>{sel.name} — data subject rights</div>
-              <div className="flex flex-wrap gap-2">
-                <button disabled={busy} onClick={doExport} className={BTN + " border-[#116329]/50 text-[#116329] hover:bg-[#116329]/10"}>{busy === "export" ? <Spinner size={13} className="animate-spin" /> : <DownloadSimple size={13} />} Export data</button>
-                <button disabled={busy} onClick={doConsent} className={BTN + " border-slate-900/20 text-slate-600 hover:text-slate-900"}>{busy === "consent" ? <Spinner size={13} className="animate-spin" /> : <DownloadSimple size={13} />} Consent + audit</button>
+          {sel && sel.kind === "workspace" && (
+            <Panel title={sel.name} hint="Workspace" actions={<LinkOut onClick={() => go(`workspaces/${sel.id}`)}>Open workspace</LinkOut>}>
+              <div className="space-y-4">
+                <div>
+                  <div className={ADMIN_H3}>Access request</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Btn size="sm" icon={DownloadSimple} busy={busy === "export"} disabled={!!busy} onClick={exportWorkspace}>Download all its data</Btn>
+                    <Btn size="sm" icon={DownloadSimple} busy={busy === "consent"} disabled={!!busy} onClick={exportConsent}>Consent and audit records</Btn>
+                  </div>
+                </div>
+                {isSuper && (
+                  <div className="border-t border-slate-900/[0.06] pt-4">
+                    <div className={ADMIN_H3}>Right to erasure</div>
+                    <Btn size="sm" variant="danger" icon={Trash} busy={busy === "delete"} disabled={!!busy} onClick={() => setPending("delete")}>Erase this workspace…</Btn>
+                    <p className="mt-1.5 text-xs text-slate-500">A full copy downloads first as the erasure receipt, then every record is deleted.</p>
+                  </div>
+                )}
               </div>
-              <div className="mt-3 pt-3 border-t border-slate-900/10">
-                <div className="font-mono text-[10px] uppercase tracking-widest text-[#b91c1c]/70 mb-2 flex items-center gap-1"><Warning size={12} weight="fill" /> Right to erasure</div>
-                <button disabled={busy} onClick={() => setPending("delete")} className={BTN + " border-[#cf222e]/50 text-[#b91c1c] hover:bg-[#cf222e]/10"}>{busy === "delete" ? <Spinner size={13} className="animate-spin" /> : <Trash size={13} />} Export &amp; delete workspace</button>
-                <div className="font-mono text-[9px] text-slate-600 mt-1.5">Downloads a full erasure receipt, then permanently wipes every record.</div>
-              </div>
-            </div>
+            </Panel>
           )}
 
-          {sel && ret && (
-            <div className={CARD}>
-              <div className={H3}>Retention policy — {sel.name}</div>
-              <label className="flex items-center gap-2 font-mono text-[11px] text-slate-600 mb-2">
-                <input type="checkbox" checked={ret.policy.enabled} onChange={(e) => setPol({ enabled: e.target.checked })} className="accent-[#cf222e]" />
-                Enable automatic purge of transient data
-              </label>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="font-mono text-[11px] text-slate-600">Keep for</span>
-                <input type="number" min={ret.min_ttl_days} value={ret.policy.ttl_days} onChange={(e) => setPol({ ttl_days: parseInt(e.target.value || "0", 10) })} className={INP + " w-20"} />
-                <span className="font-mono text-[11px] text-slate-600">days (min {ret.min_ttl_days})</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {ret.eligible_collections.map((c) => (
-                  <button key={c} onClick={() => toggleCol(c)} className={`font-mono text-[10px] px-2 py-1 border ${ret.policy.collections.includes(c) ? "border-[#0969da] text-[#0969da]" : "border-slate-900/10 text-slate-600"} rounded-xl`}>{c}</button>
-                ))}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] text-slate-600">{ret.candidates} row(s) currently past TTL</span>
-                <button disabled={busy} onClick={saveRetention} className={BTN + " border-[#116329]/50 text-[#116329] hover:bg-[#116329]/10"}>{busy === "retention" ? <Spinner size={13} className="animate-spin" /> : null} Save policy</button>
-              </div>
-            </div>
+          {sel && sel.kind === "person" && (
+            <Panel title={sel.name} hint={`Person · ${sel.tenant_name || "no workspace"}`}
+              actions={sel.tenant_id ? <LinkOut onClick={() => go(`workspaces/${sel.tenant_id}`)}>Open workspace</LinkOut> : null}>
+              <div className={ADMIN_H3}>Access request</div>
+              <Btn size="sm" icon={DownloadSimple} busy={busy === "dsar"} onClick={exportPerson}>Download everything about them</Btn>
+              <p className="mt-1.5 text-xs text-slate-500">Every record that names this person, across the workspace. Logged in the audit log.</p>
+            </Panel>
           )}
         </div>
 
-        {/* Right: platform-wide retention sweep */}
-        <div className={CARD + " h-fit"}>
-          <div className="flex items-center justify-between mb-2">
-            <div className={H3 + " mb-0"}>Retention sweep (all tenants)</div>
-            <div className="flex gap-1.5">
-              <button disabled={busy} onClick={() => runSweep(false)} className={BTN + " border-slate-900/20 text-slate-600 hover:text-slate-900 text-[10px] px-2 py-1"}>Dry run</button>
-              <button disabled={busy} onClick={() => runSweep(true)} className={BTN + " border-[#cf222e]/50 text-[#b91c1c] text-[10px] px-2 py-1"}><Broom size={12} /> Purge now</button>
-            </div>
-          </div>
-          {!sweep ? (
-            <div className="flex items-center gap-2 text-slate-600 font-mono text-xs py-6 justify-center"><Spinner size={14} className="animate-spin" /> Loading…</div>
-          ) : (
+        <Panel title="Automatic clean-up" hint="Short-lived data past each workspace's limit is deleted"
+          actions={canWrite ? (
             <>
-              <div className="font-mono text-[10px] text-slate-600 mb-2">
-                {sweep.enabled_count} of {sweep.policies.length} workspace(s) have a retention policy.
-                {sweep.last_sweep?.last_run && <> Last sweep {String(sweep.last_sweep.last_run).slice(0, 16).replace("T", " ")} ({sweep.last_sweep.last_result?.total_purged ?? 0} purged).</>}
-              </div>
-              <div className="space-y-1 max-h-96 overflow-y-auto">
-                {sweep.policies.filter((p) => p.enabled).map((p) => (
-                  <div key={p.tenant_id} className="flex items-center justify-between font-mono text-[11px] border border-slate-900/10 px-2 py-1.5 rounded-xl">
-                    <span className="text-slate-600 truncate">{p.name}</span>
-                    <span className="text-slate-600 shrink-0 ml-2">{p.ttl_days}d · <span className={p.candidates ? "text-[#7d4e00]" : "text-slate-600"}>{p.candidates ?? 0} due</span></span>
-                  </div>
-                ))}
-                {sweep.enabled_count === 0 && <div className="font-mono text-[11px] text-slate-600 py-4 text-center">No retention policies configured yet.</div>}
-              </div>
+              <Btn size="sm" busy={busy === "sweep" && pending !== "sweep"} disabled={!!busy} onClick={() => runSweep(false)}>Preview</Btn>
+              {isSuper && <Btn size="sm" variant="danger" icon={Broom} disabled={!!busy} onClick={() => runSweep(true)}>Clean up now…</Btn>}
+            </>
+          ) : null}
+          className="h-fit">
+          {sweep.error && !s ? <LoadError what="retention policies" onRetry={sweep.reload} /> : !s ? <Loading /> : (
+            <>
+              <p className="mb-3 text-sm text-slate-600">
+                {s.enabled_count ? `${s.enabled_count} of ${s.policies.length} workspaces have a retention policy.` : "No workspace has a retention policy yet."}
+                {s.last_sweep?.last_run && ` Last run ${fmtDateTime(s.last_sweep.last_run)}, ${fmtNum(s.last_sweep.last_result?.total_purged ?? 0)} rows deleted.`}
+              </p>
+              {policies.length === 0 ? (
+                <Empty compact icon={Scales} title="Nothing to clean up." hint="Set a policy on a workspace's page, under Data retention." />
+              ) : (
+                <ul className="divide-y divide-slate-900/[0.05]">
+                  {policies.map((p) => (
+                    <li key={p.tenant_id} className="flex items-center justify-between gap-3 py-2.5">
+                      <LinkOut onClick={() => go(`workspaces/${p.tenant_id}`)}>{p.name}</LinkOut>
+                      <span className="flex items-center gap-2 text-xs text-slate-500">
+                        keeps {p.ttl_days} days {p.candidates ? <Chip tone="warn">{fmtNum(p.candidates)} due</Chip> : <Chip tone="good">Clean</Chip>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </>
           )}
-        </div>
+          <div className="mt-3 flex justify-end"><Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={sweep.reload}>Refresh</Btn></div>
+        </Panel>
       </div>
+
       <ConfirmAction
         open={pending === "delete"}
         onOpenChange={() => setPending(null)}
@@ -240,15 +196,14 @@ export function ComplianceSection() {
       <ConfirmAction
         open={pending === "sweep"}
         onOpenChange={() => setPending(null)}
-        title="Run a live retention purge?"
-        description="Every tenant with a policy is swept and expired transient rows are permanently deleted. Run the dry run first if you have not."
-        confirmLabel="Purge for real"
-        busyLabel="Purging…"
+        title="Clean up for real?"
+        description="Every workspace with a policy is swept and its expired short-lived rows are permanently deleted. Run the preview first if you haven't."
+        confirmLabel="Delete the old data"
+        busyLabel="Cleaning up…"
         cancelLabel="Not now"
         busy={busy === "sweep"}
         onConfirm={() => runSweep(true)}
         testid="admin-retention-purge-confirm" />
-
-    </div>
+    </AdminPage>
   );
 }

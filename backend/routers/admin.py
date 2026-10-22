@@ -3,6 +3,7 @@
 user administration and health. Foundation imported from core.py."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from typing import Optional
+from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta
 import asyncio
 from services.tenant_ai_keys import TENANT_PUBLIC
@@ -69,12 +70,18 @@ async def admin_login(payload: AdminLoginInput, request: Request, response: Resp
             {"identifier": ident},
             {"$inc": {"count": 1}, "$set": {"last": now_iso()}}, upsert=True)
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    # 2026-10-22 (admin redesign) — a deactivated admin was signed in and then
+    # refused on every call after; say so at the door instead.
+    if admin.get("active") is False:
+        raise HTTPException(status_code=403, detail="This admin account has been deactivated")
     # Epic 10 S7: 2FA gate. If the admin has TOTP on, require a valid code.
     from services.auth import totp as _totp
     if _totp.is_enabled(admin):
         if not payload.code:
             return {"requires_2fa": True}
-        if not _totp.verify_totp(admin, payload.code):
+        # A backup code works too (2026-10-22) — they were issued and never read.
+        if not _totp.verify_totp(admin, payload.code) and not await _totp.consume_backup_code(
+                db, admin["id"], payload.code, coll="platform_admins"):
             await db.platform_login_attempts.update_one(
                 {"identifier": ident}, {"$inc": {"count": 1}, "$set": {"last": now_iso()}}, upsert=True)
             raise HTTPException(status_code=401, detail="Invalid 2FA code")
@@ -149,6 +156,7 @@ async def admin_tenants(admin: dict = Depends(get_platform_admin)):
         _per_tenant("tasks", ids, {"$sum": 1}),
         _per_tenant("activity", ids, {"$max": "$created_at"}),
     )
+    from services.admin_workspaces import is_test_tenant, test_reason
     out = []
     for t in tenants:
         tid = t.get("id")
@@ -160,20 +168,41 @@ async def admin_tenants(admin: dict = Depends(get_platform_admin)):
             "users": users_n.get(tid, 0), "decisions": dec_n.get(tid, 0), "tasks": task_n.get(tid, 0),
             "last_activity": last.get(tid),
             "suspended": bool(t.get("suspended")),
+            # 2026-10-22 (admin redesign): the list shows the plan, and which
+            # workspaces are ours (services/admin_workspaces) so they can be hidden.
+            "plan": t.get("plan"), "trial_ends_at": t.get("trial_ends_at"),
+            "is_test": is_test_tenant(t), "test_reason": test_reason(t),
         })
     out.sort(key=lambda x: x.get("created_at") or "", reverse=True)
     return {"tenants": out}
 
 
+class ReasonInput(BaseModel):
+    reason: str = ""
+
+
+class TestFlagInput(BaseModel):
+    is_test: bool
+
+
+def _with_reason(message: str, payload: Optional["ReasonInput"]) -> str:
+    """The audit line, and why — the console asks for a reason before it
+    suspends anyone (2026-10-22)."""
+    reason = ((payload.reason if payload else "") or "").strip()[:300]
+    return f"{message} — {reason}" if reason else message
+
+
 @router.post("/tenants/{tenant_id}/suspend")
-async def admin_suspend_tenant(tenant_id: str, admin: dict = Depends(get_platform_admin)):
+async def admin_suspend_tenant(tenant_id: str, payload: Optional[ReasonInput] = None,
+                               admin: dict = Depends(get_platform_admin)):
     t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
     if not t:
         raise HTTPException(status_code=404, detail="Workspace not found")
     await db.tenants.update_one({"id": tenant_id}, {"$set": {"suspended": True}})
     await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"tenant_suspended": True}})
     name = t.get("company_name") or t.get("name") or tenant_id
-    await log_admin_action(admin, "suspend_tenant", f"Suspended workspace {name}", "tenant", tenant_id)
+    await log_admin_action(admin, "suspend_tenant", _with_reason(f"Suspended workspace {name}", payload),
+                           "tenant", tenant_id)
     return {"status": "ok", "suspended": True}
 
 
@@ -215,9 +244,27 @@ async def admin_reactivate_tenant(tenant_id: str, admin: dict = Depends(get_plat
 from services.tenant_wipe import TENANT_COLLECTIONS, wipe_tenant  # noqa: E402,F401
 
 
+@router.post("/tenants/{tenant_id}/test-flag")
+async def admin_mark_test_tenant(tenant_id: str, payload: TestFlagInput, admin: dict = Depends(get_platform_admin)):
+    """Mark a workspace as ours (test) or a customer's. The console hides test
+    workspaces from its lists and totals by default (services/admin_workspaces)."""
+    t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"is_test": bool(payload.is_test)}})
+    name = t.get("company_name") or t.get("name") or tenant_id
+    await log_admin_action(admin, "mark_test_tenant" if payload.is_test else "mark_customer_tenant",
+                           f"Marked {name} as {'a test workspace' if payload.is_test else 'a customer'}",
+                           "tenant", tenant_id)
+    return {"status": "ok", "is_test": bool(payload.is_test)}
+
+
 @router.delete("/tenants/{tenant_id}")
-async def admin_delete_tenant(tenant_id: str, admin: dict = Depends(get_platform_admin)):
+async def admin_delete_tenant(tenant_id: str, admin: dict = Depends(require_admin_role("super_admin"))):
     """Permanently delete a workspace and ALL its data. Irreversible.
+
+    Super admins only (2026-10-22) — the same bar as export-and-delete in
+    routers/admin_compliance; a support or billing admin could wipe a company.
 
     The erasing itself lives in services/tenant_wipe.wipe_tenant, shared with
     the founder-facing account deletion. This route is authorisation and the
@@ -255,9 +302,19 @@ def _range_cutoff(rng: str):
 
 
 @router.get("/usage")
-async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "30d", provider: str = "all"):
+async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "30d", provider: str = "all",
+                      include_test: bool = True):
+    from services.admin_workspaces import is_test_tenant
+    from services.platform_config import usd_inr_rate
     cutoff = _range_cutoff(range)
     base = {} if cutoff is None else {"created_at": {"$gte": cutoff}}
+    tdocs = {t["id"]: t for t in await db.tenants.find(
+        {}, {"_id": 0, "id": 1, "company_name": 1, "name": 1, "is_test": 1, "is_demo": 1, "demo": 1}).to_list(5000)}
+    # 2026-10-22 (admin redesign): the console leaves our own test workspaces
+    # out of the totals unless asked (services/admin_workspaces).
+    test_ids = [tid for tid, t in tdocs.items() if is_test_tenant(t)]
+    if not include_test and test_ids:
+        base["tenant_id"] = {"$nin": test_ids}
 
     # Per-provider breakdown (always across all providers in range).
     # Motor 3.x: aggregate() returns a coroutine that resolves to the cursor.
@@ -283,8 +340,7 @@ async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "3
                     "tokens_total": {"$sum": "$tokens_total"}, "cost": {"$sum": "$cost_estimate"}}},
     ])
     rows = await _rows_cur.to_list(2000)
-    tmap = {t["id"]: (t.get("company_name") or t.get("name") or "—")
-            for t in await db.tenants.find({}, {"_id": 0, "id": 1, "company_name": 1, "name": 1}).to_list(2000)}
+    tmap = {tid: (t.get("company_name") or t.get("name") or "—") for tid, t in tdocs.items()}
     workspaces, totals = [], {"calls": 0, "tokens_total": 0, "cost": 0.0}
     for r in rows:
         tid = r["_id"]
@@ -293,6 +349,7 @@ async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "3
             "tenant_name": "System / Onboarding" if not tid else tmap.get(tid, "(deleted workspace)"),
             "calls": r["calls"], "tokens_in": r["tokens_in"], "tokens_out": r["tokens_out"],
             "tokens_total": r["tokens_total"], "cost_estimate": round(r["cost"], 4),
+            "is_test": bool(tid) and is_test_tenant(tdocs.get(tid) or {}),
         })
         totals["calls"] += r["calls"]
         totals["tokens_total"] += r["tokens_total"]
@@ -300,7 +357,8 @@ async def admin_usage(admin: dict = Depends(get_platform_admin), range: str = "3
     workspaces.sort(key=lambda x: x["cost_estimate"], reverse=True)
     totals["cost"] = round(totals["cost"], 4)
     return {"range": range, "provider": provider, "totals": totals,
-            "by_provider": by_provider, "workspaces": workspaces}
+            "by_provider": by_provider, "workspaces": workspaces,
+            "include_test": include_test, "usd_inr": await usd_inr_rate()}
 
 
 @router.get("/alerts")
@@ -325,14 +383,18 @@ async def admin_ai_quality(admin: dict = Depends(get_platform_admin),
 @router.get("/users")
 async def admin_users(admin: dict = Depends(get_platform_admin), tenant_id: Optional[str] = None):
     q = {"tenant_id": tenant_id} if tenant_id else {}
+    from services.admin_workspaces import is_test_tenant, is_test_email
     users = await db.users.find(q, {"_id": 0, "password_hash": 0}).to_list(5000)
-    tmap = {t["id"]: (t.get("company_name") or t.get("name") or "—")
-            for t in await db.tenants.find({}, {"_id": 0, "id": 1, "company_name": 1, "name": 1}).to_list(1000)}
+    tdocs = {t["id"]: t for t in await db.tenants.find(
+        {}, {"_id": 0, "id": 1, "company_name": 1, "name": 1, "is_test": 1, "is_demo": 1, "demo": 1}).to_list(5000)}
+    tmap = {tid: (t.get("company_name") or t.get("name") or "—") for tid, t in tdocs.items()}
     out = [{
         "id": u.get("id"), "name": u.get("name"), "email": u.get("email"),
         "role": u.get("role"), "phone": u.get("phone"),
         "tenant_id": u.get("tenant_id"), "tenant_name": tmap.get(u.get("tenant_id"), "—"),
         "suspended": bool(u.get("suspended")), "created_at": u.get("created_at"),
+        # 2026-10-22: someone in a test workspace, or on an example.com address.
+        "is_test": is_test_tenant(tdocs.get(u.get("tenant_id")) or {}) or is_test_email(u.get("email")),
     } for u in users]
     out.sort(key=lambda x: (x.get("tenant_name") or "", x.get("role") or ""))
     return {"users": out}
@@ -346,13 +408,15 @@ async def _get_user_or_404(user_id):
 
 
 @router.post("/users/{user_id}/suspend")
-async def admin_suspend_user(user_id: str, admin: dict = Depends(get_platform_admin)):
+async def admin_suspend_user(user_id: str, payload: Optional[ReasonInput] = None,
+                             admin: dict = Depends(get_platform_admin)):
     u = await _get_user_or_404(user_id)
     if u.get("role") == "owner":
         raise HTTPException(status_code=400, detail="Cannot suspend a workspace owner")
     await db.users.update_one({"id": user_id}, {"$set": {"suspended": True}})
     await log_admin_action(admin, "suspend_user",
-                           f"Suspended user {u.get('email') or u.get('name') or user_id}", "user", user_id)
+                           _with_reason(f"Suspended user {u.get('email') or u.get('name') or user_id}", payload),
+                           "user", user_id)
     return {"status": "ok", "suspended": True}
 
 

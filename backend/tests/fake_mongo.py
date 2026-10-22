@@ -5,7 +5,8 @@ and the company's AI consent, so the RAG unit tests need somewhere to read them)
 Supports what those paths use: find_one / find (+ async iteration, to_list, sort,
 limit) / insert_one / insert_many / update_one / update_many (with upsert, $set,
 $inc, $unset, $push) / find_one_and_update / delete_many / count_documents. Filters: equality, dotted paths,
-$in, $nin, $ne, $exists, $and, $or.
+$in, $nin, $ne, $exists, $and, $or. aggregate (awaited, as Motor 3 does) runs $match, $group ($sum, $max,
+$min), $sort and $limit — enough for the admin console's grouped counts (2026-10-22).
 """
 import copy
 
@@ -130,6 +131,31 @@ def _apply(doc, update):
                 cur.setdefault(parts[-1], []).append(copy.deepcopy(v))
 
 
+def _field(row, ref):
+    if isinstance(ref, str) and ref.startswith("$"):
+        return _get(row, ref[1:])[0]
+    return ref
+
+
+def _group(rows, spec):
+    groups = {}
+    for r in rows:
+        key = _field(r, spec["_id"])
+        g = groups.setdefault(key, {"_id": key})
+        for name, acc in spec.items():
+            if name == "_id":
+                continue
+            (op, ref), = acc.items()
+            v = _field(r, ref)
+            if op == "$sum":
+                g[name] = g.get(name, 0) + (v or 0)
+            elif op == "$max" and v is not None:
+                g[name] = v if name not in g else max(g[name], v)
+            elif op == "$min" and v is not None:
+                g[name] = v if name not in g else min(g[name], v)
+    return list(groups.values())
+
+
 class FakeCollection:
     def __init__(self):
         self.docs = []
@@ -200,6 +226,21 @@ class FakeCollection:
 
     async def count_documents(self, flt=None):
         return sum(1 for d in self.docs if matches(d, flt))
+
+    async def aggregate(self, pipeline):
+        rows = [copy.deepcopy(d) for d in self.docs]
+        for stage in pipeline:
+            (op, arg), = stage.items()
+            if op == "$match":
+                rows = [r for r in rows if matches(r, arg)]
+            elif op == "$group":
+                rows = _group(rows, arg)
+            elif op == "$sort":
+                for k, direction in reversed(list(arg.items())):
+                    rows.sort(key=lambda r: (r.get(k) is None, r.get(k)), reverse=direction < 0)
+            elif op == "$limit":
+                rows = rows[:arg]
+        return _Cursor(rows)
 
     async def distinct(self, key, flt=None):
         out = []

@@ -182,18 +182,24 @@ def test_the_check_spends_nothing_and_is_reachable_signed_out():
 
 def test_an_option_holds_one_string():
     """Text + expressions inside <option> rendered as invalid markup in
-    development (the console's only warning across all 17 admin tabs)."""
-    assert '{`${s} (${data.counts?.[s] ?? 0})`}' in src("pages/admin/SupportDeskSection.js")
-    assert '{`default (${r.default || "—"})`}' in src("pages/admin/ConfigSection.js")
+    development (the console's only warning across all 17 admin tabs).
+
+    2026-10-22 — the admin console has no <option> left at all: every list
+    is the app's own GlassSelect (the counts moved onto Segmented filters),
+    so the operating system never draws a dropdown there."""
+    for f in ADMIN_FILES:
+        assert "<option" not in src(f"pages/admin/{f}"), f
+    assert "GlassSelect" in src("pages/admin/SupportDeskSection.js")
+    assert "GlassSelect" in src("pages/admin/ConfigSection.js")
     assert '{`${m.name} · ${roleLabel(m.role, roleOptions)}`}' in src("pages/Tasks.js")
 
 
 ADMIN_FILES = [
     "AdminPortal.js", "AdminLogin.js", "AdminSections.js", "AdminRbacSection.js",
     "AnnouncementsSection.js", "BillingSection.js", "ComplianceSection.js",
-    "ConfigSection.js", "ImpersonationSection.js", "ObservabilitySection.js",
-    "SupportDeskSection.js", "Tenant360Section.js",
-]
+    "ConfigSection.js", "ImpersonationSection.js", "ReportsSection.js",
+    "SupportDeskSection.js", "WorkspacePage.js", "AdminInvite.js", "adminUi.jsx",
+]   # 2026-10-22: Tenant360 -> WorkspacePage, Observability folded into Health
 
 
 def test_the_admin_console_is_in_the_apps_own_style():

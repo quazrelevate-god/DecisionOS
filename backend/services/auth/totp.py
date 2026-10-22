@@ -191,24 +191,30 @@ def verify_totp(user: Optional[Dict[str, Any]], code: str) -> bool:
         return False
 
 
-async def consume_backup_code(db, user_id: str, code: str) -> bool:
+async def consume_backup_code(db, user_id: str, code: str, coll: str = "users") -> bool:
     """Single-use fallback for a lost authenticator. Iterates the
     hashed codes, marks the first match consumed. Returns True on
     successful consume. Constant-time-ish via bcrypt's own
-    compare_digest under the hood."""
+    compare_digest under the hood.
+
+    `coll="platform_admins"` (2026-10-22): the admin console stores its
+    codes as bare hash strings, and nothing ever read them -- an admin who
+    lost their phone was locked out holding ten "backup codes". Both shapes
+    are read; a used one is rewritten as {hash, used_at}."""
+    code = (code or "").strip().upper()
     if not code:
         return False
-    user = await db.users.find_one(
+    user = await db[coll].find_one(
         {"id": user_id}, {"_id": 0, "two_factor": 1},
     )
     tf = (user or {}).get("two_factor") or {}
-    codes = list(tf.get("backup_codes") or [])
+    codes = [c if isinstance(c, dict) else {"hash": c} for c in (tf.get("backup_codes") or [])]
     for i, entry in enumerate(codes):
         if entry.get("used_at"):
             continue
         if _verify_code_against_hash(code, entry.get("hash") or ""):
             codes[i] = {**entry, "used_at": _now_iso()}
-            await db.users.update_one(
+            await db[coll].update_one(
                 {"id": user_id},
                 {"$set": {"two_factor.backup_codes": codes,
                           "updated_at": _now_iso()}},

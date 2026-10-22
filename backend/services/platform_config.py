@@ -34,6 +34,19 @@ async def set(key: str, value: Any, admin_email: Optional[str] = None) -> None:
     await apply_hot_paths()
 
 
+DEFAULT_USD_INR = 84.0
+
+
+async def usd_inr_rate() -> float:
+    """Rupees per dollar for showing AI cost (providers bill in $, the console
+    reads in ₹). An admin sets it in Config as runtime `usd_inr` (2026-10-22)."""
+    try:
+        v = float(((await get(K_RUNTIME, {})) or {}).get("usd_inr") or 0)
+    except (TypeError, ValueError):
+        v = 0
+    return v if v > 0 else DEFAULT_USD_INR
+
+
 async def all_config() -> dict:
     """Every config key -> value (for the admin console)."""
     rows = await db.platform_config.find({}, {"_id": 0}).to_list(100)

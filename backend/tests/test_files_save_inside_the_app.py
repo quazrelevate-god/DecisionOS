@@ -42,7 +42,10 @@ def test_every_download_goes_through_the_helper():
     assert 'downloadFrom(`/invoices/${inv.id}/pdf`' in _read("pages/finance/MoneyActions.jsx")
     assert 'downloadFrom(`/brain/documents/${doc.id}/download`' in _read("pages/BrainDocuments.js")
     assert 'downloadFrom("/brain/export"' in _read("pages/brain/DexAnswer.jsx")
-    assert "await saveFile(new Blob(" in _read("pages/admin/ComplianceSection.js")
+    # 2026-10-22 admin redesign: the console's JSON exports share one helper.
+    assert "await saveFile(new Blob(" in _read("pages/admin/adminUi.jsx")
+    for rel in ("pages/admin/ComplianceSection.js", "pages/admin/WorkspacePage.js"):
+        assert "await downloadJSON(" in _read(rel), rel
     assert "downloadFrom(url, null" in _read("pages/finance/FinanceDelete.jsx")
 
 

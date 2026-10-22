@@ -47,6 +47,8 @@ const DROP = [
   "DecisionOS_Project_Document.pdf",
   "DecisionOS_User_Guide.pdf",
   "landing",   // the marketing site; the app opens at the SPA
+  "landing-v2", // the marketing site, second version (2026-10-22)
+  "landing-v3", // the marketing site, third version (2026-10-22)
   "manual",    // screenshots for the written manual
   "guide",     // the user guide: the app opens it from the website (src/lib/guide.js)
   // 2026-09-30 — the app ICON SOURCE pack. public/brand/appicon holds the

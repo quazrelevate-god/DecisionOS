@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DecisionOS: Speak the decision. We run the company.</title>
+<meta name="description" content="The AI operating system that remembers every decision, organises every task, and executes the way your business actually runs.">
+<meta name="theme-color" content="#E9EAED">
+<link rel="icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
+<link rel="preload" as="image" href="/landing-v2/assets/img/hero-desk.webp" type="image/webp">
+<link rel="stylesheet" href="/landing-v2/css/landing.css?v=2">
+<!-- The libraries named at the direction gate, pinned. three.js ships as an ES
+     module only since r160, so the scene is a module script with an import map. -->
+<script type="importmap">{"imports":{"three":"https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js"}}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- The sky: the Desk's own ground. The bloom is the app's four stops at the
+     app's geometry; the plate is the app's /sky/inbox.png. Fixed, behind everything. -->
+<div class="sky" aria-hidden="true"><div class="sky-plate"></div></div>
+
+<!-- The Dex wave, in three.js. Fixed behind the hero; it listens to the pointer
+     and settles into the ledger's rules as the first scene scrolls. -->
+<canvas id="wave" class="wave" aria-hidden="true"></canvas>
+
+<header class="nav" id="nav">
+  <div class="nav-pill frost">
+    <a class="wordmark" href="#top" aria-label="DecisionOS home">Decision<span>OS</span></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#problem">The problem</a>
+      <a href="#how">How it works</a>
+      <a href="#who">Who it's for</a>
+      <a href="#brain">The Brain</a>
+      <a href="#pricing">Pricing</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-login" href="/login">Log in</a>
+      <a class="btn pill-ink" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+      <button class="nav-menu" id="nav-menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="nav-sheet"><span></span><span></span></button>
+    </div>
+  </div>
+  <div class="nav-sheet frost" id="nav-sheet" hidden>
+    <a href="#problem">The problem</a>
+    <a href="#how">How it works</a>
+    <a href="#who">Who it's for</a>
+    <a href="#brain">The Brain</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/login">Log in</a>
+    <a class="btn pill-ink" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ═══ 1 · HERO: the spoken line becomes a record ═══════════════════════ -->
+<section class="hero" id="top" data-scene="hero">
+  <div class="hero-stage">
+    <div class="wrap hero-copy">
+      <p class="label reveal">The operating brain for founder-led businesses</p>
+      <h1 class="display">
+        <span class="line light reveal-wipe">Speak the decision.</span>
+        <span class="line bold reveal-wipe" style="--d:.12s">We run the company.</span>
+      </h1>
+      <p class="lead reveal" style="--d:.24s">Say it once, in the words you'd use on the shop floor. DecisionOS captures it, gives it an owner and a date, chases it, and remembers it for good.</p>
+      <div class="cta-row reveal" style="--d:.32s">
+        <a class="btn pill-ink lg" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn pill-glass lg" href="#product">See the Desk</a>
+      </div>
+    </div>
+
+    <!-- Scene 1. Six spoken lines rise out of the wave as frost chips, then snap
+         into the Desk's black sheet as rows with an owner and a date. The copy is
+         the product's own kind of utterance; the names are the demo company's. -->
+    <div class="hero-ledger" aria-hidden="true">
+      <p class="said-caption"><span class="light">Six things said on the floor.</span> <span class="bold">Six records, owned and dated.</span></p>
+      <div class="said" id="said">
+        <span class="chip-said" data-i="0">“tell Ravi to chase the Salem payment”</span>
+        <span class="chip-said" data-i="1">“approve the freight rate na”</span>
+        <span class="chip-said" data-i="2">“₹45,000 Gupta Traders??”</span>
+        <span class="chip-said" data-i="3">“delhi dispatch stuck”</span>
+        <span class="chip-said" data-i="4">“Priya wants leave next week”</span>
+        <span class="chip-said" data-i="5">“photo of a bill, no caption”</span>
+      </div>
+      <div class="sheet" id="sheet">
+        <div class="sheet-tabs"><span class="on">Decisions <b>6</b></span><span>Approvals</span><span>Watch</span></div>
+        <ol class="sheet-rows">
+          <li><span class="k">Task</span><span class="t">Chase Salem receivable</span><span class="m">Ravi Kumar · due Fri</span><i class="tick">✓</i></li>
+          <li><span class="k">Decision</span><span class="t">Chennai freight +8%</span><span class="m">Owner approved</span><i class="tick">✓</i></li>
+          <li><span class="k">Payment</span><span class="t">Gupta Traders ₹45,000</span><span class="m">Finance · due today</span><i class="tick">✓</i></li>
+          <li><span class="k">Escalation</span><span class="t">Delhi dispatch</span><span class="m">Meena · 2 days overdue</span><i class="tick">✓</i></li>
+          <li><span class="k">Leave</span><span class="t">Priya · 4 days</span><span class="m">Cover assigned</span><i class="tick">✓</i></li>
+          <li><span class="k">Bill</span><span class="t">AP-2291 read and filed</span><span class="m">Ledger · automatic</span><i class="tick">✓</i></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 2 · THE PRODUCT: the real Desk ═══════════════════════════════════ -->
+<section class="product" id="product">
+  <div class="wrap">
+    <h2 class="h2"><span class="light">Your morning,</span> <span class="bold">on one desk.</span></h2>
+    <p class="lead narrow">The Decision Desk is what a founder opens instead of twelve WhatsApp groups: the score, what's late, what's owed, and Dex waiting for the next thing you decide.</p>
+  </div>
+  <div class="frame-wrap">
+    <figure class="frame frost" id="frame">
+      <picture>
+        <source srcset="/landing-v2/assets/img/hero-desk.webp" type="image/webp">
+        <img class="frame-media" src="/landing-v2/assets/img/hero-desk.jpg" width="1735" height="907" alt="The DecisionOS Decision Desk: the greeting, the Operating Score at 18 of 100, tiles for Delayed, Complaints and To collect, the workflows that need attention, and the black sheet of decisions, approvals and watch items." decoding="async">
+      </picture>
+    </figure>
+    <ul class="callouts" aria-label="What the Desk shows">
+      <li class="callout frost-min" style="--x:3%;--y:38%"><b>Operating Score</b><span>Company health, live, out of 100.</span></li>
+      <li class="callout frost-min" style="--x:66%;--y:8%"><b>Delayed · To collect</b><span>What's late and what's owed, counted the same way the lists are.</span></li>
+      <li class="callout frost-min" style="--x:8%;--y:70%"><b>Dex</b><span>Tell it what you decided. It does the rest.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══ 3 · THE PROBLEM: the ink band ═════════════════════════════════════ -->
+<section class="band problem" id="problem">
+  <div class="wrap">
+    <h2 class="h2 on-ink"><span class="light">Your business lives in your head.</span> <span class="bold">That's the risk.</span></h2>
+    <p class="lead on-ink narrow">Every growing company runs on the founder's memory. A decision in a corridor. An approval over WhatsApp. A bill on someone's phone. It works, until it doesn't.</p>
+    <ol class="risks" id="risks">
+      <li class="risk">
+        <div class="old"><h3>Decisions evaporate</h3><p>Said once, forgotten by Friday. No owner, no due date, no trace.</p></div>
+        <div class="new"><span class="k">Decision</span><b>Every decision gets an owner, a date and a trail</b><span class="m">The moment it is said</span><i class="tick">✓</i></div>
+      </li>
+      <li class="risk">
+        <div class="old"><h3>Work scatters</h3><p>Tasks live across WhatsApp, notebooks, calls and spreadsheets. Nowhere and everywhere.</p></div>
+        <div class="new"><span class="k">My Work</span><b>One list each, only what is theirs</b><span class="m">Owners, due dates, proof</span><i class="tick">✓</i></div>
+      </li>
+      <li class="risk">
+        <div class="old"><h3>Nothing is provable</h3><p>“I told him to do it.” “It's done.” Neither can be checked.</p></div>
+        <div class="new"><span class="k">Proof</span><b>A photo, a voice note and a timestamp on the task</b><span class="m">Attached, not promised</span><i class="tick">✓</i></div>
+      </li>
+      <li class="risk">
+        <div class="old"><h3>You are the bottleneck</h3><p>Every follow-up, approval and “what's the status” routes back to you.</p></div>
+        <div class="new"><span class="k">Escalation</span><b>It chases without you; only exceptions come back</b><span class="m">Due, overdue, escalated</span><i class="tick">✓</i></div>
+      </li>
+      <li class="risk">
+        <div class="old"><h3>Memory walks out the door</h3><p>When a key person leaves, the context leaves with them.</p></div>
+        <div class="new"><span class="k">Company Brain</span><b>The context stays when people go</b><span class="m">Every record, searchable</span><i class="tick">✓</i></div>
+      </li>
+    </ol>
+    <div class="ways">
+      <p class="way way-old"><span class="label on-ink-label">The old way</span>Founder remembers → tells someone → hopes it happens → chases → repeats.</p>
+      <p class="way way-new"><span class="label on-ink-label">The DecisionOS way</span>Founder speaks → it is captured, assigned, tracked, chased, and remembered for good.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 4 · ONE FOUNDER. HUNDREDS OF MOVING PARTS: the stream through the gate ═ -->
+<section class="stream" id="stream" aria-label="How spoken lines become records">
+  <div class="stream-stage">
+    <div class="wrap stream-head">
+      <h2 class="h2"><span class="light">One founder.</span> <span class="bold">Hundreds of moving parts.</span></h2>
+      <p class="lead">What people say on the floor, in the words they say it, becomes a record on the other side.</p>
+    </div>
+    <div class="gate" aria-hidden="true"><span class="gate-mark">Decision<span>OS</span></span></div>
+    <ul class="stream-track" id="stream-track" aria-hidden="true">
+      <li class="mv" style="--y:-130px"><span class="raw">“tell Ravi to chase the Salem payment”</span><span class="done"><span class="k">Task</span><b>Chase Salem receivable</b><span class="m">Ravi Kumar · due Fri</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:90px"><span class="raw">“₹45,000 Gupta Traders??”</span><span class="done"><span class="k">Payment</span><b>Gupta Traders ₹45,000</b><span class="m">Finance · due today</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-40px"><span class="raw">photo of a bill, no caption</span><span class="done"><span class="k">Bill</span><b>AP-2291 read and filed</b><span class="m">Ledger · automatic</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:140px"><span class="raw">“delhi dispatch stuck”</span><span class="done"><span class="k">Escalation</span><b>Delhi dispatch</b><span class="m">Meena · 2 days overdue</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-155px"><span class="raw">“approve the freight rate na”</span><span class="done"><span class="k">Decision</span><b>Chennai freight +8%</b><span class="m">Owner approved</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:40px"><span class="raw">“chef says paneer supplier late again”</span><span class="done"><span class="k">Vendor flag</span><b>Paneer supplier</b><span class="m">3rd delay this month</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-95px"><span class="raw">“reschedule the 4pm patients”</span><span class="done"><span class="k">Task</span><b>Move 6 appointments</b><span class="m">Front desk · today</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:120px"><span class="raw">“size 42 sold out in Coimbatore”</span><span class="done"><span class="k">Stock alert</span><b>Size 42 reorder raised</b><span class="m">To vendor</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-25px"><span class="raw">“site 3 cement short by 20 bags”</span><span class="done"><span class="k">Purchase order</span><b>Cement × 20 · Site 3</b><span class="m">Approved</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:160px"><span class="raw">“Priya wants leave next week”</span><span class="done"><span class="k">Leave</span><b>Priya · 4 days</b><span class="m">Cover assigned</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-140px"><span class="raw">“batch B-771 expiring soon?”</span><span class="done"><span class="k">Alert</span><b>Batch B-771</b><span class="m">Clear stock before 12 Oct</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:65px"><span class="raw">“3 parents asked about fee refund”</span><span class="done"><span class="k">Ticket</span><b>Fee refund × 3</b><span class="m">Accounts · due Mon</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-80px"><span class="raw">“client wants the deck by tomorrow”</span><span class="done"><span class="k">Task</span><b>Client deck</b><span class="m">Design · 10am tomorrow</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:130px"><span class="raw">“machine 2 down since morning”</span><span class="done"><span class="k">Escalation</span><b>Machine 2</b><span class="m">Maintenance · 6 hrs lost</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-45px"><span class="raw">“gold rate changed, update tags”</span><span class="done"><span class="k">Task</span><b>Reprice 240 tags</b><span class="m">Store team · today</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:100px"><span class="raw">“test drive booking for saturday”</span><span class="done"><span class="k">Booking</span><b>Test drive</b><span class="m">Sat 11am · confirmed</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-165px"><span class="raw">“buyer wants revised quote, Delhi flat”</span><span class="done"><span class="k">Quote</span><b>Delhi unit · ₹3,20,000</b><span class="m">Revision sent</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:20px"><span class="raw">“paper stock won't cover next week”</span><span class="done"><span class="k">Purchase order</span><b>Art paper</b><span class="m">Raised to vendor</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-110px"><span class="raw">“chamber 4 temp rising”</span><span class="done"><span class="k">Critical</span><b>Chamber 4</b><span class="m">Technician dispatched</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:150px"><span class="raw">“12 memberships expiring this month”</span><span class="done"><span class="k">Campaign</span><b>12 renewals</b><span class="m">Follow-ups scheduled</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-35px"><span class="raw">“customer complained about last invoice”</span><span class="done"><span class="k">Complaint</span><b>Invoice #4471</b><span class="m">Owner review</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:75px"><span class="raw">“500 plates for the 22nd”</span><span class="done"><span class="k">Order</span><b>500 plates · 22 Nov</b><span class="m">Kitchen notified</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:-125px"><span class="raw">“milk collection short at 2 routes”</span><span class="done"><span class="k">Alert</span><b>Routes 4 and 7</b><span class="m">Field officer notified</span><i class="tick">✓</i></span></li>
+      <li class="mv" style="--y:110px"><span class="raw">“buyer asking for shipping docs”</span><span class="done"><span class="k">Task</span><b>Export docs</b><span class="m">Ship desk · due today</span><i class="tick">✓</i></span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══ 5 · THE TEN-SECOND RULE ═══════════════════════════════════════════ -->
+<section class="rule" id="how">
+  <div class="rule-stage">
+    <div class="wrap rule-inner">
+      <p class="h2 rule-lead"><span class="light">It takes only</span></p>
+      <p class="numeral" aria-live="polite"><span id="rule-count">0</span><span class="unit">sec</span></p>
+      <p class="h2 rule-tail"><span class="light">to set a rule the company</span> <span class="bold">never forgets.</span></p>
+
+      <div class="rule-flow">
+        <div class="rule-step frost" data-step="spoken">
+          <span class="label">Spoken</span>
+          <p class="said-line" id="said-line">“From today, stop any dispatch that doesn't have payment approval.”</p>
+        </div>
+        <div class="rule-step frost" data-step="understood">
+          <span class="label">Understood</span>
+          <div class="chips">
+            <span class="chip gold">Operating rule</span><span class="chip">Trigger: dispatch</span><span class="chip">Condition: payment approved</span><span class="chip">Scope: company-wide</span>
+          </div>
+        </div>
+        <div class="rule-step ink-plate" data-step="enforced">
+          <span class="label on-ink-label">Enforced</span>
+          <ul class="enforced">
+            <li><i class="tick">✓</i>Live on every dispatch</li>
+            <li><i class="tick">✓</i>Sales and the store notified</li>
+            <li><i class="tick">✓</i>Exceptions escalate to you</li>
+            <li><i class="tick">✓</i>Filed to the Brain</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 6 · WHO IT'S FOR: four people, one pile each ══════════════════════ -->
+<section class="who" id="who">
+  <div class="wrap who-head">
+    <h2 class="h2"><span class="light">Built for people who carry</span> <span class="bold">the business in their head.</span></h2>
+    <p class="lead narrow">No new software to learn. If your team can send a WhatsApp message, they can run DecisionOS.</p>
+  </div>
+  <ul class="who-deck" id="who-deck">
+    <li class="who-card">
+      <img src="/landing-v2/assets/img/icp-founder.jpg" width="560" height="700" alt="A textile business owner at his desk beside a towering stack of ledgers" loading="lazy" decoding="async">
+      <div class="who-copy"><span class="label">Founder / CEO</span><p>Say it once. It gets assigned, tracked, and only comes back when it needs you.</p></div>
+    </li>
+    <li class="who-card">
+      <img src="/landing-v2/assets/img/icp-family.jpg" width="560" height="700" alt="A jewellery shop owner taking a call beside several ringing phones" loading="lazy" decoding="async">
+      <div class="who-copy"><span class="label">Family business owner</span><p>Finance, inventory and dispatch run themselves. You run the business.</p></div>
+    </li>
+    <li class="who-card">
+      <img src="/landing-v2/assets/img/icp-ops.jpg" width="560" height="700" alt="An operations lead reviewing a dispatch ledger in a warehouse" loading="lazy" decoding="async">
+      <div class="who-copy"><span class="label">Operations / Sales lead</span><p>Every task has an owner, a due date and a trail. Nothing chased twice.</p></div>
+    </li>
+    <li class="who-card">
+      <img src="/landing-v2/assets/img/icp-finance.jpg" width="560" height="700" alt="An accountant working calmly amid invoices suspended in the air" loading="lazy" decoding="async">
+      <div class="who-copy"><span class="label">Finance / accounts</span><p>Ask in plain English. Answers from your real history in seconds.</p></div>
+    </li>
+  </ul>
+</section>
+
+<!-- ═══ 7 · THE COMPARISON ════════════════════════════════════════════════ -->
+<section class="compare" id="compare">
+  <div class="wrap">
+    <h2 class="h2"><span class="light">Not a chatbot.</span> <span class="bold">Not an ERP.</span></h2>
+    <p class="lead narrow">A chatbot answers and forgets. An ERP records what someone keys in. DecisionOS listens, acts, chases, and remembers.</p>
+    <div class="cmp" role="table" aria-label="DecisionOS compared with chatbots and ERP software">
+      <span class="cmp-spine" aria-hidden="true"></span>
+      <div class="cmp-row cmp-head" role="row">
+        <span class="cmp-cell cmp-label" role="columnheader">Capability</span>
+        <span class="cmp-cell dos" role="columnheader"><span class="cmp-name">Decision<span>OS</span></span><small>the operating brain</small></span>
+        <span class="cmp-cell" role="columnheader"><span class="cmp-name">ChatGPT &amp; co.</span><small>a chat window</small></span>
+        <span class="cmp-cell" role="columnheader"><span class="cmp-name">Traditional ERP</span><small>a system of record</small></span>
+      </div>
+      <div class="cmp-row" role="row">
+        <span class="cmp-cell cmp-label" role="rowheader">Permanent company memory</span>
+        <span class="cmp-cell dos" role="cell"><i class="tick">✓</i><b>Full</b><small>every decision and record</small></span>
+        <span class="cmp-cell" role="cell"><b class="no">None</b><small>forgets each chat</small></span>
+        <span class="cmp-cell" role="cell"><b class="mid">Data only</b><small>no context</small></span>
+      </div>
+      <div class="cmp-row" role="row">
+        <span class="cmp-cell cmp-label" role="rowheader">Turns talk into action</span>
+        <span class="cmp-cell dos" role="cell"><i class="tick">✓</i><b>Yes</b><small>tasks, records, rules</small></span>
+        <span class="cmp-cell" role="cell"><b class="no">No</b><small>text out only</small></span>
+        <span class="cmp-cell" role="cell"><b class="no">No</b><small>you key it in</small></span>
+      </div>
+      <div class="cmp-row" role="row">
+        <span class="cmp-cell cmp-label" role="rowheader">Runs workflows and approvals</span>
+        <span class="cmp-cell dos" role="cell"><i class="tick">✓</i><b>Yes</b><small>end to end</small></span>
+        <span class="cmp-cell" role="cell"><b class="no">No</b></span>
+        <span class="cmp-cell" role="cell"><b class="mid">Rigid</b><small>heavy to set up</small></span>
+      </div>
+      <div class="cmp-row" role="row">
+        <span class="cmp-cell cmp-label" role="rowheader">Accountability and proof</span>
+        <span class="cmp-cell dos" role="cell"><i class="tick">✓</i><b>Yes</b><small>owners, proof, trail</small></span>
+        <span class="cmp-cell" role="cell"><b class="no">No</b></span>
+        <span class="cmp-cell" role="cell"><b class="mid">Partial</b></span>
+      </div>
+      <div class="cmp-row" role="row">
+        <span class="cmp-cell cmp-label" role="rowheader">Learns how you operate</span>
+        <span class="cmp-cell dos" role="cell"><i class="tick">✓</i><b>Yes</b><small>Business DNA</small></span>
+        <span class="cmp-cell" role="cell"><b class="no">No</b></span>
+        <span class="cmp-cell" role="cell"><b class="no">No</b></span>
+      </div>
+      <div class="cmp-row" role="row">
+        <span class="cmp-cell cmp-label" role="rowheader">Setup for a lean team</span>
+        <span class="cmp-cell dos" role="cell"><i class="tick">✓</i><b>Minutes</b><small>just talk</small></span>
+        <span class="cmp-cell" role="cell"><b class="mid">Easy</b><small>and then it forgets</small></span>
+        <span class="cmp-cell" role="cell"><b class="no">Months</b><small>and consultants</small></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 8 · THE BRAIN: five stages, two live ══════════════════════════════ -->
+<section class="brain" id="brain">
+  <div class="wrap">
+    <h2 class="h2"><span class="light">One brain. Every input.</span> <span class="bold">Total recall.</span></h2>
+    <p class="lead narrow">Everything the company says, sends and photographs lands in one memory. What the memory can do for you grows in five stages, and we say plainly which are live.</p>
+    <ul class="inputs" aria-label="What it takes in">
+      <li class="chip">Voice</li><li class="chip">Text</li><li class="chip">WhatsApp</li><li class="chip">Photos</li><li class="chip">PDFs</li><li class="chip">Spreadsheets</li>
+    </ul>
+    <div class="stage-line" aria-hidden="true"><i id="stage-fill"></i></div>
+    <ol class="stages" id="stages">
+      <li class="stage live"><span class="stage-no">01</span><span class="k">Live today</span><h3>Capture</h3><p>Voice becomes a record: an owner, a date, a trail.</p></li>
+      <li class="stage live"><span class="stage-no">02</span><span class="k">Live today</span><h3>Organize</h3><p>Routed, owned and filed where it belongs.</p></li>
+      <li class="stage"><span class="stage-no">03</span><span class="label">Next</span><h3>Manage</h3><p>It balances the load across the team.</p></li>
+      <li class="stage"><span class="stage-no">04</span><span class="label">Next</span><h3>Recommend</h3><p>It proposes the move before you ask.</p></li>
+      <li class="stage"><span class="stage-no">05</span><span class="label">Next</span><h3>Autonomous</h3><p>It runs; you steer.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══ 9 · THE ENGINE: the second ink band ═══════════════════════════════ -->
+<section class="band engine" id="engine">
+  <div class="wrap">
+    <h2 class="h2 on-ink"><span class="light">Where decisions</span> <span class="bold">become done.</span></h2>
+    <p class="lead on-ink narrow">Capture is the first second. The rest of the day is execution: who, by when, with what proof, and what happens when it slips.</p>
+    <div class="bento">
+      <article class="tile tile-wide" data-tile="work">
+        <div class="viz viz-work" aria-hidden="true">
+          <span class="wrow"><i class="tick">✓</i>Reconcile packaging invoice</span>
+          <span class="wrow"><i class="tick">✓</i>Return signed agreement</span>
+          <span class="wrow"><i class="tick">✓</i>Release distributor payout</span>
+          <span class="wrow open"><i class="tick">✓</i>Chase Salem receivable<em>due Fri</em></span>
+        </div>
+        <h3>My Work</h3><p>Everyone opens one list. Only what is theirs.</p>
+      </article>
+      <article class="tile" data-tile="steps">
+        <div class="viz viz-steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <h3>AI guides the steps</h3><p>Progress updates itself.</p>
+      </article>
+      <article class="tile" data-tile="proof">
+        <div class="viz viz-proof" aria-hidden="true">
+          <img class="proof-photo" src="/landing-v2/assets/img/icp-ops.jpg" width="72" height="72" alt="" loading="lazy" decoding="async">
+          <span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="stamp">14:32 · Site 3</span>
+        </div>
+        <h3>Proof, not promises</h3><p>Photos and voice notes attached.</p>
+      </article>
+      <article class="tile" data-tile="hand">
+        <div class="viz viz-hand" aria-hidden="true"><span class="av">PN</span><span class="hand-line"></span><span class="av av2">RK</span><span class="hand-note">3 notes · 1 photo · the thread</span></div>
+        <h3>Handoffs with context</h3><p>Nothing re-explained.</p>
+      </article>
+      <article class="tile tile-wide" data-tile="flow">
+        <div class="viz viz-flow" aria-hidden="true"><span class="node">Order</span><i></i><span class="node">Invoice</span><i></i><span class="node">Dispatch</span><i></i><span class="node">Paid</span></div>
+        <h3>Workflows run start to finish</h3><p>Sales to dispatch. Purchase to payment.</p>
+      </article>
+      <article class="tile" data-tile="chase">
+        <div class="viz viz-chase" aria-hidden="true"><span class="pill due">Due</span><span class="pill over">Overdue</span><span class="pill esc">Escalated to you</span></div>
+        <h3>Chased without you</h3><p>Blockers rise before they burn.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 10 · BUSINESS DNA: the curve only goes one way ═════════════════════ -->
+<section class="dna" id="dna">
+  <div class="wrap">
+    <h2 class="h2"><span class="light">It learns how</span> <span class="bold">you operate.</span></h2>
+    <p class="lead narrow">Every decision, approval and workflow is a data point about how your business actually runs. That is your Business DNA, and it compounds.</p>
+    <figure class="dna-plot frost" id="dna-plot">
+      <svg class="dna-svg" viewBox="0 0 1000 360" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="dna-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(44 88% 60%)" stop-opacity=".4"/><stop offset="1" stop-color="hsl(44 88% 60%)" stop-opacity="0"/></linearGradient></defs>
+        <path class="dna-area" d="M20,330 C260,322 420,300 560,236 C700,172 840,96 980,30 L980,345 L20,345 Z" fill="url(#dna-grad)"/>
+        <path class="dna-line" id="dna-line" pathLength="100" vector-effect="non-scaling-stroke" d="M20,330 C260,322 420,300 560,236 C700,172 840,96 980,30"/>
+      </svg>
+      <div class="dna-dots" aria-hidden="true"><i class="dna-dot" data-at="0"></i><i class="dna-dot" data-at="34"></i><i class="dna-dot" data-at="68"></i><i class="dna-dot" data-at="99"></i></div>
+      <figcaption class="dna-scale"><span>Day one</span><span>Month twelve</span></figcaption>
+    </figure>
+    <ol class="dna-steps" id="dna-steps">
+      <li><span class="label">Day one</span><b>Captures and executes</b><p>Owners, dates and proof from the first spoken line.</p></li>
+      <li><span class="label">Month one</span><b>Knows who decides what</b><p>Which approvals go to whom, and how long each one takes.</p></li>
+      <li><span class="label">Month six</span><b>Knows your patterns</b><p>The vendor that slips, the receivable that ages, the loop that runs slow.</p></li>
+      <li><span class="label">Month twelve</span><b>It becomes you</b><p>Recommendations in the shape of your own past decisions.</p></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══ 11 · THE BRIEF: it reports to you ═════════════════════════════════ -->
+<section class="brief" id="brief">
+  <div class="wrap">
+    <h2 class="h2"><span class="light">It reports</span> <span class="bold">to you.</span></h2>
+    <p class="lead narrow">Not a dashboard to decode. A brief written for you, a score you can act on, and a bar you can ask anything, all from your own records.</p>
+    <div class="brief-grid">
+      <article class="brief-sheet" id="brief-sheet">
+        <div class="sheet-tabs" id="brief-tabs" role="tablist" aria-label="Brief cadence">
+          <button type="button" class="on" role="tab" aria-selected="true">Morning</button>
+          <button type="button" role="tab" aria-selected="false">Evening</button>
+          <button type="button" role="tab" aria-selected="false">Weekly</button>
+          <button type="button" role="tab" aria-selected="false">Monthly</button>
+        </div>
+        <span class="k">CEO Brief · written by DecisionOS</span>
+        <p class="brief-text" id="brief-text" aria-live="polite">Cash is healthy but ageing receivables are the pressure point: ₹4,00,000 sits past thirty days with one retailer. Six decisions are waiting on you, the oldest for three days.</p>
+        <ul id="brief-copy" hidden>
+          <li>Cash is healthy but ageing receivables are the pressure point: ₹4,00,000 sits past thirty days with one retailer. Six decisions are waiting on you, the oldest for three days.</li>
+          <li>Eleven tasks closed today and two slipped. The packaging reconciliation is still blocking the distributor payout, and tomorrow's dispatch needs your approval before 9am.</li>
+          <li>This week: 43 decisions captured, 38 executed, 5 still open. Collections improved 12%. Your slowest loop is purchase approvals, averaging 2.4 days.</li>
+          <li>November closed at ₹18,42,300 billed against ₹16,21,000 received. Net margin held at 22%. Two vendors slipped on delivery twice or more and are worth renegotiating.</li>
+        </ul>
+        <h3>The CEO Brief</h3><p class="sub">Your morning, written for you. Then your evening, your week, your month.</p>
+      </article>
+      <article class="score frost">
+        <div class="dial" id="dial" aria-hidden="true">
+          <svg viewBox="0 0 120 120"><circle class="dial-track" cx="60" cy="60" r="52"/><circle class="dial-fill" id="dial-fill" cx="60" cy="60" r="52" pathLength="100"/></svg>
+          <span class="dial-val" id="dial-val">0</span>
+        </div>
+        <h3>Operating Score</h3><p class="sub">Company health, live, out of 100, and the same for every person on the team.</p>
+        <ul class="people" aria-label="Scores by person"><li><span>Ravi</span><i style="--w:92%"></i></li><li><span>Priya</span><i style="--w:78%"></i></li><li><span>Meena</span><i style="--w:54%"></i></li></ul>
+      </article>
+      <article class="ask frost">
+        <h3>Talk to your data</h3>
+        <div class="ask-bar" aria-hidden="true">
+          <span class="ask-q" id="ask-q">How much do we owe vendors this week?</span><i class="caret"></i>
+          <span class="ask-mic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM6 11a6 6 0 0 0 12 0M12 19v2"/></svg></span>
+        </div>
+        <p class="sub">Ask in plain English, attach a document, or just speak. Answers come from your own records.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 12 · PRICING ══════════════════════════════════════════════════════ -->
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <h2 class="h2"><span class="light">Start free.</span> <span class="bold">Grow into it.</span></h2>
+    <p class="lead narrow">Try it with one team for nothing. Move up when the company does.</p>
+    <ul class="plans">
+      <li class="plan frost">
+        <span class="label">Free</span>
+        <p class="price">₹0<span class="per">/mo</span></p>
+        <p class="for">For trying it on one team.</p>
+        <ul class="inc"><li>Capture by voice, text and WhatsApp</li><li>Up to 3 users</li><li>Tasks, owners and due dates</li><li>30-day memory</li></ul>
+        <a class="btn pill-ink" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+      </li>
+      <li class="plan ink-plate plan-top">
+        <span class="flag">Most chosen</span>
+        <span class="label on-ink-label">Plus</span>
+        <p class="price">₹4,999<span class="per">/mo</span></p>
+        <p class="for">For a growing operation.</p>
+        <ul class="inc"><li>Everything in Free</li><li>Up to 25 users</li><li>Workflows and approval gates</li><li>The AI CFO and inventory</li><li>Unlimited Company Brain</li></ul>
+        <a class="btn pill-glass" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+      </li>
+      <li class="plan frost">
+        <span class="label">Pro</span>
+        <p class="price">₹12,999<span class="per">/mo</span></p>
+        <p class="for">For running the whole company on it.</p>
+        <ul class="inc"><li>Everything in Plus</li><li>Unlimited users</li><li>CEO Brief and Operating Score</li><li>Business DNA and recommendations</li><li>Priority onboarding</li></ul>
+        <a class="btn pill-ink" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══ 13 · FAQ ══════════════════════════════════════════════════════════ -->
+<section class="faq" id="faq">
+  <div class="wrap faq-grid">
+    <div class="faq-head">
+      <h2 class="h2"><span class="light">The things founders</span> <span class="bold">ask first.</span></h2>
+      <p class="lead">Straight answers. No sales call needed.</p>
+    </div>
+    <div class="faq-list">
+      <details class="qa" name="faq" open><summary>Is this just ChatGPT with extra steps?<i aria-hidden="true"></i></summary><p>No. ChatGPT answers questions and forgets between chats. DecisionOS remembers every decision permanently, turns talk into real tasks and records automatically, and runs full approval workflows, not just text replies.</p></details>
+      <details class="qa" name="faq"><summary>What happens to a decision that needs my approval?<i aria-hidden="true"></i></summary><p>It lands in your queue with the original context attached. You edit, approve, or reassign it directly. Sensitive items are gated behind owner approval by default, so nothing sensitive executes without you.</p></details>
+      <details class="qa" name="faq"><summary>Is my company's data safe?<i aria-hidden="true"></i></summary><p>Yes. DecisionOS is multi-tenant and isolated per company, with role-based access so people only see what they should, and secure sign-in throughout. Enterprise discipline, founder simplicity.</p></details>
+      <details class="qa" name="faq"><summary>Do I have to change how my team already works?<i aria-hidden="true"></i></summary><p>No. DecisionOS listens on the channels your team already uses: voice, text, WhatsApp, PDFs, photos and spreadsheets. If your team can send a WhatsApp message, they can run DecisionOS.</p></details>
+      <details class="qa" name="faq"><summary>How long before it actually understands my business?<i aria-hidden="true"></i></summary><p>From day one it captures and executes. Over time, every decision, approval and workflow becomes a data point about how your specific business runs. That is your Business DNA, and it keeps compounding the longer you run on it.</p></details>
+      <details class="qa" name="faq"><summary>What's live today, and what is still coming?<i aria-hidden="true"></i></summary><p>Capture and Organize, which turn voice, text and WhatsApp into structured, executed work, are live today. Manage, Recommend, and a fully autonomous mode are the next stages on the roadmap. We will always tell you plainly which is which.</p></details>
+      <details class="qa" name="faq"><summary>What if the AI gets a decision wrong?<i aria-hidden="true"></i></summary><p>Sensitive and high-impact items are gated behind owner approval before anything executes, and every action carries a full trail back to who decided what. Nothing runs silently. You can always see it, correct it, and override it.</p></details>
+      <details class="qa" name="faq"><summary>Does this replace my accounting software or ERP?<i aria-hidden="true"></i></summary><p>DecisionOS runs the operating layer above your records: decisions, tasks, approvals, and a live finance view. Talk to us about your specific stack during onboarding and we will map out exactly how it fits alongside what you already use.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 14 · THE CALL: the filed wall returns behind the last word ═════════ -->
+<section class="final" id="final">
+  <div class="wrap">
+    <div class="final-inner frost">
+      <p class="label">Every business decision</p>
+      <h2 class="display"><span class="line light">Remembered. Organized.</span> <span class="line bold">Executed.</span></h2>
+      <div class="cta-row">
+        <a class="btn pill-ink lg" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn pill-glass lg" href="#pricing">See pricing</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <a class="wordmark" href="#top" aria-label="DecisionOS">Decision<span>OS</span></a>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="/guide">User guide</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/delete-account">Delete your account</a>
+    </nav>
+    <p class="foot-meta">© 2026 DecisionOS. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+/* Signed-in visitors keep the page; the two sign-up links become one way to their desk. */
+try { sessionStorage.removeItem("dos-landing-bounce"); } catch (e) {}
+fetch("/api/auth/me", { credentials: "include" })
+  .then(function (r) { return r.ok ? r.json() : null; })
+  .then(function (d) {
+    if (!d || !d.user) return;
+    document.querySelectorAll("a.nav-login, .nav-sheet a[href='/login']").forEach(function (a) { a.remove(); });
+    document.querySelectorAll("a[href='/signup']").forEach(function (a) { a.setAttribute("href", "/app"); a.firstChild.textContent = "Go to your desk"; });
+  })
+  .catch(function () {});
+</script>
+<script type="module" src="/landing-v2/js/scene.js?v=2"></script>
+<script src="/landing-v2/js/page.js?v=2" defer></script>
+</body>
+</html>

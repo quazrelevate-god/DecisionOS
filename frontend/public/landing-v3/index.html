@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DecisionOS: Say it once. Dex does the rest.</title>
+<meta name="description" content="DecisionOS is the operating brain for founder-led businesses. Speak a decision once; Dex assigns it, tracks it and follows it up, on your phone and on your desk.">
+<meta name="theme-color" content="#0c0c0d">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/landing-v3/css/landing.css?v=1">
+<link rel="preload" as="image" href="/landing-v3/assets/img/phone-slide-decide-00.jpg">
+<script type="importmap">{"imports":{"three":"https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js"}}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="bloom" aria-hidden="true"></div>
+
+<header class="nav" id="nav">
+  <div class="nav-in">
+    <a class="wordmark" href="#top" aria-label="DecisionOS home">Decision<span>OS</span></a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#dex">Dex</a><a href="#desk">The Desk</a><a href="#chase">Follow-up</a><a href="#who">Who it's for</a><a href="#pricing">Pricing</a>
+    </nav>
+    <div class="nav-cta"><a class="nav-login" href="/login">Log in</a><a class="btn btn-white sm" href="/signup">Start free</a></div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ═══ 1 · HERO + DEX: the founder, the phone, the decision ══════════════ -->
+<section class="scene hero" id="top" data-tone="light">
+  <div class="pin hero-pin" id="hero-pin">
+    <div class="hero-copy" id="hero-copy">
+      <p class="eyebrow">The operating brain for founder-led businesses</p>
+      <h1 class="display"><span class="line light">Say it once.</span><span class="line bold">Dex does the rest.</span></h1>
+      <p class="lead">A decision spoken on the shop floor becomes an owner, a date and a follow-up. On your phone, on your desk, and in the company's memory for good.</p>
+      <div class="cta-row">
+        <a class="btn btn-ink lg" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+        <a class="btn btn-glass lg" href="#dex">Watch Dex work</a>
+      </div>
+      <p class="apps">Android · iOS · Web</p>
+    </div>
+
+    <!-- The founder in dots (figure.js): seen over his shoulder, the camera on the
+         phone. The phone's screen is this HTML element, glued to the 3D phone's
+         screen plane with a matrix3d, so the real app runs inside the scene. -->
+    <canvas id="figure" class="figure" aria-hidden="true"></canvas>
+    <div class="phone-anchor" aria-hidden="true">
+    <div class="phone hero-phone" id="hero-phone">
+      <div class="phone-screen" id="hero-screen">
+        <img class="screen-base" src="/landing-v3/assets/img/phone-slide-decide-00.jpg" width="900" height="1957" alt="" decoding="async">
+        <div class="seq" id="seq">
+          <img src="/landing-v3/assets/seq/slide-00.jpg" alt="" class="on"><img src="/landing-v3/assets/seq/slide-01.jpg" alt=""><img src="/landing-v3/assets/seq/slide-02.jpg" alt=""><img src="/landing-v3/assets/seq/slide-03.jpg" alt=""><img src="/landing-v3/assets/seq/slide-04.jpg" alt=""><img src="/landing-v3/assets/seq/slide-05.jpg" alt=""><img src="/landing-v3/assets/seq/slide-06.jpg" alt=""><img src="/landing-v3/assets/seq/slide-07.jpg" alt=""><img src="/landing-v3/assets/seq/slide-08.jpg" alt=""><img src="/landing-v3/assets/seq/slide-09.jpg" alt=""><img src="/landing-v3/assets/seq/slide-10.jpg" alt=""><img src="/landing-v3/assets/seq/slide-11.jpg" alt=""><img src="/landing-v3/assets/seq/slide-12.jpg" alt=""><img src="/landing-v3/assets/seq/listen.jpg" alt="">
+        </div>
+        <div class="draft" id="draft">
+          <span class="k">Dex drafted this</span>
+          <h4>Approve 12 tonnes of cotton yarn from Surat Spinners · ₹4,80,000</h4>
+          <ul>
+            <li><b>Owner</b><span>Priya Nair · Purchase</span></li>
+            <li><b>Task</b><span>Raise the PO · Fri 24 Oct</span></li>
+            <li><b>Task</b><span>Confirm delivery date · Mon 27 Oct</span></li>
+            <li><b>Approval</b><span>Needs your sign-off</span></li>
+          </ul>
+          <div class="draft-actions"><span class="d-approve">Approve</span><span class="d-ghost">Edit</span><span class="d-ghost">Reject</span></div>
+          <div class="stamp" id="stamp">Approved</div>
+        </div>
+        <span class="island"></span>
+      </div>
+    </div>
+    </div>
+    <!-- What was said, typed as Dex hears it: outside the rig, so the camera's push
+         into the phone leaves it where the eye can read it. -->
+    <div class="bubble" id="bubble" aria-hidden="true"><i class="wave"><b></b><b></b><b></b><b></b><b></b></i><span id="bubble-text"></span></div>
+
+    <ol class="captions hero-caps" id="hero-caps" aria-hidden="true">
+      <li class="cap"><b>Slide right. Talk.</b><span>Dex is built into the app. No forms, no menus.</span></li>
+      <li class="cap"><b>Dex hears the decision.</b><span>In the words you'd use on the floor.</span></li>
+      <li class="cap"><b>It drafts the owner, the tasks, the dates.</b><span>Nothing is created until you approve it.</span></li>
+      <li class="cap"><b>You approve. Dex follows it up.</b><span>Until it's done, with proof.</span></li>
+    </ol>
+
+    <div class="record" id="record" aria-hidden="true">
+      <span class="k">Decision · approved</span>
+      <b>12 t cotton yarn · Surat Spinners</b>
+      <em>Priya Nair · PO by Fri 24 Oct · 2 tasks</em>
+      <i class="tick">✓</i>
+    </div>
+    <a class="anchor" id="dex" href="#dex" aria-hidden="true" tabindex="-1"></a>
+  </div>
+</section>
+
+<!-- ═══ 2 · ORGANISE: a day of "tell someone", filed by evening ════════════ -->
+<section class="scene organise" id="organise" data-tone="dark">
+  <div class="pin org-pin" id="org-pin">
+    <div class="org-head">
+      <h2 class="h2 on-dark"><span class="light">A whole day of “tell someone”.</span> <span class="bold">Filed by evening.</span></h2>
+    </div>
+    <div class="org-cols" id="org-cols">
+      <div class="col">
+        <h3><span>Ravi Kumar</span><small>Sales</small></h3>
+        <ul>
+          <li class="job"><span class="raw">“tell Ravi to chase the Salem payment”</span><span class="row"><b>Chase Salem receivable</b><em>due Fri</em></span></li>
+          <li class="job"><span class="raw">“Kapoor wants the invoice resent”</span><span class="row"><b>Resend Kapoor Retail invoice</b><em>today</em></span></li>
+          <li class="job"><span class="raw">“follow up the Reliance credit terms”</span><span class="row"><b>Reliance Trends · 45-day credit</b><em>Mon</em></span></li>
+          <li class="job"><span class="raw">“ask Krishna Garments about the balance”</span><span class="row"><b>Krishna Garments · ₹4,00,000</b><em>Tue</em></span></li>
+          <li class="job"><span class="raw">“quote for loom 4 buyer by evening”</span><span class="row"><b>Loom-4 buyer quote</b><em>6 pm</em></span></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3><span>Priya Nair</span><small>Purchase</small></h3>
+        <ul>
+          <li class="job"><span class="raw">“raise the PO for Surat Spinners”</span><span class="row"><b>PO · 12 t cotton yarn</b><em>Fri</em></span></li>
+          <li class="job"><span class="raw">“dyes from Bombay Dyeing, check the rate”</span><span class="row"><b>Bombay Dyeing · rate check</b><em>Wed</em></span></li>
+          <li class="job"><span class="raw">“electrician for loom maintenance”</span><span class="row"><b>Contract electrician · ₹18,000</b><em>Thu</em></span></li>
+          <li class="job"><span class="raw">“paper stock won't last the week”</span><span class="row"><b>Art paper · reorder</b><em>today</em></span></li>
+          <li class="job"><span class="raw">“get three quotes for the new motor”</span><span class="row"><b>Loom-4 motor · 3 quotes</b><em>Mon</em></span></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h3><span>Meena</span><small>Dispatch</small></h3>
+        <ul>
+          <li class="job"><span class="raw">“delhi dispatch stuck”</span><span class="row"><b>Delhi dispatch · unblock</b><em>now</em></span></li>
+          <li class="job"><span class="raw">“Kapoor order 4825 goes Thursday”</span><span class="row"><b>Dispatch #4825 · Kapoor Retail</b><em>Thu</em></span></li>
+          <li class="job"><span class="raw">“count the finished goods in godown 2”</span><span class="row"><b>Godown 2 · stock count</b><em>Sat</em></span></li>
+          <li class="job"><span class="raw">“Priya is on leave Mon, cover dispatch”</span><span class="row"><b>Cover for Priya · Mon</b><em>assigned</em></span></li>
+          <li class="job"><span class="raw">“photo of the damaged bales, no caption”</span><span class="row"><b>Damage report · 6 bales</b><em>filed</em></span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="noise" id="noise" aria-hidden="true">
+      <span class="scrap">ok</span><span class="scrap">noted</span><span class="scrap">haan</span><span class="scrap">will check</span><span class="scrap">call me</span><span class="scrap">sent</span><span class="scrap">done?</span><span class="scrap">pls</span><span class="scrap">ok boss</span><span class="scrap">tmrw</span><span class="scrap">?</span><span class="scrap">on it</span>
+    </div>
+    <div class="phone org-phone" id="org-phone" aria-hidden="true"><div class="phone-screen"><img src="/landing-v3/assets/img/phone-my-work.jpg" width="900" height="1957" alt="" loading="lazy" decoding="async"><span class="island"></span></div></div>
+    <p class="org-note" id="org-note">Everyone opens one list. Only what is theirs.</p>
+  </div>
+</section>
+
+<!-- ═══ 3 · THE DESK: a camera over the morning ═══════════════════════════ -->
+<section class="scene desk" id="desk" data-tone="light">
+  <div class="pin desk-pin" id="desk-pin">
+    <div class="desk-head" id="desk-head">
+      <h2 class="h2"><span class="light">Your morning,</span> <span class="bold">on one desk.</span></h2>
+      <p class="lead">What a founder opens instead of twelve WhatsApp groups.</p>
+    </div>
+    <div class="slab" id="slab">
+      <div class="slab-clip">
+        <img id="desk-img" src="/landing-v3/assets/img/desk-monitor.jpg" width="2000" height="1125" alt="The DecisionOS Decision Desk: the greeting and Operating Score, the Dex bar, tiles for Delayed, Complaints and To collect, workflows that need attention, and the sheet of decisions and approvals." loading="lazy" decoding="async">
+      </div>
+    </div>
+    <ol class="captions desk-caps" id="desk-caps" aria-hidden="true">
+      <li class="cap"><b>Tell Dex what you decided.</b><span>Voice or text, from the Desk too.</span></li>
+      <li class="cap"><b>Operating Score, 72 of 100.</b><span>How the company is running, with the gaps to fix first.</span></li>
+      <li class="cap"><b>What's late, what's owed.</b><span>Delayed, complaints, to collect, at a glance.</span></li>
+      <li class="cap"><b>Decisions waiting on you.</b><span>Newest first, each with its trail.</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══ 4 · TWO DESKS, ONE BRAIN ══════════════════════════════════════════ -->
+<section class="scene two" id="two" data-tone="light">
+  <div class="wrap two-grid">
+    <div class="two-copy">
+      <h2 class="h2"><span class="light">Two desks.</span> <span class="bold">One brain.</span></h2>
+      <p class="lead">The same company on the laptop and in your pocket. Approve on the train; the Desk already knows. Everything you send it lands in the same memory.</p>
+      <ul class="inputs" aria-label="What it takes in"><li>Voice</li><li>Text</li><li>WhatsApp</li><li>Photos</li><li>PDFs</li><li>Spreadsheets</li></ul>
+    </div>
+    <div class="two-devices" id="two-devices">
+      <div class="laptop" id="laptop"><div class="laptop-screen"><img src="/landing-v3/assets/img/desk-laptop.jpg" width="1600" height="1000" alt="The Decision Desk on a laptop" loading="lazy" decoding="async"></div><div class="laptop-base"></div></div>
+      <div class="phone two-phone" id="two-phone"><div class="phone-screen"><img src="/landing-v3/assets/img/phone-slide-decide-00.jpg" width="900" height="1957" alt="The Decision Desk on a phone" loading="lazy" decoding="async"><span class="island"></span></div></div>
+      <span class="sync-chip a" id="sync-a">Approved ✓</span>
+      <span class="sync-chip b" id="sync-b">Approved ✓</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 5 · IT CHASES: one task, one day ══════════════════════════════════ -->
+<section class="scene chase" id="chase" data-tone="dark">
+  <div class="pin chase-pin" id="chase-pin">
+    <div class="chase-head">
+      <h2 class="h2 on-dark"><span class="light">It chases,</span> <span class="bold">so you don't.</span></h2>
+      <p class="lead on-dark">One task, one day. You hear about it once, when it needs you.</p>
+    </div>
+    <div class="clock" id="clock" aria-hidden="true">09:00</div>
+    <div class="now" aria-hidden="true"></div>
+    <div class="day-wrap" aria-hidden="true">
+      <div class="day" id="day">
+      <ul class="evs">
+        <li class="ev" style="--x:0vw"><span class="k">Assigned · 09:10</span><b>Chase the Salem receivable</b><em>Ravi Kumar · due 16:00</em></li>
+        <li class="ev" style="--x:26vw"><span class="k">Reminder · 11:30</span><b>“Ravi, Salem is due at 4.”</b><em>WhatsApp · automatic</em></li>
+        <li class="ev" style="--x:52vw"><span class="k">Update · 14:00</span><b>“Called. They'll pay by 5.”</b><em>Ravi · voice note, attached</em></li>
+        <li class="ev late" style="--x:78vw"><span class="k">Overdue · 16:00</span><b>No payment logged.</b><em>Reminder sent again</em></li>
+        <li class="ev esc" style="--x:104vw"><span class="k">Escalated · 16:35</span><b>To you, with the thread.</b><em>One notification on your phone</em></li>
+        <li class="ev done" style="--x:130vw"><span class="k">Done · 17:40</span><b>₹4,00,000 received.</b><em>Proof: bank screenshot</em></li>
+      </ul>
+      <div class="hours" id="hours"></div>
+      </div>
+    </div>
+    <div class="toast" id="toast" aria-hidden="true"><i></i><div><b>Escalated to you</b><span>Salem receivable · Ravi · 35 min overdue</span></div></div>
+  </div>
+</section>
+
+<!-- ═══ 6 · ASK DEX ═══════════════════════════════════════════════════════ -->
+<section class="scene ask" id="ask" data-tone="light">
+  <div class="wrap ask-grid">
+    <div class="ask-copy">
+      <h2 class="h2"><span class="light">Ask anything</span> <span class="bold">about your business.</span></h2>
+      <p class="lead">Slide left and ask in plain words. The answer comes from your own records, not from the internet.</p>
+      <div class="ask-bar" aria-hidden="true"><span class="ask-q" id="ask-q"></span><i class="caret"></i><span class="mic"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM6 11a6 6 0 0 0 12 0M12 19v2"/></svg></span></div>
+      <div class="answer" id="answer" aria-live="polite"><span class="k">Dex</span><p id="ask-a"></p></div>
+    </div>
+    <div class="phone ask-phone" id="ask-phone"><div class="phone-screen"><img src="/landing-v3/assets/img/phone-ask-open.jpg" width="900" height="1957" alt="Ask Dex, open on the phone" loading="lazy" decoding="async"><span class="island"></span></div></div>
+  </div>
+</section>
+
+<!-- ═══ 7 · THE BRAIN: five stages, two live ══════════════════════════════ -->
+<section class="scene stages" id="stages" data-tone="dark">
+  <div class="wrap">
+    <h2 class="h2 on-dark"><span class="light">One brain.</span> <span class="bold">Five stages.</span></h2>
+    <p class="lead on-dark">Every decision, approval and workflow is a data point about how your business runs. The more it holds, the more it can do. We say plainly which stages are live.</p>
+    <ol class="rail" id="rail">
+      <li class="st live"><i>01</i><span class="k">Live today</span><b>Capture</b><p>Voice becomes a record: an owner, a date, a trail.</p></li>
+      <li class="st live"><i>02</i><span class="k">Live today</span><b>Organize</b><p>Routed, owned and filed where it belongs.</p></li>
+      <li class="st"><i>03</i><span class="k dim">Next</span><b>Manage</b><p>It balances the load across the team.</p></li>
+      <li class="st"><i>04</i><span class="k dim">Next</span><b>Recommend</b><p>It proposes the move before you ask.</p></li>
+      <li class="st"><i>05</i><span class="k dim">Next</span><b>Autonomous</b><p>It runs; you steer.</p></li>
+      <span class="rail-line" aria-hidden="true"><i id="rail-fill"></i></span>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══ 8 · SCORE + BRIEF ═════════════════════════════════════════════════ -->
+<section class="scene brief" id="brief" data-tone="light">
+  <div class="wrap brief-grid">
+    <div class="score-big" id="score-big">
+      <p class="eyebrow">Operating Score</p>
+      <p class="numeral"><span id="score-n">0</span><small>/100</small></p>
+      <p class="lead">How the company is running, across execution, finance, decisions and responsiveness, with the gaps to fix first.</p>
+      <ul class="parts">
+        <li><span>Execution</span><i style="--w:78%"></i><b>78</b></li>
+        <li><span>Finance</span><i style="--w:64%"></i><b>64</b></li>
+        <li><span>Decisions</span><i style="--w:81%"></i><b>81</b></li>
+        <li><span>Responsiveness</span><i style="--w:66%"></i><b>66</b></li>
+      </ul>
+    </div>
+    <article class="brief-sheet" id="brief-sheet">
+      <div class="tabs" id="brief-tabs" role="tablist" aria-label="Brief cadence">
+        <button type="button" class="on" role="tab" aria-selected="true">Morning</button>
+        <button type="button" role="tab" aria-selected="false">Evening</button>
+        <button type="button" role="tab" aria-selected="false">Weekly</button>
+        <button type="button" role="tab" aria-selected="false">Monthly</button>
+      </div>
+      <span class="k">CEO Brief · written by DecisionOS</span>
+      <p class="brief-text" id="brief-text" aria-live="polite">Cash is healthy but ageing receivables are the pressure point: ₹4,00,000 sits past thirty days with one retailer. Six decisions are waiting on you, the oldest for three days.</p>
+      <ul id="brief-copy" hidden>
+        <li>Cash is healthy but ageing receivables are the pressure point: ₹4,00,000 sits past thirty days with one retailer. Six decisions are waiting on you, the oldest for three days.</li>
+        <li>Eleven tasks closed today and two slipped. The packaging reconciliation is still blocking the distributor payout, and tomorrow's dispatch needs your approval before 9am.</li>
+        <li>This week: 43 decisions captured, 38 executed, 5 still open. Collections improved 12%. Your slowest loop is purchase approvals, averaging 2.4 days.</li>
+        <li>November closed at ₹18,42,300 billed against ₹16,21,000 received. Net margin held at 22%. Two vendors slipped on delivery twice or more and are worth renegotiating.</li>
+      </ul>
+      <h3>It reports to you.</h3>
+      <p class="sub">Your morning, written for you. Then your evening, your week, your month.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ═══ 9 · WHO IT'S FOR: a strip of four ══════════════════════════════════ -->
+<section class="scene who" id="who" data-tone="dark">
+  <div class="pin who-pin" id="who-pin">
+    <div class="who-head">
+      <h2 class="h2 on-dark"><span class="light">Built for people who carry</span> <span class="bold">the business in their head.</span></h2>
+      <p class="lead on-dark">No new software to learn. If your team can send a WhatsApp message, they can run DecisionOS.</p>
+    </div>
+    <ul class="who-track" id="who-track">
+      <li class="who-card"><img src="/landing-v3/assets/img/icp-founder.jpg" width="560" height="700" alt="A textile business owner at his desk beside a towering stack of ledgers" loading="lazy" decoding="async"><div class="who-copy"><span class="k">Founder / CEO</span><p>Say it once. It gets assigned, tracked, and only comes back when it needs you.</p></div></li>
+      <li class="who-card"><img src="/landing-v3/assets/img/icp-family.jpg" width="560" height="700" alt="A jewellery shop owner taking a call beside several ringing phones" loading="lazy" decoding="async"><div class="who-copy"><span class="k">Family business owner</span><p>Finance, inventory and dispatch run themselves. You run the business.</p></div></li>
+      <li class="who-card"><img src="/landing-v3/assets/img/icp-ops.jpg" width="560" height="700" alt="An operations lead reviewing a dispatch ledger in a warehouse" loading="lazy" decoding="async"><div class="who-copy"><span class="k">Operations / Sales lead</span><p>Every task has an owner, a due date and a trail. Nothing chased twice.</p></div></li>
+      <li class="who-card"><img src="/landing-v3/assets/img/icp-finance.jpg" width="560" height="700" alt="An accountant working calmly amid invoices suspended in the air" loading="lazy" decoding="async"><div class="who-copy"><span class="k">Finance / accounts</span><p>Ask in plain English. Answers from your real history in seconds.</p></div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══ 10 · PRICING ═════════════════════════════════════════════════════ -->
+<section class="scene pricing" id="pricing" data-tone="light">
+  <div class="wrap">
+    <h2 class="h2 center"><span class="light">Start free.</span> <span class="bold">Grow into it.</span></h2>
+    <p class="lead center">Try it with one team for nothing. Move up when the company does.</p>
+    <ul class="plans">
+      <li class="plan">
+        <span class="k">Free</span>
+        <p class="price">₹0<small>/mo</small></p>
+        <p class="for">For trying it on one team.</p>
+        <ul class="inc"><li>Capture by voice, text and WhatsApp</li><li>Up to 3 users</li><li>Tasks, owners and due dates</li><li>30-day memory</li></ul>
+        <a class="btn btn-ink" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+      </li>
+      <li class="plan top">
+        <span class="flag">Most chosen</span>
+        <span class="k">Plus</span>
+        <p class="price">₹4,999<small>/mo</small></p>
+        <p class="for">For a growing operation.</p>
+        <ul class="inc"><li>Everything in Free</li><li>Up to 25 users</li><li>Workflows and approval gates</li><li>The AI CFO and inventory</li><li>Unlimited Company Brain</li></ul>
+        <a class="btn btn-white" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+      </li>
+      <li class="plan">
+        <span class="k">Pro</span>
+        <p class="price">₹12,999<small>/mo</small></p>
+        <p class="for">For running the whole company on it.</p>
+        <ul class="inc"><li>Everything in Plus</li><li>Unlimited users</li><li>CEO Brief and Operating Score</li><li>Business DNA and recommendations</li><li>Priority onboarding</li></ul>
+        <a class="btn btn-ink" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══ 11 · FAQ ═════════════════════════════════════════════════════════ -->
+<section class="scene faq" id="faq" data-tone="light">
+  <div class="wrap faq-grid">
+    <div class="faq-head"><h2 class="h2"><span class="light">The things founders</span> <span class="bold">ask first.</span></h2><p class="lead">Straight answers. No sales call needed.</p></div>
+    <div class="faq-list">
+      <details class="qa" name="faq" open><summary>Is this just ChatGPT with extra steps?<i aria-hidden="true"></i></summary><p>No. ChatGPT answers questions and forgets between chats. DecisionOS remembers every decision permanently, turns talk into real tasks and records automatically, and runs full approval workflows, not just text replies.</p></details>
+      <details class="qa" name="faq"><summary>What happens to a decision that needs my approval?<i aria-hidden="true"></i></summary><p>It lands in your queue with the original context attached. You edit, approve, or reassign it directly. Sensitive items are gated behind owner approval by default, so nothing sensitive executes without you.</p></details>
+      <details class="qa" name="faq"><summary>Is my company's data safe?<i aria-hidden="true"></i></summary><p>Yes. DecisionOS is multi-tenant and isolated per company, with role-based access so people only see what they should, and secure sign-in throughout. Enterprise discipline, founder simplicity.</p></details>
+      <details class="qa" name="faq"><summary>Do I have to change how my team already works?<i aria-hidden="true"></i></summary><p>No. DecisionOS listens on the channels your team already uses: voice, text, WhatsApp, PDFs, photos and spreadsheets. If your team can send a WhatsApp message, they can run DecisionOS.</p></details>
+      <details class="qa" name="faq"><summary>How long before it actually understands my business?<i aria-hidden="true"></i></summary><p>From day one it captures and executes. Over time, every decision, approval and workflow becomes a data point about how your specific business runs. That is your Business DNA, and it keeps compounding the longer you run on it.</p></details>
+      <details class="qa" name="faq"><summary>What's live today, and what is still coming?<i aria-hidden="true"></i></summary><p>Capture and Organize, which turn voice, text and WhatsApp into structured, executed work, are live today. Manage, Recommend, and a fully autonomous mode are the next stages on the roadmap. We will always tell you plainly which is which.</p></details>
+      <details class="qa" name="faq"><summary>What if the AI gets a decision wrong?<i aria-hidden="true"></i></summary><p>Sensitive and high-impact items are gated behind owner approval before anything executes, and every action carries a full trail back to who decided what. Nothing runs silently. You can always see it, correct it, and override it.</p></details>
+      <details class="qa" name="faq"><summary>Does this replace my accounting software or ERP?<i aria-hidden="true"></i></summary><p>DecisionOS runs the operating layer above your records: decisions, tasks, approvals, and a live finance view. Talk to us about your specific stack during onboarding and we will map out exactly how it fits alongside what you already use.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 12 · THE CALL ════════════════════════════════════════════════════ -->
+<section class="scene final" id="final" data-tone="dark">
+  <div class="final-in">
+    <p class="eyebrow on-dark">Every business decision</p>
+    <h2 class="display on-dark"><span class="line light">Remembered. Organized.</span><span class="line bold">Done.</span></h2>
+    <div class="cta-row"><a class="btn btn-white lg" href="/signup">Start free<span class="arr" aria-hidden="true">→</span></a><a class="btn btn-ghost lg" href="#pricing">See pricing</a></div>
+    <ul class="platforms"><li>Android</li><li>iOS</li><li>Web</li></ul>
+    <div class="phone final-phone" id="final-phone" aria-hidden="true"><div class="phone-screen"><img src="/landing-v3/assets/img/phone-slide-decide-00.jpg" width="900" height="1957" alt="" loading="lazy" decoding="async"><span class="island"></span></div></div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <a class="wordmark" href="#top" aria-label="DecisionOS">Decision<span>OS</span></a>
+    <nav class="foot-links" aria-label="Footer"><a href="/guide">User guide</a><a href="/privacy">Privacy</a><a href="/delete-account">Delete your account</a></nav>
+    <p class="foot-meta">© 2026 DecisionOS. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+/* Signed-in visitors keep the page; the sign-up links become one way to their desk. */
+fetch("/api/auth/me", { credentials: "include" })
+  .then(function (r) { return r.ok ? r.json() : null; })
+  .then(function (d) {
+    if (!d || !d.user) return;
+    document.querySelectorAll("a.nav-login").forEach(function (a) { a.remove(); });
+    document.querySelectorAll("a[href='/signup']").forEach(function (a) { a.setAttribute("href", "/app"); a.firstChild.textContent = "Go to your desk"; });
+  })
+  .catch(function () {});
+</script>
+<script type="module" src="/landing-v3/js/figure.js?v=1"></script>
+<script src="/landing-v3/js/page.js?v=1" defer></script>
+</body>
+</html>

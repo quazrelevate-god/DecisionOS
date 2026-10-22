@@ -125,3 +125,25 @@ class StockUseInput(BaseModel):
     quantity: float
     date: Optional[str] = None
     note: Optional[str] = ""
+
+
+class FinanceDeleteItem(BaseModel):
+    """One record to delete: kind is invoice | bill | payment | expense | asset | inventory."""
+    kind: str
+    id: str
+
+
+class FinanceDeleteInput(BaseModel):
+    """2026-10-22 (client) — delete one record or a selection
+    (services/finance_trash). include_issued is the owner's explicit yes to
+    deleting GST invoices issued from DecisionOS."""
+    items: List[FinanceDeleteItem]
+    include_issued: Optional[bool] = False
+
+
+class FinanceEverythingInput(BaseModel):
+    """Delete every Finance record: the owner types the company's name, after
+    downloading a copy (export_id)."""
+    confirm_name: str
+    export_id: str
+    include_issued: Optional[bool] = False

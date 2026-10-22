@@ -28,6 +28,7 @@
 // in one, so the table draws no box of its own: a slate head, hairline rows, a
 // white wash on hover. On a phone each row is a small white glass tile.
 import * as React from "react";
+import { Check } from "@phosphor-icons/react";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { cn } from "@/lib/utils";
 
@@ -44,10 +45,15 @@ import { cn } from "@/lib/utils";
  * @param {Function} rowKey       row -> stable key
  * @param {Function} [rowTestid]  row -> data-testid, so existing selectors survive
  * @param {Function} [rowClass]   row -> extra classes (e.g. the overdue tint)
+ * @param {object}   [select]     2026-10-22 — Finance's select-and-delete
+ *   (pages/finance/FinanceDelete useSelection): while `select.on`, a tick box
+ *   leads every row, a tap on a phone card ticks it, and the row's own actions
+ *   step aside so a tap cannot delete one record by accident.
  */
-export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, footer }) {
+export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, footer, select }) {
   const isMobile = useIsMobile();
-  const by = (r) => columns.filter((c) => c.role === r);
+  const selecting = !!select?.on;
+  const by = (r) => columns.filter((c) => c.role === r && !(selecting && r === "action"));
 
   if (isMobile) {
     const titles = by("title");
@@ -67,15 +73,25 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
             .filter(({ c, v }) => (c.value ? v != null && v !== "" && v !== "—" : true))
             .map(({ c }) => c);
 
+          const ticked = selecting && select.has(row);
           return (
             <div
               key={rowKey(row)}
               data-testid={rowTestid ? rowTestid(row) : undefined}
+              {...(selecting ? {
+                role: "checkbox", "aria-checked": ticked, tabIndex: 0,
+                onClick: () => select.toggle(row),
+                onKeyDown: (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); select.toggle(row); } },
+              } : {})}
               className={cn(
                 "rounded-2xl bg-white/80 p-3.5 ring-1 ring-inset ring-white shadow-[0_8px_22px_-14px_hsl(150_15%_20%/0.3)]",
                 rowClass?.(row),
+                selecting && "flex cursor-pointer items-start gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30",
+                ticked && "bg-white ring-2 ring-neutral-900/70",
               )}
             >
+              {selecting && <Tick on={ticked} />}
+              <div className={selecting ? "min-w-0 flex-1" : undefined}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900 line-clamp-2">
                   {titles.map((c) => <React.Fragment key={c.key}>{c.cell(row)}</React.Fragment>)}
@@ -111,6 +127,7 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
                   )}
                 </div>
               )}
+              </div>
             </div>
           );
         })}
@@ -134,6 +151,11 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-900/[0.07] text-left text-xs font-medium text-slate-500">
+            {selecting && (
+              <th className="w-10 px-3 py-2.5">
+                <TickBox checked={select.all} onChange={select.toggleAll} label="Select all" testid={testid ? `${testid}-select-all` : undefined} />
+              </th>
+            )}
             {columns.map((c) => (
               <th key={c.key} className={cn("px-3 py-2.5 font-medium", c.align === "right" && "text-right", c.thClass)}>
                 {c.head}
@@ -146,8 +168,15 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
             <tr
               key={rowKey(row)}
               data-testid={rowTestid ? rowTestid(row) : undefined}
-              className={cn("border-b border-slate-900/[0.05] transition-colors last:border-0 hover:bg-white/60", rowClass?.(row))}
+              className={cn("border-b border-slate-900/[0.05] transition-colors last:border-0 hover:bg-white/60", rowClass?.(row),
+                selecting && select.has(row) && "bg-white/80")}
             >
+              {selecting && (
+                <td className="w-10 px-3 py-3 align-middle">
+                  <TickBox checked={select.has(row)} onChange={() => select.toggle(row)} label="Select"
+                    testid={rowTestid ? `${rowTestid(row)}-select` : undefined} />
+                </td>
+              )}
               {columns.map((c) => (
                 <td key={c.key} className={cn("px-3 py-3 align-middle text-slate-700", c.align === "right" && "text-right", c.tdClass)}>
                   {c.cell(row)}
@@ -159,7 +188,7 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
         {footer && (
           <tfoot>
             <tr className="border-t border-slate-900/[0.07]">
-              <td colSpan={Math.max(1, columns.length - 2)} className="px-3 py-3 text-xs text-slate-500">
+              <td colSpan={Math.max(1, columns.length - 2 + (selecting ? 1 : 0))} className="px-3 py-3 text-xs text-slate-500">
                 {footer.label}
               </td>
               <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-900" data-testid={footer.testid}>
@@ -171,6 +200,30 @@ export function DataList({ columns, rows, rowKey, rowTestid, rowClass, testid, f
         )}
       </table>
     </div>
+  );
+}
+
+/* The tick: the design system's round ink check (DesignCheckbox), drawn
+   without a label. On a phone card it is only a picture — the whole card is
+   the control — so it is hidden from the accessibility tree there. */
+function Tick({ on }) {
+  return (
+    <span aria-hidden="true" className={cn(
+      "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-[1.5px] transition-colors",
+      on ? "border-transparent bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))]" : "border-neutral-400/80 bg-white",
+    )}>
+      {on && <Check size={12} weight="bold" className="text-white" />}
+    </span>
+  );
+}
+
+function TickBox({ checked, onChange, label, testid }) {
+  return (
+    <span className="relative grid h-5 w-5 place-items-center">
+      <input type="checkbox" checked={checked} onChange={onChange} aria-label={label} data-testid={testid}
+        className="peer h-5 w-5 cursor-pointer appearance-none rounded-full border-[1.5px] border-neutral-400/80 bg-white transition-colors checked:border-transparent checked:bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30" />
+      <Check size={12} weight="bold" aria-hidden="true" className="pointer-events-none absolute hidden text-white peer-checked:block" />
+    </span>
   );
 }
 

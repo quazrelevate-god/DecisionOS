@@ -5,6 +5,7 @@ import { ADMIN_BTN, ADMIN_H2, ADMIN_H3, ADMIN_INP, CARD_BASE } from "./adminStyl
 import { useState, useEffect, useCallback } from "react";
 import api, { formatApiError } from "../../lib/api";
 import { toast } from "sonner";
+import { saveFile } from "../../lib/native/files";
 import { ConfirmAction } from "../../components/common";
 import {
   Spinner, ArrowClockwise, MagnifyingGlass, DownloadSimple, Scales,
@@ -17,14 +18,9 @@ const H3 = ADMIN_H3;
 const BTN = ADMIN_BTN;
 const INP = ADMIN_INP;
 
-function downloadJSON(obj, name) {
+async function downloadJSON(obj, name) {
   try {
-    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    await saveFile(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }), name);
   } catch (e) {
     // The export arrived; it is the browser that could not hand it over as a file.
     console.error("compliance: building the download failed", e);

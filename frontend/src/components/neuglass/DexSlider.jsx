@@ -551,9 +551,16 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
              bar's height at every corner. 9999px cannot be reused here — on a
              334px box the browser would clamp it to half the WIDTH and draw a
              lozenge — so the radius is written as the number the bar resolves
-             to, from the bar's own token. */
+             to, from the bar's own token.
+             2026-10-22 (founder) — EXCEPT THE TOP PAIR, which follows the More
+             menu's pills instead: 30px, the pill's own 22px end plus the 8px
+             the pills sit in (DockSlider DockMore), so the corner runs
+             parallel to the first pill's round end with an even 8px of black
+             all the way round. At the bar's 48px the curve crowded that end at
+             the diagonal and read as a different shape. The bottom pair is
+             the bar's and does not change. */
           menu
-            ? "flex-col rounded-[calc(var(--desk-slider-track)/2)]"
+            ? "flex-col rounded-b-[calc(var(--desk-slider-track)/2)] rounded-t-[1.875rem]"
             : "h-[var(--desk-slider-track)]",
           onInk && "ng-slider-well--ink")}
         data-at={at || undefined}

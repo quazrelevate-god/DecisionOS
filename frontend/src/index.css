@@ -2103,7 +2103,10 @@ html[data-page="operating-score"] {
     --sky-art: url("/sky/ops.webp");
 }
 
-html[data-page="finance"] {
+/* 2026-10-22, founder — Requests wears the Money room's sky: picture, darker
+   secondary text, gradient, and no blur on its glass (rules below). */
+html[data-page="finance"],
+html[data-page="requests"] {
     --sky-art: url("/sky/finance.webp");
     /* KM-34 — the secondary text on this room is darkened rather than the
        picture faded; see the note on --text-secondary below. Kept through the
@@ -2649,7 +2652,8 @@ html[data-page="operating-score"] .app-sky {
 /* Finance — the founder's own suggestion: smoke with a gold glow. Money
    gets the most restrained sky in the app; the gold is the only thing in it
    with any chroma. */
-html[data-page="finance"] .app-sky {
+html[data-page="finance"] .app-sky,
+html[data-page="requests"] .app-sky {
     --sky-core: hsl(35 12% 72% / .62);
     --sky-deep: 220  8% 64%;
     --sky-lift: hsl(46 92% 68% / .38);
@@ -3579,7 +3583,9 @@ html[data-page="dex"] .app-sky {
        scrolled into view for the first time, so the capture was stale while
        the DOM was correct all along.) */
     html[data-page="finance"] .ng-frost:not(.ng-keep-blur),
-    html[data-page="finance"] .ng-frost-min:not(.ng-keep-blur) {
+    html[data-page="finance"] .ng-frost-min:not(.ng-keep-blur),
+    html[data-page="requests"] .ng-frost:not(.ng-keep-blur),
+    html[data-page="requests"] .ng-frost-min:not(.ng-keep-blur) {
         -webkit-backdrop-filter: none;
                 backdrop-filter: none;
     }

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Paperclip, Tray, WarningCircle, X } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { inrCompact } from "../../lib/format";
+import { fileLink } from "../../lib/native/files";
 import { DialogDescription, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { CHIP, DRAWER_FIELD, GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL, QUIET_CHIP } from "../../components/neuglass/glass";
 
@@ -104,7 +105,7 @@ export function AttachmentLink({ att }) {
   const { t } = useTranslation();
   if (!att?.url) return null;
   return (
-    <a href={`${process.env.REACT_APP_BACKEND_URL}${att.url}`} target="_blank" rel="noopener noreferrer" data-testid="view-attachment"
+    <a {...fileLink(`${process.env.REACT_APP_BACKEND_URL}${att.url}`, att.filename)} data-testid="view-attachment"
       className="ml-1.5 inline-flex items-center gap-1 rounded-pill px-2 py-0.5 align-middle text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-900/[0.08] hover:bg-white hover:text-slate-900">
       <Paperclip size={11} weight="bold" aria-hidden="true" /> {t("finance.bill")}
     </a>

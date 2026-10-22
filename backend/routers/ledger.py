@@ -392,6 +392,9 @@ async def create_inventory(tenant_id: str, user_id: str, data: dict, source: str
         "vendor_id": data.get("vendor_id"),  # PILOT-1 E
         "notes": (data.get("notes") or "").strip(), "source": source,
         "attachment": data.get("attachment"),
+        # 2026-10-22 — the bill and the import it came from, so deleting the
+        # bill or undoing the import takes the stock too (services/finance_trash).
+        "invoice_id": data.get("invoice_id"), "ingestion_id": data.get("ingestion_id"),
         "created_by": user_id, "created_at": now_iso(),
     }
     await db.inventory.insert_one(dict(doc))
@@ -1002,20 +1005,26 @@ async def update_expense(eid: str, inp: ExpensePatch, user: dict = Depends(requi
     return doc
 
 
+async def _delete_one(user: dict, kind: str, rid: str, missing: str) -> dict:
+    """2026-10-22 (client) — every Finance delete goes through
+    services/finance_trash: what belongs with the record goes with it (an
+    expense's asset and the bill it was booked from; a payment's hold on an
+    invoice), what stays is put right (the invoice a deleted payment settled
+    is owed again), and it can be put back for 30 days. E2-65 still holds: a
+    missing or other company's id is a 404, never a "Deleted!" for nothing."""
+    from services import finance_trash as trash
+    plan = await trash.plan_items(user["tenant_id"], [{"kind": kind, "id": rid}])
+    if plan.missing:
+        raise HTTPException(status_code=404, detail=missing)
+    res = await trash.remove(plan, user, kind="single", label=trash.label_for(plan))
+    return {"ok": True, **res}
+
+
 @router.delete("/expenses/{eid}")
 async def delete_expense(eid: str, user: dict = Depends(require_ledger)):
-    # E2-65: 404 on non-existent / cross-tenant id -- was silently returning
-    # 200 with deleted_count=0, so the UI showed "Deleted!" toast for
-    # nothing. Now the toast reflects reality.
-    r = await db.expenses.delete_one({"id": eid, "tenant_id": user["tenant_id"]})
-    if not r.deleted_count:
-        raise HTTPException(status_code=404, detail="Expense not found")
-    # Requests — a request that pointed at this expense must not link to a row
-    # that is gone; it says the expense has to be added again instead.
-    await db.requests.update_many(
-        {"tenant_id": user["tenant_id"], "expense_id": eid},
-        {"$set": {"expense_id": None, "expense_error": "The expense booked for this request was deleted in Finance."}})
-    return {"ok": True}
+    # Requests — a request that pointed at this expense says the expense has
+    # to be added again (services/finance_trash._consequences).
+    return await _delete_one(user, "expense", eid, "Expense not found")
 
 
 @router.post("/expenses/suggest-category")
@@ -1076,11 +1085,7 @@ async def update_asset(aid: str, inp: AssetInput, user: dict = Depends(require_l
 
 @router.delete("/assets/{aid}")
 async def delete_asset(aid: str, user: dict = Depends(require_ledger)):
-    # E2-65: 404 on non-existent / cross-tenant id.
-    r = await db.assets.delete_one({"id": aid, "tenant_id": user["tenant_id"]})
-    if not r.deleted_count:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return {"ok": True}
+    return await _delete_one(user, "asset", aid, "Asset not found")
 
 
 # --- Inventory --------------------------------------------------------------
@@ -1131,11 +1136,7 @@ async def update_inventory(iid: str, inp: InventoryInput, user: dict = Depends(r
 
 @router.delete("/inventory/{iid}")
 async def delete_inventory(iid: str, user: dict = Depends(require_ledger)):
-    # E2-65: 404 on non-existent / cross-tenant id.
-    r = await db.inventory.delete_one({"id": iid, "tenant_id": user["tenant_id"]})
-    if not r.deleted_count:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-    return {"ok": True}
+    return await _delete_one(user, "inventory", iid, "Inventory item not found")
 
 
 # --- Revenue (sale/service income — money coming IN) ------------------------
@@ -1243,6 +1244,8 @@ async def list_payables(user: dict = Depends(require_ledger)):
     for b in bills:
         b["balance"] = _remaining(b)
         b["balance_base"] = in_base(b["balance"], b, currency)
+    for p in payments:
+        p["amount_base"] = in_base(p.get("amount"), p, currency)
     unmatched = [{**p, "remaining": _pay_remaining(p)} for p in payments
                  if _pay_remaining(p) > 0.01 and p.get("match_status") != "standalone"]
     open_bills = [b for b in bills if b.get("status") != "paid" and _remaining(b) > 0.01]
@@ -1260,6 +1263,9 @@ async def list_payables(user: dict = Depends(require_ledger)):
                            "fx_rate": b.get("fx_rate"), "balance_base": b.get("balance_base")} for b in open_bills],
         # J1-11 — approved, not yet billed. Read, never booked (see above).
         "committed": committed,
+        # 2026-10-22 — every payment made, so the Expenses tab can list them
+        # (and delete one) the way Revenue lists payments received.
+        "payments": payments,
     }
 
 
@@ -1354,26 +1360,20 @@ async def add_revenue_with_file(
 
 @router.delete("/revenue/invoice/{iid}")
 async def delete_revenue_invoice(iid: str, user: dict = Depends(require_ledger)):
-    # E2-65: 404 if the invoice doesn't exist (or isn't a sales invoice
-    # or isn't in this tenant). The payments-cascade still runs after
-    # so a valid delete cleans linked receipts too.
-    r = await db.invoices.delete_one(
-        {"id": iid, "tenant_id": user["tenant_id"], "type": "sales_invoice"})
-    if not r.deleted_count:
-        raise HTTPException(status_code=404, detail="Sales invoice not found")
-    await db.payments.delete_many(
-        {"tenant_id": user["tenant_id"], "invoice_id": iid, "direction": "in"})
-    return {"ok": True}
+    # A payment that settled only this invoice goes with it; one split across
+    # others stays, with this invoice's part back in Needs matching. A GST
+    # invoice issued from DecisionOS is refused here (409): the owner deletes
+    # one only through POST /finance/delete with include_issued.
+    return await _delete_one(user, "invoice", iid, "Sales invoice not found")
 
 
 @router.delete("/revenue/payment/{pid}")
 async def delete_revenue_payment(pid: str, user: dict = Depends(require_ledger)):
-    # E2-65: 404 on non-existent / wrong-direction id.
-    r = await db.payments.delete_one(
-        {"id": pid, "tenant_id": user["tenant_id"], "direction": "in"})
-    if not r.deleted_count:
+    # The invoice it settled is owed again (it used to stay "received").
+    received = await db.payments.find_one({"id": pid, "tenant_id": user["tenant_id"], "direction": "in"}, {"_id": 1})
+    if not received:
         raise HTTPException(status_code=404, detail="Payment not found")
-    return {"ok": True}
+    return await _delete_one(user, "payment", pid, "Payment not found")
 
 
 # --- 2026-10-06: the "Fix Mis-booked Purchases" re-sync is gone ------------------

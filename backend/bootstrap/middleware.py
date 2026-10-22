@@ -33,7 +33,9 @@ def register_middleware(app) -> None:
         # the token we just handed it is invisible. Same-origin deployments
         # (the node proxy) and the native app ignore this; a browser talking
         # straight to the backend does not.
-        expose_headers=["X-CSRF-Token"],
+        # 2026-10-22 — and the file name a download carries, so a file saved
+        # from the app (frontend lib/native/files.js) keeps its real name.
+        expose_headers=["X-CSRF-Token", "Content-Disposition"],
         max_age=600,
     )
     logger.info(f"CORS allow-list ({len(CORS_ORIGINS)} origins): {CORS_ORIGINS}")

@@ -23,7 +23,7 @@ import {
   Wallet, FlowArrow, CalendarBlank, NotePencil, ChatCircleText, UsersThree,
   Paperclip, CheckCircle, WarningCircle,
 } from "@phosphor-icons/react";
-import api from "../../lib/api";
+import { downloadFrom } from "../../lib/native/files";
 import { useAuth } from "../../context/AuthContext";
 import { hasPerm } from "../../lib/perms";
 import { money, humanStage, priorityLabel, taskStatusLabel } from "../../lib/format";
@@ -348,15 +348,10 @@ function AnswerActions({ answer, question, onAsk, exports, contextId }) {
   const run = async (fmt) => {
     setBusy(fmt);
     try {
-      const res = await api.post("/brain/export", { context_id: contextId, format: fmt }, { responseType: "blob" });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dex-answer.${fmt === "excel" ? "xlsx" : fmt}`;
-      document.body.appendChild(a); a.click(); a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "That export didn't go through. Try again in a moment.");
+      // A download in a browser, the share sheet in the app (lib/native/files).
+      await downloadFrom("/brain/export", `dex-answer.${fmt === "excel" ? "xlsx" : fmt}`,
+        { method: "post", data: { context_id: contextId, format: fmt },
+          failed: "That export didn't go through. Try again in a moment." });
     } finally {
       setBusy("");
     }

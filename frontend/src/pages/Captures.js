@@ -12,7 +12,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  ArrowRight, ArrowsClockwise, ChatText, CheckCircle, FilePdf, PencilSimple, Question, Receipt, ShieldWarning, Tray, UploadSimple,
+  ArrowCounterClockwise, ArrowRight, ArrowsClockwise, ChatText, CheckCircle, FilePdf, PencilSimple, Question, Receipt, ShieldWarning, Tray, UploadSimple,
   WhatsappLogo, XCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,8 @@ import { DRAWER_FIELD, DRAWER_TRACK, INK_PILL } from "../components/neuglass/gla
 import { ScrollTabRow } from "../components/neuglass/ScrollTabRow";
 import { CARD, EmptyNote, SMALL_INK, SMALL_PILL, Tag } from "./finance/financeKit";
 import ReviewPanel, { filedWhat } from "./finance/ReviewPanel";
+import { restoreBatch, useFinanceDelete, useRefreshBooks } from "./finance/FinanceDelete";
+import { fileLink } from "../lib/native/files";
 
 const INPUT = cn(DRAWER_FIELD, "h-10 rounded-xl px-3 py-0 text-sm");
 const LABEL = "mb-1 block text-[11px] font-medium text-slate-500";
@@ -137,7 +139,12 @@ export function CaptureReview() {
 function UploadCard({ u, user, onChange }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 2026-10-22 (client) — a wrong import from Tally can be taken back out:
+  // everything it filed, asked first, and it can be put back for 30 days.
+  const undo = useFinanceDelete(onChange);
+  const refresh = useRefreshBooks();
   const waiting = u.status === "review";
+  const undone = u.status === "undone";
   const amount = (u.records?.invoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0)
     || (u.records?.payments || []).reduce((sum, pm) => sum + (Number(pm.amount) || 0), 0);
   const by = u.created_by === user?.id ? "You" : (u.created_by_name || "Someone");
@@ -194,6 +201,19 @@ function UploadCard({ u, user, onChange }) {
             <XCircle size={14} weight="bold" aria-hidden="true" /> Discard
           </button>
         </div>
+      ) : undone ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`upload-undone-${u.id}`}>
+          <p className="flex items-center gap-1 text-xs text-slate-500">
+            <ArrowCounterClockwise size={13} weight="bold" aria-hidden="true" />
+            Undone{u.undone_at ? ` · ${timeAgo(u.undone_at)}` : ""} — what it filed was taken out
+          </p>
+          {canLedger && u.undo_batch_id && (
+            <button type="button" disabled={busy} data-testid={`upload-restore-${u.id}`} className={SMALL_PILL}
+              onClick={async () => { setBusy(true); await restoreBatch(u.undo_batch_id, refresh); setBusy(false); }}>
+              <ArrowCounterClockwise size={14} aria-hidden="true" /> Put back
+            </button>
+          )}
+        </div>
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-2" data-testid={`upload-filed-${u.id}`}>
           <p className="flex items-center gap-1 text-xs text-emerald-700">
@@ -205,8 +225,15 @@ function UploadCard({ u, user, onChange }) {
               Open {what.place} <ArrowRight size={12} weight="bold" aria-hidden="true" />
             </Link>
           )}
+          {canLedger && (
+            <button type="button" data-testid={`upload-undo-${u.id}`} onClick={() => undo.askImport(u)}
+              className={cn(SMALL_PILL, "text-rose-700")}>
+              <ArrowCounterClockwise size={14} aria-hidden="true" /> Undo this import
+            </button>
+          )}
         </div>
       )}
+      {undo.dialog}
     </article>
   );
 }
@@ -374,12 +401,12 @@ function CaptureCard({ c, user, onChange }) {
         <div className="mt-3">
           <p className="mb-1 text-[11px] font-medium text-slate-500">Under review — original file</p>
           {c.kind === "image" ? (
-            <a href={fileSrc} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} title="Open full image"
+            <a {...fileLink(fileSrc, c.filename)} data-testid={`capture-file-${c.id}`} title="Open full image"
               className="inline-block overflow-hidden rounded-xl ring-1 ring-slate-900/[0.08]">
               <img src={fileSrc} alt={c.filename || "attachment"} className="h-28 w-auto object-cover" />
             </a>
           ) : (
-            <a href={fileSrc} target="_blank" rel="noopener noreferrer" data-testid={`capture-file-${c.id}`} className={SMALL_PILL}>
+            <a {...fileLink(fileSrc, c.filename)} data-testid={`capture-file-${c.id}`} className={SMALL_PILL}>
               <FilePdf size={14} aria-hidden="true" /> Open file{c.filename ? ` · ${c.filename}` : ""}
             </a>
           )}

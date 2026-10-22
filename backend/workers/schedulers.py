@@ -82,6 +82,13 @@ async def _followup_scheduler_loop():
                 await _maybe_run_retention_sweep()
             except Exception as e:
                 logger.warning(f"[followup-scheduler] retention sweep failed: {e}")
+            # 2026-10-22 — Finance deletes older than 30 days can no longer be
+            # put back; their copies are emptied (services/finance_trash).
+            try:
+                from services.finance_trash import purge_expired
+                await purge_expired()
+            except Exception as e:
+                logger.warning(f"[followup-scheduler] finance trash purge failed: {e}")
             # 2026-09-29 — write the day's score down, so that in a month the
             # Ops page has a real past to draw a trend from instead of the
             # invented one it has always refused. Leader-locked and once per

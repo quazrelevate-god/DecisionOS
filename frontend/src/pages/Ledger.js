@@ -44,6 +44,7 @@ import { AddRecordControl, AddRecordDialogs } from "./finance/FinanceForms";
 import { OverviewTab } from "./finance/FinanceOverview";
 import { AssetsTab, ExpensesTab, InventoryTab, RevenueTab } from "./finance/FinanceRecords";
 import { RecordPaymentDialog, SetRateDialog, UseStockDialog } from "./finance/MoneyActions";
+import { FinanceMoreMenu, useFinanceDelete } from "./finance/FinanceDelete";
 import { CARD, LoadError } from "./finance/financeKit";
 import { LIST_LIMIT, PERIODS, periodOf } from "./finance/ledgerMath";
 
@@ -328,14 +329,12 @@ export default function Ledger() {
   const cur = summary?.currency || tenant?.currency || "INR";
   const overviewReady = !summaryQ.isLoading && !revenueQ.isLoading && !expensesQ.isLoading && !assetsQ.isLoading && !inventoryQ.isLoading;
 
-  const del = async (kind, id) => {
-    try { await api.delete(`/${kind}/${id}`); invalidate(); toast.success(t("finance.deleted")); }
-    catch { toast.error(t("finance.del_failed")); }
-  };
-  const delRevenue = async (kind, id) => {
-    try { await api.delete(`/revenue/${kind}/${id}`); invalidate(); toast.success(t("finance.deleted")); }
-    catch { toast.error(t("finance.del_failed")); }
-  };
+  /* 2026-10-22 (client) — a tap on the bin deleted the row on the spot, with
+     no question and no way back, and got the books wrong as it went (a deleted
+     payment left its invoice "received"). Every delete — one row or a
+     selection — now asks first, saying what goes with it, and can be put back
+     for 30 days (pages/finance/FinanceDelete, backend services/finance_trash). */
+  const deleting = useFinanceDelete();
 
   return (
     <div data-testid="finance-page">
@@ -377,6 +376,7 @@ export default function Ledger() {
                 options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} triggerClassName="h-11 w-auto min-w-[11rem] text-sm" />
             )}
             {canLedger && <AddRecordControl tab={tab} onPick={setAdding} />}
+            {canLedger && <FinanceMoreMenu cur={cur} />}
           </div>
         </div>
       </div>
@@ -400,20 +400,20 @@ export default function Ledger() {
       )}
       {tab === "revenue" && (
         <RevenueTab key={filterParam} data={revenueQ.data} loading={revenueQ.isLoading} error={revenueQ.isError}
-          cur={cur} onDelete={delRevenue} onChange={invalidate} onPay={setPaying} onSetRate={setSettingRate}
+          cur={cur} onDelete={deleting.ask} onChange={invalidate} onPay={setPaying} onSetRate={setSettingRate}
           initialFilter={filterParam} />
       )}
       {tab === "expenses" && (
         <ExpensesTab rows={expensesQ.data || []} loading={expensesQ.isLoading} error={expensesQ.isError} payables={payablesQ.data}
-          cur={cur} onDelete={(id) => del("expenses", id)} onChange={invalidate} onPay={setPaying}
+          cur={cur} onDelete={deleting.ask} onChange={invalidate} onPay={setPaying}
           onSetRate={setSettingRate} needsRate={summary?.totals?.needs_rate} />
       )}
       {tab === "assets" && (
-        <AssetsTab rows={assetsQ.data || []} loading={assetsQ.isLoading} error={assetsQ.isError} cur={cur} onDelete={(id) => del("assets", id)} />
+        <AssetsTab rows={assetsQ.data || []} loading={assetsQ.isLoading} error={assetsQ.isError} cur={cur} onDelete={deleting.ask} />
       )}
       {tab === "inventory" && (
         <InventoryTab rows={inventoryQ.data || []} loading={inventoryQ.isLoading} error={inventoryQ.isError} cur={cur}
-          onDelete={(id) => del("inventory", id)} onUse={setUsingStock} />
+          onDelete={deleting.ask} onUse={setUsingStock} />
       )}
       {tab === "inbox" && <CaptureReview />}
 
@@ -422,6 +422,7 @@ export default function Ledger() {
       <RecordPaymentDialog invoice={paying} onOpenChange={(o) => !o && setPaying(null)} onDone={invalidate} />
       <UseStockDialog item={usingStock} onOpenChange={(o) => !o && setUsingStock(null)} onDone={invalidate} />
       <SetRateDialog invoice={settingRate} home={cur} onOpenChange={(o) => !o && setSettingRate(null)} onDone={invalidate} />
+      {deleting.dialog}
     </div>
   );
 }

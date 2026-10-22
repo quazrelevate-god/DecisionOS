@@ -20,6 +20,8 @@ import api from "../../lib/api";
 import { inr, money, timeAgo, fullTime, shortDate } from "../../lib/format";
 import { requestStatus, requestType, HISTORY_WORDS, OPEN_REQUEST } from "../../lib/requests";
 import { DesignCheckbox } from "../neuglass/DesignCheckbox";
+// A new tab on the web; in the app, signed in and through the share sheet.
+import { fileLink } from "../../lib/native/files";
 import {
   CHIP, QUIET_CHIP, DRAWER_FIELD, DRAWER_TRACK, GLASS_PILL, INK_PILL, MAROON_PILL,
 } from "../neuglass/glass";
@@ -161,7 +163,7 @@ export function RequestCard({ r, highlight = false, onChanged }) {
         <ul className="mt-3 flex flex-wrap gap-1.5" data-testid={`request-files-${r.id}`}>
           {r.attachments.map((a) => (
             <li key={a.id}>
-              <a href={`${BACKEND}/api/files/${a.id}/download`} target="_blank" rel="noreferrer"
+              <a {...fileLink(`${BACKEND}/api/files/${a.id}/download`, a.filename)}
                 className={`flex max-w-[14rem] items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs font-medium text-neutral-700 hover:text-neutral-900 ${GLASS_PILL}`}>
                 <Paperclip size={12} weight="bold" aria-hidden="true" className="shrink-0" />
                 <span className="truncate">{a.filename}</span>

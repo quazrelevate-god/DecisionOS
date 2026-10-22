@@ -1042,6 +1042,20 @@ async def _bootstrap():
         await db.invoices.create_index([("tenant_id", 1), ("contact_name", 1)])
         await db.payments.create_index([("tenant_id", 1), ("invoice_id", 1)])
         await db.expenses.create_index([("tenant_id", 1), ("date", -1)])
+        # 2026-10-22 (client) — Finance delete / undo an import / restore
+        # (services/finance_trash): what goes with what, and the trash itself.
+        await db.payments.create_index([("tenant_id", 1), ("applications.invoice_id", 1)])
+        await db.expenses.create_index([("tenant_id", 1), ("invoice_id", 1)])
+        await db.expenses.create_index([("tenant_id", 1), ("ingestion_id", 1)])
+        await db.invoices.create_index([("tenant_id", 1), ("ingestion_id", 1)])
+        await db.payments.create_index([("tenant_id", 1), ("ingestion_id", 1)])
+        await db.finance_trash.create_index("id")
+        await db.finance_trash.create_index([("tenant_id", 1), ("deleted_at", -1)])
+        await db.finance_trash.create_index([("status", 1), ("restore_until", 1)])
+        await db.finance_trash_rows.create_index([("batch_id", 1)])
+        await db.finance_trash_rows.create_index([("tenant_id", 1), ("coll", 1), ("doc.number", 1)])
+        await db.retired_invoice_numbers.create_index([("tenant_id", 1), ("number", 1)], unique=True)
+        await db.finance_exports.create_index("token_hash")
         await db.complaints.create_index([("tenant_id", 1), ("status", 1), ("created_at", -1)])
         # S9 (U8-09.2): index gap-fill. These list endpoints filter by tenant_id
         # and sort by created_at, but had no supporting index (workflows had only

@@ -158,6 +158,8 @@ async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
         raise HTTPException(status_code=400, detail="This upload has already been filed")
     if ing.get("status") == "discarded":
         raise HTTPException(status_code=400, detail="This upload was discarded")
+    if ing.get("status") == "undone":
+        raise HTTPException(status_code=400, detail="This import was undone. Put it back from Recently deleted, or upload the file again.")
     created = await commit_ingestion_records(user["tenant_id"], user["id"], _normalise_records(inp.records),
                                              ingestion_id, ing.get("source", "upload"))
     await db.ingestions.update_one({"id": ingestion_id},
@@ -186,7 +188,11 @@ async def commit_ingestion(ingestion_id: str, inp: IngestCommitInput,
 async def list_ingestions(status: Optional[str] = None,
                           user: dict = Depends(require_any_perm("finance", "data_input"))):
     q = upload_scope(user)
-    if status in ("review", "filed", "failed", "discarded"):
+    if status == "filed":
+        # 2026-10-22 — an import that was undone stays on Filed, saying so,
+        # with the way to put it back (services/finance_trash).
+        q["status"] = {"$in": ["filed", "undone"]}
+    elif status in ("review", "failed", "discarded", "undone"):
         q["status"] = status
     rows = await db.ingestions.find(q, {"_id": 0}).sort("created_at", -1).to_list(50)
     ids = list({r["created_by"] for r in rows if r.get("created_by")})
@@ -213,7 +219,7 @@ async def discard_ingestion(ingestion_id: str, user: dict = Depends(require_any_
     ing = await db.ingestions.find_one({**upload_scope(user), "id": ingestion_id}, {"_id": 0})
     if not ing:
         raise HTTPException(status_code=404, detail="Not found")
-    if ing.get("status") == "filed":
+    if ing.get("status") in ("filed", "undone"):
         raise HTTPException(status_code=400, detail="This upload has already been filed")
     await db.ingestions.update_one({"id": ingestion_id, "tenant_id": user["tenant_id"]}, {"$set": {
         "status": "discarded", "discarded_at": now_iso(), "discarded_by": user["id"]}})

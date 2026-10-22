@@ -439,6 +439,9 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
                     "unit_cost": round((amount - gst["input_tax_credit"]) / qty, 2) if qty else amount - gst["input_tax_credit"],
                     "currency": inv_cur, "vendor_name": vend,
                     "notes": f"From bill {inv.get('number') or ''}".strip(),
+                    # 2026-10-22 — so deleting the bill, or undoing this
+                    # import, takes the stock too (services/finance_trash).
+                    "invoice_id": inv_id, "ingestion_id": ingestion_id,
                 }, source=source)
                 created["inventory"] = created.get("inventory", 0) + 1
             else:
@@ -490,7 +493,7 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             "assignee_role": followup_role, "assignee_id": None,
             "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
             "status": "todo", "due_date": due, "decision_id": None,
-            "source": "ingest", "created_at": now_iso(),
+            "source": "ingest", "ingestion_id": ingestion_id, "created_at": now_iso(),
         })
         created["tasks"] += 1
 

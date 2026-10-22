@@ -23,6 +23,9 @@ import {
 } from "./financeKit";
 import { latestEntryAt, daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
 import { BillsToPayPanel, InvoiceRowActions, NeedsRateNote } from "./MoneyActions";
+// 2026-10-22 (client) — select-and-delete, and every delete asks first
+// (FinanceDelete: the preview says what goes with it; it can be put back).
+import { SelectToggle, SelectionBar, useSelection } from "./FinanceDelete";
 // J2-07 — the Date columns printed the stored "2026-09-22". shortDate reads it
 // back as a day ("22 Sep 2026"); the tables still SORT on the raw value.
 import { shortDate } from "../../lib/format";
@@ -203,7 +206,8 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
   const f = fmt(cur);
   const tt = data?.totals || {};
   const invoices = useMemo(() => data?.invoices || [], [data]);
-  const payments = data?.payments || [];
+  const payments = useMemo(() => data?.payments || [], [data]);
+  const group = useState(null);
   // U7-08.1: status filter + sort; KR-10: ?filter= seeds the filter.
   const [statusFilter, setStatusFilter] = useState(FILTER_KEYS.includes(initialFilter) ? initialFilter : "all");
   const [sortKey, setSortKey] = useState("date-desc");
@@ -231,6 +235,8 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
     else if (sortKey === "overdue") sorted.sort((a, b) => (daysSince(b.date) || 0) - (daysSince(a.date) || 0));
     return sorted;
   }, [invoices, statusFilter, sortKey]);
+  const selInv = useSelection(filtered, () => "invoice", "invoices", group);
+  const selPay = useSelection(payments, () => "payment", "payments", group);
   // Audit 2026-10-08: in the company's currency; no-rate foreign invoices left out.
   const filteredTotal = filtered.reduce((sum, s) => sum + (("amount_base" in s ? s.amount_base : s.amount) || 0), 0);
 
@@ -300,7 +306,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
       cell: (s) => (
         <span className="inline-flex items-center justify-end gap-1">
           <InvoiceRowActions inv={{ ...s, currency: s.currency || cur }} onPay={onPay} onSetRate={onSetRate} />
-          <DeleteButton onClick={() => onDelete("invoice", s.id)} testid={`revenue-invoice-delete-${s.id}`} label="Delete invoice" />
+          <DeleteButton onClick={() => onDelete([{ kind: "invoice", id: s.id }])} testid={`revenue-invoice-delete-${s.id}`} label="Delete invoice" />
         </span>
       ) },
   ];
@@ -314,7 +320,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
     { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900",
       cell: (p) => (p.currency && p.currency !== cur ? fmt(p.currency)(p.amount) : f(p.amount)) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
-      cell: (p) => <DeleteButton onClick={() => onDelete("payment", p.id)} testid={`revenue-payment-delete-${p.id}`} label="Delete payment" /> },
+      cell: (p) => <DeleteButton onClick={() => onDelete([{ kind: "payment", id: p.id }])} testid={`revenue-payment-delete-${p.id}`} label="Delete payment" /> },
   ];
 
   return (
@@ -349,8 +355,11 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
 
       <ListCard title="Sales & service invoices" count={invoices.length}
         action={invoices.length > 0 && (
-          <GlassSelect testid="revenue-sort" ariaLabel="Sort invoices" value={sortKey} onChange={setSortKey} align="end"
-            options={SORTS} triggerClassName="h-10 w-auto min-w-[11rem] text-sm" />
+          <span className="flex flex-wrap items-center gap-2">
+            <SelectToggle sel={selInv} rows={filtered} testid="revenue-invoices-select" />
+            <GlassSelect testid="revenue-sort" ariaLabel="Sort invoices" value={sortKey} onChange={setSortKey} align="end"
+              options={SORTS} triggerClassName="h-10 w-auto min-w-[11rem] text-sm" />
+          </span>
         )}>
         {invoices.length > 0 && (
           <div role="group" aria-label="Filter invoices" data-testid="revenue-status-filter"
@@ -383,16 +392,19 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
             rowTestid={(s) => `revenue-invoice-row-${s.id}`}
             rowClass={(s) => (isInvoiceOverdue(s) ? "bg-rose-50/40" : "")}
             footer={filtered.length > 1 ? { label: `Showing ${filtered.length} of ${invoices.length}`, value: f(filteredTotal), testid: "revenue-filtered-total" } : undefined}
-            columns={invoiceColumns} />
+            columns={invoiceColumns} select={selInv} />
         )}
       </ListCard>
 
       {payments.length > 0 && (
-        <ListCard title="Payments received" count={payments.length}>
+        <ListCard title="Payments received" count={payments.length}
+          action={<SelectToggle sel={selPay} rows={payments} testid="revenue-payments-select" />}>
           <DataList testid="revenue-payments-table" rows={payments} rowKey={(p) => p.id}
-            rowTestid={(p) => `revenue-payment-row-${p.id}`} columns={paymentColumns} />
+            rowTestid={(p) => `revenue-payment-row-${p.id}`} columns={paymentColumns} select={selPay} />
         </ListCard>
       )}
+      <SelectionBar sel={selInv} onDelete={() => onDelete(selInv.items(), selInv.stop)} />
+      <SelectionBar sel={selPay} onDelete={() => onDelete(selPay.items(), selPay.stop)} />
     </div>
   );
 }
@@ -441,6 +453,12 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
   const { t } = useTranslation();
   const f = fmt(cur);
   const { user } = useAuth();
+  const group = useState(null);
+  const sel = useSelection(rows, () => "expense", "expenses", group);
+  // 2026-10-22 — payments made had no list of their own, so one could not be
+  // deleted at all; they sit under the expenses now, like Payments received.
+  const paid = useMemo(() => payables?.payments || [], [payables]);
+  const selPaid = useSelection(paid, () => "payment", "paid", group);
   const canApprove = hasPerm(user, "approvals");
   const decide = async (e, approve) => {
     try {
@@ -484,7 +502,7 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
         <span className="flex items-center justify-end gap-1.5">
           <button type="button" className={SMALL_PILL} data-testid={`expense-rate-${e.id}`}
             onClick={() => onSetRate({ ...e, kind: "expense" })}>Set rate</button>
-          <DeleteButton onClick={() => onDelete(e.id)} testid={`expense-delete-${e.id}`} label="Delete expense" />
+          <DeleteButton onClick={() => onDelete([{ kind: "expense", id: e.id }])} testid={`expense-delete-${e.id}`} label="Delete expense" />
         </span>
       ) : (
         e.approval_status === "pending" && canApprove ? (
@@ -494,14 +512,15 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
             <button type="button" className={SMALL_PILL} data-testid={`expense-reject-${e.id}`}
               onClick={() => decide(e, false)}>Reject</button>
           </span>
-        ) : <DeleteButton onClick={() => onDelete(e.id)} testid={`expense-delete-${e.id}`} label="Delete expense" />
+        ) : <DeleteButton onClick={() => onDelete([{ kind: "expense", id: e.id }])} testid={`expense-delete-${e.id}`} label="Delete expense" />
       )) },
   ];
   return (
     <div className="space-y-5">
       <NeedsRateNote rows={needsRate} testid="expenses-needs-rate" />
       {/* Audit F-02 — the supplier bills still unpaid, with a way to pay them. */}
-      <BillsToPayPanel bills={payables?.open_invoices} total={payables?.totals?.payable_outstanding || 0} cur={cur} onPay={onPay} />
+      <BillsToPayPanel bills={payables?.open_invoices} total={payables?.totals?.payable_outstanding || 0} cur={cur} onPay={onPay}
+        onDelete={(b) => onDelete([{ kind: "bill", id: b.id }])} />
       <CommittedPanel rows={payables?.committed} cur={cur} />
       <NeedsMatchingPanel title="Supplier payments to match" testid="payables-needs-matching"
         hint="These payments to suppliers couldn’t be auto-linked to a purchase bill. Pick the bill they settle, or mark it as a standalone expense."
@@ -509,12 +528,33 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
         endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }}
         onChange={onChange} />
       <AiPanel scope="expenses" scopeLabel={t("finance.t_expenses").toLowerCase()} changedAt={latestEntryAt(null, rows)} />
-      <ListCard title={t("finance.t_expenses")} count={loading || error ? null : rows.length}>
+      <ListCard title={t("finance.t_expenses")} count={loading || error ? null : rows.length}
+        action={<SelectToggle sel={sel} rows={rows} testid="expenses-select" />}>
         <Records loading={loading} error={error} what="expenses" rows={rows}
           empty={<EmptyNote icon={Receipt} title={t("finance.empty_exp_title")} hint={t("finance.empty_exp_hint")} />}>
-          <DataList columns={columns} rows={rows} rowKey={(e) => e.id} rowTestid={(e) => `expense-row-${e.id}`} testid="expenses-table" />
+          <DataList columns={columns} rows={rows} rowKey={(e) => e.id} rowTestid={(e) => `expense-row-${e.id}`} testid="expenses-table" select={sel} />
         </Records>
       </ListCard>
+      {paid.length > 0 && (
+        <ListCard title="Payments made" count={paid.length}
+          action={<SelectToggle sel={selPaid} rows={paid} testid="payments-made-select" />}>
+          <DataList testid="payments-made-table" rows={paid} rowKey={(p) => p.id} rowTestid={(p) => `payment-made-row-${p.id}`}
+            select={selPaid} columns={[
+              { key: "supplier", head: "Supplier", role: "title", tdClass: "font-medium text-slate-900",
+                cell: (p) => <>{p.contact_name || "—"}<SourceTag source={p.source} /></> },
+              { key: "date", head: "Date", role: "meta", tdClass: "tabular-nums text-slate-600", value: (p) => p.date, cell: (p) => shortDate(p.date) || "—" },
+              { key: "method", head: "Method", role: "meta", tdClass: "text-slate-600", value: (p) => p.method, cell: (p) => p.method || "—" },
+              { key: "ref", head: "Reference", role: "meta", tdClass: "text-slate-600",
+                value: (p) => p.reference || p.invoice_number, cell: (p) => p.reference || p.invoice_number || "—" },
+              { key: "amount", head: "Amount", role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900",
+                cell: (p) => (p.currency && p.currency !== cur ? fmt(p.currency)(p.amount) : f(p.amount)) },
+              { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
+                cell: (p) => <DeleteButton onClick={() => onDelete([{ kind: "payment", id: p.id }])} testid={`payment-made-delete-${p.id}`} label="Delete payment" /> },
+            ]} />
+        </ListCard>
+      )}
+      <SelectionBar sel={sel} onDelete={() => onDelete(sel.items(), sel.stop)} />
+      <SelectionBar sel={selPaid} onDelete={() => onDelete(selPaid.items(), selPaid.stop)} />
     </div>
   );
 }
@@ -522,6 +562,8 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
 export function AssetsTab({ rows, loading, error, cur, onDelete }) {
   const { t } = useTranslation();
   const f = fmt(cur);
+  const group = useState(null);
+  const sel = useSelection(rows, () => "asset", "assets", group);
   const STATUS = {
     active: { tone: "good", label: t("finance.active") },
     maintenance: { tone: "warn", label: t("finance.maintenance") },
@@ -540,17 +582,19 @@ export function AssetsTab({ rows, loading, error, cur, onDelete }) {
       } },
     { key: "value", head: t("finance.a_value"), role: "amount", align: "right", tdClass: "font-semibold tabular-nums text-slate-900", cell: (a) => f(a.purchase_amount) },
     { key: "act", head: <span className="sr-only">Actions</span>, role: "action", align: "right",
-      cell: (a) => <DeleteButton onClick={() => onDelete(a.id)} testid={`asset-delete-${a.id}`} label="Delete asset" /> },
+      cell: (a) => <DeleteButton onClick={() => onDelete([{ kind: "asset", id: a.id }])} testid={`asset-delete-${a.id}`} label="Delete asset" /> },
   ];
   return (
     <div className="space-y-5">
       <AiPanel scope="assets" scopeLabel={t("finance.t_assets").toLowerCase()} />
-      <ListCard title={t("finance.t_assets")} count={loading || error ? null : rows.length}>
+      <ListCard title={t("finance.t_assets")} count={loading || error ? null : rows.length}
+        action={<SelectToggle sel={sel} rows={rows} testid="assets-select" />}>
         <Records loading={loading} error={error} what="assets" rows={rows}
           empty={<EmptyNote icon={Buildings} title={t("finance.empty_asset_title")} hint={t("finance.empty_asset_hint")} />}>
-          <DataList columns={columns} rows={rows} rowKey={(a) => a.id} rowTestid={(a) => `asset-row-${a.id}`} testid="assets-table" />
+          <DataList columns={columns} rows={rows} rowKey={(a) => a.id} rowTestid={(a) => `asset-row-${a.id}`} testid="assets-table" select={sel} />
         </Records>
       </ListCard>
+      <SelectionBar sel={sel} onDelete={() => onDelete(sel.items(), sel.stop)} />
     </div>
   );
 }
@@ -558,6 +602,8 @@ export function AssetsTab({ rows, loading, error, cur, onDelete }) {
 export function InventoryTab({ rows, loading, error, cur, onDelete, onUse }) {
   const { t } = useTranslation();
   const f = fmt(cur);
+  const group = useState(null);
+  const sel = useSelection(rows, () => "inventory", "inventory", group);
   const columns = [
     { key: "item", head: t("finance.i_item"), role: "title", tdClass: "font-medium text-slate-900",
       cell: (i) => <>{i.item}<AttachmentLink att={i.attachment} /></> },
@@ -575,19 +621,21 @@ export function InventoryTab({ rows, loading, error, cur, onDelete, onUse }) {
             <button type="button" className={SMALL_PILL} data-testid={`inventory-use-${i.id}`}
               onClick={() => onUse({ ...i, currency: i.currency || cur })}>Use</button>
           )}
-          <DeleteButton onClick={() => onDelete(i.id)} testid={`inventory-delete-${i.id}`} label="Delete item" />
+          <DeleteButton onClick={() => onDelete([{ kind: "inventory", id: i.id }])} testid={`inventory-delete-${i.id}`} label="Delete item" />
         </span>
       ) },
   ];
   return (
     <div className="space-y-5">
       <AiPanel scope="inventory" scopeLabel={t("finance.t_inventory").toLowerCase()} />
-      <ListCard title={t("finance.t_inventory")} count={loading || error ? null : rows.length}>
+      <ListCard title={t("finance.t_inventory")} count={loading || error ? null : rows.length}
+        action={<SelectToggle sel={sel} rows={rows} testid="inventory-select" />}>
         <Records loading={loading} error={error} what="inventory" rows={rows}
           empty={<EmptyNote icon={Package} title={t("finance.empty_inv_title")} hint={t("finance.empty_inv_hint")} />}>
-          <DataList columns={columns} rows={rows} rowKey={(i) => i.id} rowTestid={(i) => `inv-row-${i.id}`} testid="inventory-table" />
+          <DataList columns={columns} rows={rows} rowKey={(i) => i.id} rowTestid={(i) => `inv-row-${i.id}`} testid="inventory-table" select={sel} />
         </Records>
       </ListCard>
+      <SelectionBar sel={sel} onDelete={() => onDelete(sel.items(), sel.stop)} />
     </div>
   );
 }

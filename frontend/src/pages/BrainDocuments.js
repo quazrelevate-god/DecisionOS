@@ -4,6 +4,7 @@ import {
   Upload, MagnifyingGlass, File, Trash, DownloadSimple, Lock, Paperclip, FileText,
 } from "@phosphor-icons/react";
 import api, { formatApiError } from "../lib/api";
+import { downloadFrom } from "../lib/native/files";
 import { EmptyState, Loader, ConfirmAction } from "../components/common";
 import { useAuth } from "../context/AuthContext";
 import { ReportButton } from "../components/ReportButton";
@@ -221,18 +222,9 @@ export function DocumentsPanel({ focusId = null }) {
     }
   };
 
-  const download = async (doc) => {
-    try {
-      const res = await api.get(`/brain/documents/${doc.id}/download`, { responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement("a");
-      a.href = url; a.download = doc.filename || doc.title;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Couldn't download");
-    }
-  };
+  // A download in a browser, the share sheet in the app (lib/native/files).
+  const download = (doc) => downloadFrom(`/brain/documents/${doc.id}/download`, doc.filename || doc.title,
+    { failed: "Couldn't download" });
 
   return (
     <div data-testid="brain-documents-panel">

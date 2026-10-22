@@ -250,6 +250,13 @@ export function AllAppsPanel({
   // can already see." Twelve destinations, and the bento shows them all.
   const searchable = tiles.length + utility.length > 12;
 
+  /* 2026-10-22, founder — the same rule as the dock's More (DockSlider):
+     Preferences is a tile like the rest when an odd count leaves a hole in the
+     last row, and keeps its full-width row only when the grid is full. */
+  const fillHole = shown.length % 2 === 1;
+  const gridTiles = fillHole ? [...shown, ...shownUtility] : shown;
+  const rowUtility = fillHole ? [] : shownUtility;
+
   const pick = (tile) => {
     if (tile.to) {
       onClose?.();
@@ -417,7 +424,7 @@ export function AllAppsPanel({
                 </h3>
                 {/* ASK-38 — two up, equal, no dense packing: see TILE_INK. */}
                 <div className="grid grid-cols-2 gap-2.5">
-                  {shown.map((tile) => (
+                  {gridTiles.map((tile) => (
                     <Tile key={tile.key} tile={tile} onPick={pick} />
                   ))}
                 </div>
@@ -426,7 +433,7 @@ export function AllAppsPanel({
 
             {/* §5.7's utility strip: 56px, hairline-separated, icon + 13px label,
                 horizontally distributed. Sign out last, in danger text. */}
-            {shownUtility.length > 0 && (
+            {rowUtility.length > 0 && (
               <section
                 aria-labelledby="allapps-h-utility"
                 data-testid="allapps-utility"
@@ -440,7 +447,7 @@ export function AllAppsPanel({
                     is inside, chevron. It is one item and a one-up row says so
                     better than a lone tile in a two-up grid. */}
                 <div className="flex flex-col gap-2.5">
-                  {shownUtility.map((item) => (
+                  {rowUtility.map((item) => (
                     <button
                       key={item.key}
                       type="button"

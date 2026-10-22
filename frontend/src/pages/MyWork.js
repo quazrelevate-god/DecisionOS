@@ -4,6 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import api from "../lib/api";
+// A file opens in a new tab on the web; in the app, signed in and through the share sheet.
+import { fileLink } from "../lib/native/files";
 import { timeAgo, fullTime, TASK_STATUS_LABELS } from "../lib/format";
 import { roleLabel } from "../lib/departments";
 import { PageHeader, Chip, EmptyState, LoadFailed, SkeletonCard, StickyHeader } from "../components/common";
@@ -1178,7 +1180,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                         </button>
                       : isAudio(a)
                         ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-ref-voice-${t.id}-${a.url}`} />
-                        : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-ref-file-${t.id}-${a.url}`}
+                        : <a key={a.url} {...fileLink(url(a.url), a.filename)} data-testid={`detail-ref-file-${t.id}-${a.url}`}
                             className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
                             <FileIcon size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                           </a>
@@ -1218,7 +1220,7 @@ function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
                   {voices.map((a) => (
                     isAudio(a)
                       ? <audio key={a.url} controls preload="none" src={url(a.url)} className="h-9 w-full" data-testid={`detail-voice-${t.id}-${a.url}`} />
-                      : <a key={a.url} href={url(a.url)} target="_blank" rel="noreferrer" data-testid={`detail-proof-file-${t.id}-${a.url}`}
+                      : <a key={a.url} {...fileLink(url(a.url), a.filename)} data-testid={`detail-proof-file-${t.id}-${a.url}`}
                           className="inline-flex items-center gap-1.5 nm-tile px-2.5 py-1.5 text-xs font-mono hover:bg-accent transition-colors max-w-[220px]">
                           <FileIcon size={14} weight="bold" /> <span className="truncate">{a.filename || "file"}</span>
                         </a>
@@ -2452,7 +2454,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           </button>
         : isAudio(a)
           ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9 max-w-full" data-testid={`att-voice${sfx}-${t.id}-${a.url}`} />
-          : <a key={a.url} href={`${beUrl}${a.url}`} target="_blank" rel="noreferrer" data-testid={`att-file${sfx}-${t.id}-${a.url}`}
+          : <a key={a.url} {...fileLink(`${beUrl}${a.url}`, a.filename)} data-testid={`att-file${sfx}-${t.id}-${a.url}`}
               className="inline-flex max-w-[180px] items-center gap-1.5 rounded-pill bg-white/80 px-2.5 py-1.5 text-xs text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white">
               <FileIcon size={13} weight="bold" aria-hidden="true" /> <span className="truncate">{a.filename || "file"}</span>
             </a>

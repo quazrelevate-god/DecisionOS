@@ -271,18 +271,17 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
   const navigate = useNavigate();
   /* The nine, in the order the panel has always had them: the destinations
      first, Settings last. */
-  const items = React.useMemo(
-    () => [
-      ...buildTiles({ user, t }),
-      /* Settings is the menu's one utility, and it was a full-width strip
-         under the grid in the floating panel. Keeping it full width here is
-         the same distinction and it saves the last row from being a single
-         half-pill with a hole beside it — which reads as a missing item
-         rather than as the end of the list. */
-      ...buildUtility({ user, t }).map((x) => ({ ...x, wide: true })),
-    ],
-    [user, t]
-  );
+  const items = React.useMemo(() => {
+    const tiles = buildTiles({ user, t });
+    /* Settings (Preferences) is the menu's one utility, last. 2026-10-22,
+       founder — it is a pill the same size as the rest. Requests made the
+       owner's list odd, and a full-width Preferences under a half-empty row
+       left the hole it was meant to prevent. So it takes the empty half when
+       there is one, and the whole row only when the grid above is already full:
+       either way the last row has no hole. */
+    const wide = tiles.length % 2 === 0;
+    return [...tiles, ...buildUtility({ user, t }).map((x) => ({ ...x, wide }))];
+  }, [user, t]);
   // The Android back gesture closes the menu rather than leaving the page.
   useBackDismiss(true, (o) => { if (!o) onClose?.(); });
 
@@ -295,18 +294,18 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
           bar like this already has: press More again, tap anywhere off the bar,
           or pick something. A button whose only job is "undo the last tap" was
           the fourth, and it was the one taking up the most room. */}
-      {/* px-5 pt-3.5, not px-3 pt-2.5: the corner is a 48px arc now (it is the
-          bar's own), and at 12px in and 10px down the label sat inside the
-          sweep — "More" came out with its M clipped on both platforms. At 20
-          and 14 the curve has passed. */}
-      <div className="flex shrink-0 items-center px-5 pb-0.5 pt-3.5">
-        <span className="text-[13px] font-medium text-white/60">{t("bottomnav.more", "More")}</span>
-      </div>
+      {/* NO "More" HEADING. (2026-10-22, founder.) The More button it grew out
+          of is lit right underneath, so the word was a label on a menu that is
+          already labelled, and its row was the tallest thing in the sheet. */}
 
       {/* Five rows of two, on the dock's own ink — no card between them and it.
           It scrolls only if a role ever has more than fits, which no role does
-          today; the panel is sized to its content. */}
-      <div className="ng-scroll-quiet min-h-0 max-h-[calc(58dvh/var(--ui-scale,1))] overflow-y-auto overscroll-contain px-2 py-2">
+          today; the panel is sized to its content.
+          8px on every side: with the heading gone the first row meets the
+          sheet's top corners, which are 30px since 2026-10-22 (DexSlider) —
+          a 44px pill's 22px end plus these 8px — so the corner and the pill's
+          end share one centre and the gap between them is 8px all round. */}
+      <div className="ng-scroll-quiet min-h-0 max-h-[calc(58dvh/var(--ui-scale,1))] overflow-y-auto overscroll-contain px-2 pb-2 pt-2">
         <div className="grid grid-cols-2 gap-2" data-testid="dock-more-grid">
           {items.map((it) => {
             const Icon = it.icon;

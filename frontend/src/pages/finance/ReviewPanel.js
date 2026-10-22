@@ -12,6 +12,8 @@ import {
   ArrowsLeftRight, CheckCircle, CurrencyCircleDollar, Eye, ListChecks, Receipt, Sparkle, Trash, UsersThree, WarningCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { downloadFrom } from "../../lib/native/files";
+import { isNativeApp } from "../../lib/native/back";
 import api, { formatApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { hasPerm } from "../../lib/perms";
@@ -134,7 +136,8 @@ function FilePreview({ fileUrl, kind, filename, testid }) {
   if (!fileUrl) return null;
   const src = `${process.env.REACT_APP_BACKEND_URL}${fileUrl}`;
   const isImage = kind === "image" || /\.(png|jpe?g|webp|gif)$/i.test(filename || "");
-  const view = () => { if (isImage) setOpen(true); else window.open(src, "_blank", "noopener"); };
+  // A PDF: a new tab on the web; in the app, signed in and through the share sheet.
+  const view = () => { if (isImage) setOpen(true); else if (isNativeApp()) downloadFrom(src, filename); else window.open(src, "_blank", "noopener"); };
   return (
     <>
       <button type="button" data-testid={testid} onClick={view} title="View attachment" className={cn(SMALL_PILL, "h-10")}>

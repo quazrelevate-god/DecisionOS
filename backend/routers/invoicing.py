@@ -111,10 +111,13 @@ async def _next_number(tid: str, tenant: dict, on: Optional[str] = None) -> str:
     prefix = (tenant.get("invoice_prefix") or invoicing.default_prefix(tenant.get("name") or "")).strip().strip("/")
     fy = invoicing.financial_year(on)
     stem = f"{prefix}/{fy}/"
-    # The next free number in this series, counting the ones already typed by hand.
-    nums = [int(m.group(1)) for n in await db.invoices.distinct(
-        "number", {"tenant_id": tid, "type": "sales_invoice"})
-        for m in [re.fullmatch(re.escape(stem) + r"(\d+)", str(n or ""))] if m]
+    # The next free number in this series, counting the ones already typed by
+    # hand — and (2026-10-22) the ones deleted: an issued number is retired for
+    # good, and one in Recently deleted may yet come back (services/finance_trash).
+    from services.finance_trash import numbers_in_use
+    taken = await db.invoices.distinct("number", {"tenant_id": tid, "type": "sales_invoice"})
+    nums = [int(m.group(1)) for n in [*taken, *await numbers_in_use(tid, db)]
+            for m in [re.fullmatch(re.escape(stem) + r"(\d+)", str(n or ""))] if m]
     return f"{stem}{(max(nums) + 1 if nums else 1):03d}"
 
 
@@ -164,6 +167,12 @@ async def create_gst_invoice(inp: GstInvoiceInput, user: dict = Depends(require_
     number = (inp.number or "").strip()[:40] or await _next_number(tid, tenant, date)
     if await db.invoices.find_one({"tenant_id": tid, "type": "sales_invoice", "number": number}, {"_id": 1}):
         raise HTTPException(status_code=409, detail=f"Invoice {number} already exists. Use the next number.")
+    from services.finance_trash import deleted_number
+    gone = await deleted_number(tid, number, db)
+    if gone == "retired":
+        raise HTTPException(status_code=409, detail=f"Invoice {number} was issued before and deleted — a GST invoice number is never used twice. Use the next number.")
+    if gone:
+        raise HTTPException(status_code=409, detail=f"Invoice {number} is in Recently deleted. Put it back, or use the next number.")
     gstin = (inp.customer_gstin or "").strip().upper()
     if gstin and not re.fullmatch(r"\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]", gstin):
         raise HTTPException(status_code=400, detail="That GSTIN doesn't look right — it is 15 characters, like 33ABCDE1234F1Z5.")

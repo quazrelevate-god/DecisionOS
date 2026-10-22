@@ -20,6 +20,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowsLeftRight, FilePdf, HandCoins, Package, Plus, Receipt, Trash, WarningCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { downloadFrom } from "../../lib/native/files";
 import api, { formatApiError } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { lex } from "../../lib/lexicon";
@@ -112,7 +113,7 @@ export function RecordPaymentDialog({ invoice, onOpenChange, onDone }) {
   );
 }
 
-export function BillsToPayPanel({ bills, total, cur, onPay }) {
+export function BillsToPayPanel({ bills, total, cur, onPay, onDelete }) {
   const f = fmt(cur);
   if (!bills || bills.length === 0) return null;
   return (
@@ -141,6 +142,14 @@ export function BillsToPayPanel({ bills, total, cur, onPay }) {
             {b.balance < b.amount - 0.01 && <Tag tone="warn">part paid</Tag>}
             <button type="button" className={SMALL_INK} data-testid={`bill-pay-${b.id}`}
               onClick={() => onPay({ ...b, type: "purchase_bill", currency: b.currency || cur })}>Record payment</button>
+            {/* 2026-10-22 — a supplier bill could not be deleted anywhere. It
+                asks first, and the expense booked from it goes with it. */}
+            {onDelete && (
+              <button type="button" onClick={() => onDelete(b)} data-testid={`bill-delete-${b.id}`} aria-label="Delete bill"
+                className="grid h-9 w-9 place-items-center rounded-full text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300">
+                <Trash size={15} aria-hidden="true" />
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -149,20 +158,12 @@ export function BillsToPayPanel({ bills, total, cur, onPay }) {
 }
 
 /* ---------------------------------------------------------------- F-03 ---- */
-export async function downloadInvoicePdf(inv) {
-  try {
-    const res = await api.get(`/invoices/${inv.id}/pdf`, { responseType: "blob" });
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${String(inv.number || "invoice").replace(/[^A-Za-z0-9_-]+/g, "-")}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  } catch {
-    toast.error("Couldn't make the PDF. Try again in a moment.");
-  }
+// In the app this opens the share sheet — send it to the buyer, or save it
+// (lib/native/files: the webview has no download handler).
+export function downloadInvoicePdf(inv) {
+  return downloadFrom(`/invoices/${inv.id}/pdf`,
+    `${String(inv.number || "invoice").replace(/[^A-Za-z0-9_-]+/g, "-")}.pdf`,
+    { failed: "Couldn't make the PDF. Try again in a moment." });
 }
 
 export function InvoiceRowActions({ inv, onPay, onSetRate }) {

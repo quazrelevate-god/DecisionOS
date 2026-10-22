@@ -31,6 +31,7 @@ import routers.files as files_rt
 import routers.ledger as ledger
 import routers.staff_requests as rt
 import services.finance_words as finance_words
+import services.finance_trash as finance_trash
 import services.staff_requests as svc
 from models.finance import ExpensePatch
 from models.staff_requests import RequestCreateInput, RequestFulfilInput, RequestNoteInput
@@ -56,7 +57,7 @@ PEOPLE = (OWNER, MANAGER, STAFF, LONER, FIN, OUTSIDER)
 @pytest.fixture
 def env(monkeypatch):
     db = FakeDB()
-    for mod in (svc, rt, ledger, finance_words, files_rt):
+    for mod in (svc, rt, ledger, finance_words, files_rt, finance_trash):
         monkeypatch.setattr(mod, "db", db)
     sent = []
 

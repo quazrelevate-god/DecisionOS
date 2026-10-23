@@ -1,6 +1,6 @@
 {
-  "count": 409,
-  "sha": "afe9a5ef4105c41c240cad3b3c6461ac08ad645013c441765e334438870eb1c9",
+  "count": 411,
+  "sha": "ff29746a721e99d6cd21ca1926f32ce397e2322f1f33921b977eaf30a7d447ae",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -43,6 +43,7 @@
     "GET /api/admin/ai-keys/status",
     "GET /api/admin/ai-quality",
     "GET /api/admin/alerts",
+    "GET /api/admin/analytics/status",
     "GET /api/admin/announcements",
     "GET /api/admin/audit",
     "GET /api/admin/audit-log",
@@ -236,6 +237,7 @@
     "POST /api/admin/admins",
     "POST /api/admin/admins/invite",
     "POST /api/admin/admins/{admin_id}/invite",
+    "POST /api/admin/analytics/rebuild",
     "POST /api/admin/announcements",
     "POST /api/admin/announcements/{aid}/email",
     "POST /api/admin/impersonation/{session_id}/revoke",

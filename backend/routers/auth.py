@@ -682,6 +682,14 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         after={"email": email, "role": "owner"},
         **_ctx,
     )
+    # 2026-10-23 (admin console v2): the company's first lifecycle event and
+    # the owner's first sign-in.
+    from services import lifecycle as _lifecycle
+    from services.presence import note_sign_in as _note_sign_in
+    await _lifecycle.record(tenant_id, "signed_up", by=user_id, source="signup",
+                            data={"plan": tenant_doc.get("plan"), "industry": tenant_doc.get("industry")},
+                            database=db)
+    await _note_sign_in(db, user_id=user_id, tenant_id=tenant_id, method="signup")
     os_summary = {
         # WE-02: 'workflows' count removed (was reading the ghost
         # workflow_templates field that no longer exists on tenant).
@@ -867,6 +875,8 @@ async def login(inp: LoginInput, request: Request, response: Response):
         )
     except Exception:
         pass  # best-effort — the JWT is still valid; session-mgmt is bonus
+    from services.presence import note_sign_in as _note_sign_in
+    await _note_sign_in(db, user_id=user["id"], tenant_id=tenant_id, method="password")
     # FIX-006-A (S0-08): cookie-only in prod (see login_response).
     return login_response(token, user=user, tenant=tenant)
 
@@ -1725,6 +1735,8 @@ async def verify_2fa_on_login(inp: TotpVerifyLoginInput, request: Request,
         meta={"used_backup_code": used_backup},
         **_ctx,
     )
+    from services.presence import note_sign_in as _note_sign_in
+    await _note_sign_in(db, user_id=user_id, tenant_id=tenant_id, method="two_factor")
     # FIX-006-A (S0-08): cookie-only in prod.
     return login_response(token, user=user, tenant=tenant, used_backup_code=used_backup)
 

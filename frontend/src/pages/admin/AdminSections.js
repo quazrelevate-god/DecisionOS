@@ -285,6 +285,11 @@ export function UsersSection() {
     ) },
     { key: "tenant_name", label: "Workspace", render: (u) => (u.tenant_id ? <LinkOut onClick={() => go(`workspaces/${u.tenant_id}`)}>{u.tenant_name}</LinkOut> : "—") },
     { key: "role", label: "Role", sortValue: (u) => roleLabel(u.role), render: (u) => roleLabel(u.role) },
+    { key: "last_seen_at", label: "Last seen", render: (u) => (
+      <span title={u.last_login_at ? `Last signed in ${fmtDateTime(u.last_login_at)}` : "No sign-in recorded yet"}>
+        {u.last_seen_at ? fmtAgo(u.last_seen_at) : "Not yet"}
+      </span>
+    ) },
     { key: "created_at", label: "Joined", mobile: false, render: (u) => fmtDate(u.created_at) },
     { key: "suspended", label: "Status", sortValue: (u) => (u.suspended ? 1 : 0), render: (u) => statusChip(u.suspended) },
     { key: "_menu", label: "", sortable: false, className: "w-10", render: (u) => (
@@ -634,6 +639,8 @@ export function HealthSection() {
         </Panel>
       )}
 
+      <AnalyticsDataPanel />
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><Pulse size={18} /> AI reliability</h2>
         <Segmented value={range} onChange={setRange} options={OBS_RANGES} ariaLabel="Window" testid="health-range" />
@@ -688,3 +695,55 @@ export function HealthSection() {
   );
 }
 
+
+/* 2026-10-23 (admin console v2 P1): the analytics foundations, so an operator
+   can see they are filling before any chart is drawn on them -- sign-ins and
+   presence, the daily roll-up kept for good, activation. */
+function AnalyticsDataPanel() {
+  const { isSuper } = useAdmin();
+  const { data, error, reload } = useAdminGet("/admin/analytics/status");
+  const [busy, setBusy] = useState(false);
+  const rebuild = async () => {
+    setBusy(true);
+    try {
+      const r = await api.post("/admin/analytics/rebuild");
+      toast.success(r.data.started ? "Counting again. This takes a few minutes; Refresh shows when it's done."
+        : "A count is already running.");
+      reload();
+    } catch (e) { toast.error(errText(e)); } finally { setBusy(false); }
+  };
+  const last = [data?.rollup?.last_run, data?.backfill?.last_run].filter(Boolean).sort().pop();
+  const a = data?.activation;
+  return (
+    <Panel title="Analytics data" className="mb-6" testid="health-analytics"
+      hint="Sign-ins, who was here each day, and a daily count per workspace, kept for good"
+      actions={isSuper ? <Btn size="sm" icon={ArrowClockwise} busy={busy} onClick={rebuild} data-testid="analytics-rebuild">Count again</Btn> : null}>
+      {error && !data ? <LoadError what="the analytics status" onRetry={reload} /> : !data ? <Loading /> : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <div className="text-xs text-slate-500">Daily count last ran</div>
+            <div className="text-sm text-slate-900" title={fmtDateTime(last)}>{data.rebuilding ? "Counting now…" : last ? fmtAgo(last) : "Not yet"}</div>
+            <div className="text-xs text-slate-500">{fmtNum(data.kept.daily_rows)} company-days kept</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">People here</div>
+            <div className="text-sm tabular-nums text-slate-900">
+              {fmtNum(data.active_people.today)} today · {fmtNum(data.active_people.last_7_days)} this week · {fmtNum(data.active_people.last_30_days)} this month
+            </div>
+            <div className="text-xs text-slate-500">Counted from sign-ins since 23 Oct 2026</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">Activated workspaces</div>
+            <div className="text-sm tabular-nums text-slate-900">{fmtNum(a.activated)} of {fmtNum(a.workspaces)}</div>
+            <div className="text-xs text-slate-500">{fmtNum(a.activated_of_those)} of {fmtNum(a.signed_up_90_days)} signed up in 90 days</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500">Lifecycle events kept</div>
+            <div className="text-sm tabular-nums text-slate-900">{fmtNum(data.kept.lifecycle_events)}</div>
+            <div className="text-xs text-slate-500">Sign-ups, plan changes, payments, suspensions</div>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+}

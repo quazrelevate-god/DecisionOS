@@ -8,7 +8,7 @@ import re
 from services.tenant_ai_keys import TENANT_PUBLIC
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from core import db, now_iso, create_token, set_auth_cookie, login_response
 from services.otp import _issue_otp, consume_otp
@@ -210,7 +210,7 @@ async def invite_start(token: str):
 
 
 @router.post("/auth/otp/verify")
-async def verify_otp(inp: OtpVerifyInput, response: Response):
+async def verify_otp(inp: OtpVerifyInput, response: Response, request: Request = None):
     # Audit D-03: an invite names its own member, so the number comes from it
     # (the invite page is never given the full number to send back).
     invite_user = None
@@ -343,6 +343,13 @@ async def verify_otp(inp: OtpVerifyInput, response: Response):
     from services.auth.phone import has_credentials_elsewhere
     user["credentials_elsewhere"] = await has_credentials_elsewhere(db, user)
     set_auth_cookie(response, token)
+    # 2026-10-23 (admin console v2): the phone-code sign-in -- the way most
+    # people sign in -- left no audit row, no session row and no "last seen",
+    # so the console could not count who uses the product. Now it leaves the
+    # same three as the password sign-in (services/presence.record_sign_in).
+    from services.presence import record_sign_in
+    await record_sign_in(db, request, user=user, tenant_id=tenant_id, role=user.get("role"),
+                         token=token, method="phone_code")
     # FIX-006-A (S0-08): cookie is source of truth; only surface the JWT
     # in the body when AUTH_RETURN_TOKEN is on (dev/test) so prod XSS
     # can't leak it.

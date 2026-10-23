@@ -257,6 +257,7 @@ async def razorpay_webhook(request: Request):
         from services.plans import PLAN_KEYS
         if plan_key not in PLAN_KEYS:
             return {"ok": True, "invalid_plan": plan_key}
+        _before = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "plan": 1})
         await db.tenants.update_one(
             {"id": tenant_id},
             {"$set": {
@@ -265,6 +266,13 @@ async def razorpay_webhook(request: Request):
                 "trial_ends_at": None,
             }},
         )
+        # 2026-10-23 (admin console v2): money in, and the plan it moved to.
+        from services import lifecycle as _lifecycle
+        await _lifecycle.record(tenant_id, "payment_received", source="razorpay",
+                                data={"event": event, "plan": plan_key,
+                                      "amount_paise": int(body_ent.get("amount") or 0)}, database=db)
+        await _lifecycle.plan_changed(tenant_id, (_before or {}).get("plan"), plan_key, source="razorpay",
+                                      database=db)
         await log_activity(
             tenant_id, "system", "plan_upgraded",
             f"Plan upgraded to '{plan_key}' via Razorpay ({event})",
@@ -274,6 +282,9 @@ async def razorpay_webhook(request: Request):
 
     # payment.failed / subscription.halted -- just log; don't downgrade
     # automatically. Founder decides how to handle dunning.
+    from services import lifecycle as _lifecycle
+    await _lifecycle.record(tenant_id, "subscription_halted" if event == "subscription.halted" else "payment_failed",
+                            source="razorpay", data={"event": event, "plan": plan_key}, database=db)
     await log_activity(
         tenant_id, "system", "plan_payment_issue",
         f"Payment issue: {event} on plan '{plan_key}'",

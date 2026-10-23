@@ -49,6 +49,9 @@ TENANT_COLLECTIONS = [
     "device_tokens", "active_sessions", "audit_log", "ai_calls", "crm_activities",
     "support_tickets", "operating_score_history", "operating_score_cache",
     "content_reports",
+    # 2026-10-23 (admin console v2): presence, the daily roll-up and the
+    # lifecycle events are the company's too -- they go with it.
+    "presence_days", "tenant_daily", "lifecycle_events",
 ]
 
 

@@ -112,11 +112,19 @@ from core.permissions import (  # noqa: F401
 # --- Shared small helpers ---------------------------------------------------
 async def log_activity(tenant_id: str, actor: str, kind: str, message: str,
                        entity_type: Optional[str] = None, entity_id: Optional[str] = None) -> None:
+    at = now_iso()
     await db.activity.insert_one({
         "id": new_id(), "tenant_id": tenant_id, "actor": actor, "kind": kind,
         "message": message, "entity_type": entity_type, "entity_id": entity_id,
-        "created_at": now_iso(),
+        "created_at": at,
     })
+    # 2026-10-23 (admin console v2): the first time a company does each thing
+    # lands once on the company (services/milestones). Never fails the caller.
+    try:
+        from services.milestones import note as _milestone
+        await _milestone(tenant_id, kind, at, database=db)
+    except Exception:
+        pass
 
 
 async def add_decision_event(decision_id: str, label: str, actor: str = "System", kind: str = "event") -> None:

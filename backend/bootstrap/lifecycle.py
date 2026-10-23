@@ -110,6 +110,18 @@ async def _bootstrap():
             )
         except Exception as e:
             logger.warning(f"operating_score_history index: {e}")
+        # 2026-10-23 (admin console v2): presence, the daily roll-up and the
+        # lifecycle events (services/presence, rollups, lifecycle). The first
+        # two are keyed by _id "<tenant>:...:<day>"; these serve the reads.
+        try:
+            await db.presence_days.create_index([("day", 1), ("tenant_id", 1)], name="presence_day_tenant")
+            await db.presence_days.create_index([("tenant_id", 1), ("day", -1)], name="presence_tenant_day")
+            await db.tenant_daily.create_index([("day", 1)], name="tenant_daily_day")
+            await db.tenant_daily.create_index([("tenant_id", 1), ("day", -1)], name="tenant_daily_tenant_day")
+            await db.lifecycle_events.create_index([("tenant_id", 1), ("created_at", -1)], name="lifecycle_tenant_at")
+            await db.lifecycle_events.create_index([("kind", 1), ("created_at", -1)], name="lifecycle_kind_at")
+        except Exception as e:
+            logger.warning(f"admin analytics indexes: {e}")
         # FIX-004-B (RBAC-13): memberships collection indexes.
         # Compound unique on (user_id, tenant_id) — one membership per
         # (person, workspace). Query indexes for the two hot paths:

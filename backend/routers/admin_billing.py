@@ -136,6 +136,10 @@ async def billing_set_plan(tenant_id: str, payload: PlanOverrideInput,
     sets["plan_updated_at"] = now_iso()
     sets["plan_updated_by"] = admin.get("email")
     await db.tenants.update_one({"id": tenant_id}, {"$set": sets})
+    if "plan" in sets:
+        from services import lifecycle as _lifecycle
+        await _lifecycle.plan_changed(tenant_id, t.get("plan"), sets["plan"], source="admin",
+                                      by=admin.get("email"), reason=payload.reason, database=db)
     await log_admin_action(
         admin, "billing_plan_override",
         f"{_tname(t)}: {', '.join(changes)}. Reason: {(payload.reason or '—').strip()[:200]}",

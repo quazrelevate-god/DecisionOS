@@ -4,7 +4,7 @@ and the company's AI consent, so the RAG unit tests need somewhere to read them)
 
 Supports what those paths use: find_one / find (+ async iteration, to_list, sort,
 limit) / insert_one / insert_many / update_one / update_many (with upsert, $set,
-$inc, $unset, $push) / find_one_and_update / delete_many / count_documents. Filters: equality, dotted paths,
+$setOnInsert, $inc, $unset, $push, $max, $min) / find_one_and_update / delete_many / count_documents. Filters: equality, dotted paths,
 $in, $nin, $ne, $exists, $and, $or. aggregate (awaited, as Motor 3 does) runs $match, $group ($sum, $max,
 $min), $sort and $limit — enough for the admin console's grouped counts (2026-10-22).
 """
@@ -114,19 +114,27 @@ class _Cursor:
             raise StopAsyncIteration
 
 
-def _apply(doc, update):
+def _apply(doc, update, inserting=False):
     for op, fields in update.items():
+        if op == "$setOnInsert" and not inserting:
+            continue
         for k, v in fields.items():
             parts = k.split(".")
             cur = doc
             for p in parts[:-1]:
                 cur = cur.setdefault(p, {})
-            if op == "$set":
+            if op in ("$set", "$setOnInsert"):
                 cur[parts[-1]] = copy.deepcopy(v)
             elif op == "$inc":
                 cur[parts[-1]] = (cur.get(parts[-1]) or 0) + v
             elif op == "$unset":
                 cur.pop(parts[-1], None)
+            elif op == "$max":
+                if cur.get(parts[-1]) is None or v > cur[parts[-1]]:
+                    cur[parts[-1]] = copy.deepcopy(v)
+            elif op == "$min":
+                if cur.get(parts[-1]) is None or v < cur[parts[-1]]:
+                    cur[parts[-1]] = copy.deepcopy(v)
             elif op == "$push":
                 cur.setdefault(parts[-1], []).append(copy.deepcopy(v))
 
@@ -185,7 +193,7 @@ class FakeCollection:
                 return _Res(1, 1)
         if upsert:
             new = {k: v for k, v in flt.items() if not k.startswith("$")}
-            _apply(new, update)
+            _apply(new, update, inserting=True)
             self.docs.append(new)
         return _Res(0)
 
@@ -199,7 +207,7 @@ class FakeCollection:
                 return _project(d, projection) if return_document else before
         if upsert:
             new = {k: v for k, v in flt.items() if not k.startswith("$")}
-            _apply(new, update)
+            _apply(new, update, inserting=True)
             self.docs.append(new)
             return _project(new, projection) if return_document else None
         return None

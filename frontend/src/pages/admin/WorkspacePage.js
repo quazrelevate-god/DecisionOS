@@ -50,6 +50,10 @@ export function WorkspacePage({ id }) {
   const c = sel.counts;
   const rate = sel.usd_inr || 84;
   const suspendedPeople = sel.members.filter((m) => m.suspended).length;
+  // The later of the last thing done (activity) and the last time anyone was
+  // here (presence, 2026-10-23) -- reading counts as being active.
+  const lastActive = [sel.health.last_activity, ...sel.members.map((m) => m.last_seen_at)]
+    .filter(Boolean).sort().pop() || null;
 
   const setTenant = (patch) => setData((d) => ({ ...d, tenant: { ...d.tenant, ...patch } }));
   const run = async (key, fn) => {
@@ -152,7 +156,8 @@ export function WorkspacePage({ id }) {
       )}>
       {t.suspended && (
         <div className="mb-4 rounded-2xl bg-[#cf222e]/[0.06] px-4 py-3 text-sm text-[#8f1620] ring-1 ring-inset ring-[#cf222e]/15">
-          This workspace is suspended: nobody in it can sign in. {canWrite && <button type="button" onClick={reactivate} className="font-semibold underline underline-offset-2">Reactivate</button>}
+          This workspace is suspended{t.suspended_at ? ` since ${fmtDate(t.suspended_at)}` : ""}: nobody in it can sign in.
+          {t.suspended_reason ? ` Reason: ${t.suspended_reason}.` : ""} {canWrite &&<button type="button" onClick={reactivate} className="font-semibold underline underline-offset-2">Reactivate</button>}
         </div>
       )}
 
@@ -161,7 +166,7 @@ export function WorkspacePage({ id }) {
         <Stat label="Tasks" value={fmtNum(c.tasks)} sub={`${fmtNum(c.tasks_done)} done`} />
         <Stat label="Decisions" value={fmtNum(c.decisions)} sub={`${fmtNum(c.workflows)} workflows`} />
         <Stat label="AI spend · 30 days" value={fmtInr(usdToInr(sel.spend.last_30d.cost, rate))} sub={`${fmtNum(sel.spend.last_30d.calls)} calls`} />
-        <Stat label="Last active" value={<span className="text-[1.35rem]">{fmtAgo(sel.health.last_activity)}</span>} sub={fmtDateTime(sel.health.last_activity)} />
+        <Stat label="Last active" value={<span className="text-[1.35rem]">{fmtAgo(lastActive)}</span>} sub={fmtDateTime(lastActive)} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -175,6 +180,10 @@ export function WorkspacePage({ id }) {
                       <div className="truncate text-sm font-medium text-slate-900">{m.name || "No name"} <span className="font-normal text-slate-500">· {roleLabel(m.role, t.roles)}</span></div>
                       <div className="truncate text-xs text-slate-500">{m.email || "—"}</div>
                     </div>
+                    <span className="hidden shrink-0 text-xs text-slate-500 sm:block" title={m.last_login_at ? `Last signed in ${fmtDateTime(m.last_login_at)}` : "No sign-in recorded yet"}
+                      data-testid={`person-seen-${m.id}`}>
+                      {m.last_seen_at ? `Seen ${fmtAgo(m.last_seen_at).toLowerCase()}` : "Not seen yet"}
+                    </span>
                     {statusChip(m.suspended)}
                     <RowMenu testid={`person-menu-${m.id}`} items={[
                       { label: "Download this person's data", icon: DownloadSimple, onSelect: () => personData(m) },
@@ -185,6 +194,8 @@ export function WorkspacePage({ id }) {
               </ul>
             )}
           </Panel>
+
+          <ActivationPanel milestones={sel.milestones || []} />
 
           <Panel title="Recent activity" testid="workspace-activity">
             {sel.activity.length === 0 ? <Empty compact icon={ClockCounterClockwise} title="Nothing has happened here yet." /> : (
@@ -211,6 +222,8 @@ export function WorkspacePage({ id }) {
               <Row k="Calls, all time" v={fmtNum(sel.spend.all_time.calls)} />
             </dl>
           </Panel>
+
+          <HistoryPanel events={sel.lifecycle || []} />
 
           <RetentionPanel tenantId={t.id} canWrite={canWrite} />
 
@@ -275,6 +288,71 @@ function Row({ k, v }) {
       <dt className="text-slate-500">{k}</dt>
       <dd className="min-w-0 truncate text-right text-slate-900">{v}</dd>
     </div>
+  );
+}
+
+/* 2026-10-23 (admin console v2 P1): the firsts this company reached
+   (services/milestones). Activated = a decision approved and a teammate
+   invited within 14 days of signing up. */
+const ACTIVATION_STEPS = ["first_decision_at", "first_decision_approved_at", "first_invite_at", "first_task_done_at",
+  "first_finance_at", "first_whatsapp_at", "first_payment_at"];
+
+function ActivationPanel({ milestones }) {
+  const by = Object.fromEntries(milestones.map((m) => [m.key, m]));
+  const activated = by.activated_at?.at;
+  const steps = ACTIVATION_STEPS.map((k) => by[k]).filter(Boolean);
+  const others = milestones.filter((m) => m.at && !ACTIVATION_STEPS.includes(m.key) && m.key !== "activated_at");
+  return (
+    <Panel title="Activation" testid="workspace-activation"
+      hint="Activated means a decision approved and a teammate invited within 14 days of signing up"
+      actions={activated ? <Chip tone="good">Activated {fmtDate(activated)}</Chip> : <Chip tone="warn">Not activated</Chip>}>
+      <ul className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        {steps.map((m) => (
+          <li key={m.key} className="flex items-center gap-2 text-sm">
+            {m.at ? <CheckCircle size={16} weight="fill" className="shrink-0 text-[#116329]" />
+              : <span className="h-4 w-4 shrink-0 rounded-full ring-1 ring-inset ring-slate-400/60" aria-hidden="true" />}
+            <span className={m.at ? "text-slate-900" : "text-slate-500"}>{m.label}</span>
+            <span className="ml-auto text-xs text-slate-500">{m.at ? fmtDate(m.at) : "Not yet"}</span>
+          </li>
+        ))}
+      </ul>
+      {others.length > 0 && (
+        <p className="mt-3 text-xs text-slate-500">Also: {others.map((m) => `${m.label.toLowerCase()} ${fmtDate(m.at)}`).join(" · ")}</p>
+      )}
+    </Panel>
+  );
+}
+
+const EVENT_LABEL = {
+  signed_up: "Signed up", plan_changed: "Plan changed", payment_received: "Payment received",
+  payment_failed: "Payment failed", subscription_halted: "Subscription halted",
+  suspended: "Suspended", reactivated: "Reactivated",
+};
+const EVENT_TONE = { payment_failed: "bad", subscription_halted: "bad", suspended: "bad", payment_received: "good", reactivated: "good" };
+
+function HistoryPanel({ events }) {
+  return (
+    <Panel title="History" testid="workspace-history" hint="Sign-up, plan changes, payments and suspensions">
+      {events.length === 0 ? <div className="text-xs text-slate-500">Nothing recorded yet.</div> : (
+        <ul className="max-h-64 space-y-2 overflow-y-auto">
+          {events.map((e) => (
+            <li key={e.id || `${e.kind}-${e.created_at}`} className="text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <Chip tone={EVENT_TONE[e.kind] || "neutral"}>{EVENT_LABEL[e.kind] || humanize(e.kind)}</Chip>
+                <span className="text-xs text-slate-500" title={fmtDateTime(e.created_at)}>{fmtDate(e.created_at)}</span>
+              </div>
+              {(e.kind === "plan_changed" || e.reason || e.by) && (
+                <div className="mt-0.5 text-xs text-slate-600">
+                  {e.kind === "plan_changed" ? `${planLabel(e.data?.from)} to ${planLabel(e.data?.to)}` : ""}
+                  {e.reason ? `${e.kind === "plan_changed" ? " · " : ""}${e.reason}` : ""}
+                  {e.by && e.source === "admin" ? ` · ${e.by}` : ""}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

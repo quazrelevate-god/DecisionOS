@@ -98,6 +98,7 @@ const AUDIT_LABEL = {
   admin_create: "Added an admin", admin_invite: "Invited an admin", admin_invite_accepted: "Accepted an admin invite",
   admin_update: "Changed an admin", admin_2fa_enable: "Turned on two-step sign-in",
   admin_2fa_disable: "Turned off two-step sign-in",
+  analytics_rebuild: "Recounted the analytics data",
 };
 export const auditLabel = (a) => AUDIT_LABEL[a] || humanize(a);
 

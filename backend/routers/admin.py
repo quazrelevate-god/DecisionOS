@@ -198,8 +198,16 @@ async def admin_suspend_tenant(tenant_id: str, payload: Optional[ReasonInput] = 
     t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
     if not t:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    await db.tenants.update_one({"id": tenant_id}, {"$set": {"suspended": True}})
+    reason = ((payload.reason if payload else "") or "").strip()[:300] or None
+    # 2026-10-23 (admin console v2): since when, why and by whom -- on the
+    # company and as a lifecycle event, not only in the audit log.
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {
+        "suspended": True, "suspended_at": now_iso(), "suspended_reason": reason,
+        "suspended_by": admin.get("email")}})
     await db.users.update_many({"tenant_id": tenant_id}, {"$set": {"tenant_suspended": True}})
+    from services import lifecycle as _lifecycle
+    await _lifecycle.record(tenant_id, "suspended", by=admin.get("email"), source="admin", reason=reason,
+                            database=db)
     name = t.get("company_name") or t.get("name") or tenant_id
     await log_admin_action(admin, "suspend_tenant", _with_reason(f"Suspended workspace {name}", payload),
                            "tenant", tenant_id)
@@ -211,8 +219,12 @@ async def admin_reactivate_tenant(tenant_id: str, admin: dict = Depends(get_plat
     t = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "id": 1, "company_name": 1, "name": 1})
     if not t:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    await db.tenants.update_one({"id": tenant_id}, {"$set": {"suspended": False}})
+    await db.tenants.update_one({"id": tenant_id}, {"$set": {"suspended": False},
+                                                    "$unset": {"suspended_at": "", "suspended_reason": "",
+                                                               "suspended_by": ""}})
     await db.users.update_many({"tenant_id": tenant_id}, {"$unset": {"tenant_suspended": ""}})
+    from services import lifecycle as _lifecycle
+    await _lifecycle.record(tenant_id, "reactivated", by=admin.get("email"), source="admin", database=db)
     name = t.get("company_name") or t.get("name") or tenant_id
     await log_admin_action(admin, "reactivate_tenant", f"Reactivated workspace {name}", "tenant", tenant_id)
     return {"status": "ok", "suspended": False}
@@ -393,6 +405,8 @@ async def admin_users(admin: dict = Depends(get_platform_admin), tenant_id: Opti
         "role": u.get("role"), "phone": u.get("phone"),
         "tenant_id": u.get("tenant_id"), "tenant_name": tmap.get(u.get("tenant_id"), "—"),
         "suspended": bool(u.get("suspended")), "created_at": u.get("created_at"),
+        # 2026-10-23 (admin console v2, services/presence).
+        "last_seen_at": u.get("last_seen_at"), "last_login_at": u.get("last_login_at"),
         # 2026-10-22: someone in a test workspace, or on an example.com address.
         "is_test": is_test_tenant(tdocs.get(u.get("tenant_id")) or {}) or is_test_email(u.get("email")),
     } for u in users]

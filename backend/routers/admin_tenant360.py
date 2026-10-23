@@ -105,6 +105,25 @@ async def admin_tenant_360(tenant_id: str, admin: dict = Depends(get_platform_ad
 
     spend_30d, spend_all = await asyncio.gather(spend("30d"), spend(None))
 
+    # 2026-10-23 (admin console v2): when each person was last here, the
+    # company's milestones and lifecycle, and its last 30 days of counts.
+    from services import lifecycle, rollups
+    from services.milestones import MILESTONE_LABELS
+    seen = {m["user_id"]: m for m in await db.memberships.find(
+        {"tenant_id": tenant_id}, {"_id": 0, "user_id": 1, "last_seen_at": 1, "last_login_at": 1, "status": 1,
+                                    "invited_at": 1, "accepted_at": 1}).to_list(500)}
+    from services.presence import live_last_seen
+    live = await live_last_seen(db, [tenant_id])
+    for m in members:
+        s = seen.get(m["id"]) or {}
+        m["last_seen_at"] = max(filter(None, [s.get("last_seen_at"), live.get((m["id"], tenant_id))]), default=None)
+        m["last_login_at"] = s.get("last_login_at")
+        m["membership_status"] = s.get("status")
+    ms = t.get("milestones") or {}
+    milestones = [{"key": k, "label": label, "at": ms.get(k)} for k, label in MILESTONE_LABELS.items()]
+    events, daily = await asyncio.gather(lifecycle.events_for(tenant_id, 30, database=db),
+                                         rollups.series(tenant_id, 30, database=db))
+
     activity = await db.activity.find(
         {"tenant_id": tenant_id}, {"_id": 0}).sort("created_at", -1).to_list(20)
 
@@ -124,6 +143,7 @@ async def admin_tenant_360(tenant_id: str, admin: dict = Depends(get_platform_ad
             # 2026-10-22 (admin redesign): the workspace page shows the trial's
             # end and whether this is one of our test workspaces.
             "trial_ends_at": t.get("trial_ends_at"),
+            "suspended_at": t.get("suspended_at"), "suspended_reason": t.get("suspended_reason"),
             "is_test": is_test_tenant(t), "test_reason": test_reason(t),
         },
         "usd_inr": await usd_inr_rate(),
@@ -134,6 +154,9 @@ async def admin_tenant_360(tenant_id: str, admin: dict = Depends(get_platform_ad
             "complaints": complaints,
         },
         "members": members,
+        "milestones": milestones,
+        "lifecycle": events,
+        "daily": daily,
         "spend": {"last_30d": spend_30d, "all_time": spend_all},
         "activity": activity,
         "health": {

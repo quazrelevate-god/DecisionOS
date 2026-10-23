@@ -99,6 +99,13 @@ async def _followup_scheduler_loop():
                 await record_all(db)
             except Exception as e:
                 logger.warning(f"[followup-scheduler] score history failed: {e}")
+            # 2026-10-23 (admin console v2) — the day's counts per company,
+            # kept for good (services/rollups); the first run counts back as
+            # far as the data goes and fills milestones.
+            try:
+                await _maybe_run_rollups()
+            except Exception as e:
+                logger.warning(f"[followup-scheduler] daily roll-up failed: {e}")
         except Exception as e:
             # Never let a lock or DB error stop the loop — next tick retries.
             logger.exception(f"[followup-scheduler] tick error: {e}")
@@ -111,6 +118,35 @@ async def _followup_scheduler_loop():
                 except Exception:
                     pass  # natural TTL expiry handles it
         await asyncio.sleep(FOLLOWUP_INTERVAL_SECONDS)
+
+
+ROLLUP_MIN_INTERVAL_SECONDS = 3 * 3600
+
+
+async def _maybe_run_rollups():
+    """Re-count today and yesterday every three hours; once, ever, count back
+    180 days and fill milestones (db.platform_ops markers, like the sweep)."""
+    from services import rollups
+
+    now = datetime.now(timezone.utc)
+    if not await db.platform_ops.find_one({"id": "analytics_backfill"}, {"_id": 0, "id": 1}):
+        result = await rollups.backfill(days=180)
+        await db.platform_ops.update_one(
+            {"id": "analytics_backfill"}, {"$set": {"last_run": now.isoformat(), "last_result": result}}, upsert=True)
+        logger.info(f"[rollups] backfill: {result}")
+    marker = await db.platform_ops.find_one({"id": "daily_rollup"})
+    if marker and marker.get("last_run"):
+        try:
+            last = datetime.fromisoformat(marker["last_run"])
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if (now - last).total_seconds() < ROLLUP_MIN_INTERVAL_SECONDS:
+                return
+        except ValueError:
+            pass
+    rows = await rollups.roll_recent()
+    await db.platform_ops.update_one(
+        {"id": "daily_rollup"}, {"$set": {"last_run": now.isoformat(), "last_result": {"rows": rows}}}, upsert=True)
 
 
 async def _maybe_run_retention_sweep():

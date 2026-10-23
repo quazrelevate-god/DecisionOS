@@ -43,7 +43,7 @@ const PAGE = "min-h-[calc(100vh/var(--ui-scale,1))] bg-[linear-gradient(180deg,h
 const NAV = [
   { items: [{ key: "", label: "Overview", icon: SquaresFour }] },
   { group: "Customers", items: [
-    { key: "workspaces", label: "Workspaces", icon: Buildings },
+    { key: "workspaces", label: "Customers", icon: Buildings },
     { key: "users", label: "Users", icon: Users },
   ] },
   { group: "Support", items: [
@@ -85,7 +85,7 @@ const SECTIONS = {
 function parsePath(pathname) {
   const rest = pathname.replace(/^\/admin\/?/, "").replace(/\/+$/, "");
   const parts = rest ? rest.split("/") : [];
-  return { section: parts[0] || "", id: parts[1] ? decodeURIComponent(parts[1]) : null };
+  return { section: parts[0] || "", id: parts[1] ? decodeURIComponent(parts[1]) : null, sub: parts[2] || null };
 }
 
 function NavList({ section, counts, onGo }) {
@@ -155,7 +155,7 @@ export default function AdminPortal() {
     try { return window.sessionStorage.getItem(NUDGE_KEY) === "1"; } catch { return false; }
   });
 
-  const { section: rawSection, id } = parsePath(location.pathname);
+  const { section: rawSection, id, sub } = parsePath(location.pathname);
   const isInvite = rawSection === "invite";
 
   useEffect(() => {
@@ -288,7 +288,7 @@ export default function AdminPortal() {
 
             <main className="px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
               <div className="mx-auto max-w-6xl">
-                <Active id={id} />
+                <Active id={id} sub={sub} />
               </div>
             </main>
           </div>

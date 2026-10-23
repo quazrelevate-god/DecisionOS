@@ -120,6 +120,7 @@ async def _bootstrap():
             await db.tenant_daily.create_index([("tenant_id", 1), ("day", -1)], name="tenant_daily_tenant_day")
             await db.lifecycle_events.create_index([("tenant_id", 1), ("created_at", -1)], name="lifecycle_tenant_at")
             await db.lifecycle_events.create_index([("kind", 1), ("created_at", -1)], name="lifecycle_kind_at")
+            await db.customer_notes.create_index([("tenant_id", 1), ("created_at", -1)], name="customer_notes_tenant_at")
         except Exception as e:
             logger.warning(f"admin analytics indexes: {e}")
         # FIX-004-B (RBAC-13): memberships collection indexes.

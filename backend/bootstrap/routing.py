@@ -27,6 +27,7 @@ from routers.admin_compliance import router as admin_compliance_router  # Epic 9
 from routers.admin_overview import router as admin_overview_router  # 2026-10-22: admin console Overview
 from routers.admin_invites import router as admin_invites_router  # 2026-10-22: accepting an admin invite (public)
 from routers.admin_analytics import router as admin_analytics_router  # 2026-10-23: analytics foundations
+from routers.admin_customers import router as admin_customers_router  # 2026-10-23: managing customers
 from routers.brain import router as brain_router
 from routers.brain_docs import router as brain_docs_router
 from routers.brain_notes import router as brain_notes_router
@@ -87,6 +88,7 @@ _DOMAIN_ROUTERS = (
     admin_overview_router,     # 2026-10-22: what needs an operator, in one answer
     admin_invites_router,      # 2026-10-22: invite links, outside the /api/admin gate by design
     admin_analytics_router,    # 2026-10-23: presence, daily roll-up, milestones
+    admin_customers_router,    # 2026-10-23: health, notes, tags, owners, views, timeline
     brain_router,
     brain_docs_router,
     brain_notes_router,   # 2026-10-06: Company Brain notes

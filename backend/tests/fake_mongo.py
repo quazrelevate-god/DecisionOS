@@ -4,7 +4,7 @@ and the company's AI consent, so the RAG unit tests need somewhere to read them)
 
 Supports what those paths use: find_one / find (+ async iteration, to_list, sort,
 limit) / insert_one / insert_many / update_one / update_many (with upsert, $set,
-$setOnInsert, $inc, $unset, $push, $max, $min) / find_one_and_update / delete_many / count_documents. Filters: equality, dotted paths,
+$setOnInsert, $inc, $unset, $push, $addToSet, $pull, $max, $min) / find_one_and_update / delete_many / count_documents. Filters: equality, dotted paths,
 $in, $nin, $ne, $exists, $and, $or. aggregate (awaited, as Motor 3 does) runs $match, $group ($sum, $max,
 $min), $sort and $limit — enough for the admin console's grouped counts (2026-10-22).
 """
@@ -137,6 +137,13 @@ def _apply(doc, update, inserting=False):
                     cur[parts[-1]] = copy.deepcopy(v)
             elif op == "$push":
                 cur.setdefault(parts[-1], []).append(copy.deepcopy(v))
+            elif op == "$addToSet":
+                lst = cur.setdefault(parts[-1], [])
+                if v not in lst:
+                    lst.append(copy.deepcopy(v))
+            elif op == "$pull":
+                if isinstance(cur.get(parts[-1]), list):
+                    cur[parts[-1]] = [x for x in cur[parts[-1]] if x != v]
 
 
 def _field(row, ref):

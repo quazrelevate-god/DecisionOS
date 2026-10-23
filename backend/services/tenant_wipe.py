@@ -52,6 +52,8 @@ TENANT_COLLECTIONS = [
     # 2026-10-23 (admin console v2): presence, the daily roll-up and the
     # lifecycle events are the company's too -- they go with it.
     "presence_days", "tenant_daily", "lifecycle_events",
+    # 2026-10-23 (admin console v2 P2): our notes about the company.
+    "customer_notes",
 ]
 
 

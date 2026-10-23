@@ -12,20 +12,21 @@ import api from "../../lib/api";
 import { ConfirmAction } from "../../components/common";
 import { GlassSelect } from "../../components/neuglass/GlassSelect";
 import {
-  Buildings, Users, ArrowClockwise, PencilSimple, Prohibit, ShieldCheck, Key as KeyIcon, WarningCircle,
+  Users, ArrowClockwise, PencilSimple, Prohibit, ShieldCheck, Key as KeyIcon, WarningCircle,
   CheckCircle, Lifebuoy, Flag, CurrencyInr, Eye, Hourglass, Pulse, ClockCounterClockwise, ArrowSquareOut,
-  Flask, Storefront, ChartBar,
+  ChartBar,
 } from "@phosphor-icons/react";
 import {
   useAdmin, useAdminGet, usePersisted, errText, fmtNum, fmtInr, fmtUsd, usdToInr, fmtDate, fmtDateTime, fmtAgo,
-  Btn, Chip, statusChip, planChip, SearchField, Segmented, Toggle, RowMenu, AdminPage, Panel, Loading, Empty,
+  Btn, Chip, statusChip, SearchField, Segmented, Toggle, RowMenu, AdminPage, Panel, Loading, Empty,
   LoadError, Stat, DataTable, ReasonDialog, LinkOut, ADMIN_FIELD,
 } from "./adminUi";
 import {
-  PLAN_OPTIONS, planLabel, providerLabel, keySourceLabel, keyStatus, healthOk, healthLabel, humanize,
+  providerLabel, keySourceLabel, keyStatus, healthOk, healthLabel, humanize,
   auditLabel, AUDIT_GROUPS,
 } from "./adminLabels";
 import { WorkspacePage } from "./WorkspacePage";
+import { CustomersList } from "./CustomersList";
 import { ImpersonationSection } from "./ImpersonationSection";
 
 // --- Overview -----------------------------------------------------------------------------
@@ -151,99 +152,9 @@ export function OverviewSection() {
 }
 
 // --- Workspaces --------------------------------------------------------------------------
-export function WorkspacesSection({ id }) {
-  if (id) return <WorkspacePage id={id} />;
-  return <WorkspaceList />;
-}
-
-function WorkspaceList() {
-  const { go, canWrite } = useAdmin();
-  const location = useLocation();
-  const { data, error, reload, setData } = useAdminGet("/admin/tenants");
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("all");
-  const [plan, setPlan] = useState(() => new URLSearchParams(location.search).get("plan") || "");
-  const [hideTest, setHideTest] = usePersisted("hide_test_workspaces", true);
-
-  const rows = useMemo(() => data?.tenants || [], [data]);
-  const testCount = rows.filter((t) => t.is_test).length;
-  const shown = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return rows.filter((t) => (!hideTest || !t.is_test)
-      && (status === "all" || (status === "suspended" ? t.suspended : !t.suspended))
-      && (!plan || (t.plan || "") === plan)
-      && (!term || `${t.name} ${t.industry} ${t.id}`.toLowerCase().includes(term)));
-  }, [rows, q, status, plan, hideTest]);
-
-  const flag = (id, isTest) => setData((d) => ({
-    ...d, tenants: d.tenants.map((x) => (x.id === id ? { ...x, is_test: isTest, test_reason: "Marked by an admin" } : x)),
-  }));
-  const markTest = async (t, isTest) => {
-    try {
-      await api.post(`/admin/tenants/${t.id}/test-flag`, { is_test: isTest });
-      flag(t.id, isTest);
-      toast.success(isTest ? `${t.name} is marked as a test workspace` : `${t.name} is marked as a customer`, {
-        action: {
-          label: "Undo",
-          onClick: () => api.post(`/admin/tenants/${t.id}/test-flag`, { is_test: !isTest })
-            .then(() => flag(t.id, !isTest)).catch((e) => toast.error(errText(e))),
-        },
-      });
-    } catch (e) { toast.error(errText(e)); }
-  };
-
-  const columns = [
-    { key: "name", label: "Workspace", render: (t) => (
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="truncate font-medium text-slate-900">{t.name}</span>
-          {t.is_test && <Chip title={t.test_reason}>Test</Chip>}
-        </div>
-        <div className="truncate text-xs text-slate-500">{t.industry && t.industry !== "—" ? t.industry : "No industry set"}</div>
-      </div>
-    ) },
-    { key: "plan", label: "Plan", sortValue: (t) => planLabel(t.plan), render: (t) => (
-      <div>{planChip(t.plan)}{t.plan === "trial" && t.trial_ends_at && <div className="mt-1 hidden text-[11px] text-slate-500 md:block">Ends {fmtDate(t.trial_ends_at)}</div>}</div>
-    ) },
-    { key: "users", label: "Users", align: "right" },
-    { key: "tasks", label: "Tasks", align: "right", mobile: false },
-    { key: "decisions", label: "Decisions", align: "right", mobile: false },
-    { key: "last_activity", label: "Last active", render: (t) => <span title={fmtDateTime(t.last_activity)}>{fmtAgo(t.last_activity)}</span> },
-    { key: "created_at", label: "Created", mobile: false, render: (t) => fmtDate(t.created_at) },
-    { key: "suspended", label: "Status", sortValue: (t) => (t.suspended ? 1 : 0), render: (t) => statusChip(t.suspended) },
-    { key: "_menu", label: "", sortable: false, className: "w-10", render: (t) => (
-      <RowMenu testid={`tenant-menu-${t.id}`} items={[
-        { label: "Open", icon: ArrowSquareOut, onSelect: () => go(`workspaces/${t.id}`) },
-        { label: "Mark as test workspace", icon: Flask, hidden: !canWrite || t.is_test, onSelect: () => markTest(t, true), testid: `tenant-mark-test-${t.id}` },
-        { label: "Mark as customer", icon: Storefront, hidden: !canWrite || !t.is_test, onSelect: () => markTest(t, false), testid: `tenant-mark-customer-${t.id}` },
-      ]} />
-    ) },
-  ];
-
-  return (
-    <AdminPage title="Workspaces" testid="admin-tenants"
-      subtitle={data ? `${shown.length} of ${rows.length}${hideTest && testCount ? ` · ${testCount} test workspaces hidden` : ""}` : null}
-      actions={<Btn size="sm" variant="ghost" icon={ArrowClockwise} onClick={reload}>Refresh</Btn>}>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <SearchField value={q} onChange={setQ} placeholder="Search by name, industry or id" testid="tenants-search" className="w-full sm:w-72" />
-        <Segmented value={status} onChange={setStatus} ariaLabel="Status" testid="tenants-status"
-          options={[{ value: "all", label: "All" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }]} />
-        <div className="w-44">
-          <GlassSelect value={plan} onChange={setPlan} ariaLabel="Plan" testid="tenants-plan" triggerClassName="h-10 text-sm"
-            options={[{ value: "", label: "Every plan" }, ...PLAN_OPTIONS]} />
-        </div>
-        <div className="sm:ml-auto"><Toggle checked={hideTest} onChange={setHideTest} label="Hide test workspaces" testid="tenants-hide-test" /></div>
-      </div>
-      {error && !data ? <LoadError what="workspaces" onRetry={reload} /> : !data ? <Loading /> : (
-        <div className={CARD_BASE}>
-          <DataTable rows={shown} columns={columns} onRowClick={(t) => go(`workspaces/${t.id}`)}
-            rowTestid={(t) => `tenant-row-${t.id}`} initialSort={{ key: "last_activity", dir: "desc" }}
-            empty={<Empty icon={Buildings} title={rows.length ? "No workspace matches." : "No workspaces yet."}
-              hint={rows.length ? "Clear the search or the filters to see more." : "Workspaces appear here when a company signs up."} />} />
-        </div>
-      )}
-    </AdminPage>
-  );
+export function WorkspacesSection({ id, sub }) {
+  if (id) return <WorkspacePage id={id} sub={sub} />;
+  return <CustomersList />;
 }
 
 // --- Users ------------------------------------------------------------------------------

@@ -26,8 +26,19 @@ import {
   ReasonDialog, TypedConfirmDialog,
 } from "./adminUi";
 import { PLAN_OPTIONS, planLabel, humanize } from "./adminLabels";
+import { ActivityChart, HealthBreakdown, HealthChip, StageChip } from "./customerKit";
+import { AccountPanel, NotesTab, SupportTab, TimelineTab, UsageTab } from "./WorkspaceTabs";
 
-export function WorkspacePage({ id }) {
+/* 2026-10-23 (admin console v2 P2): the customer page in tabs, each with an
+   address -- /admin/workspaces/<id>/<tab>. */
+const TABS = [
+  { key: "overview", label: "Overview" }, { key: "timeline", label: "Timeline" }, { key: "people", label: "People" },
+  { key: "usage", label: "Usage" }, { key: "billing", label: "Billing" }, { key: "support", label: "Support" },
+  { key: "data", label: "Data" }, { key: "notes", label: "Notes" },
+];
+
+export function WorkspacePage({ id, sub }) {
+  const tab = TABS.some((x) => x.key === sub) ? sub : "overview";
   const { go, canWrite, isSuper } = useAdmin();
   const { data: sel, error, reload, setData } = useAdminGet(`/admin/tenants/${id}/360`);
   const [dialog, setDialog] = useState(null);   // "viewas" | "plan" | "suspend" | "delete"
@@ -38,13 +49,13 @@ export function WorkspacePage({ id }) {
   if (error && !sel) {
     const gone = error?.response?.status === 404;
     return (
-      <AdminPage title={gone ? "Workspace not found" : "Workspace"} back={{ label: "Workspaces", onClick: () => go("workspaces") }} testid="tenant360-detail">
-        {gone ? <Empty title="This workspace doesn't exist, or was deleted." action={<Btn onClick={() => go("workspaces")}>All workspaces</Btn>} />
+      <AdminPage title={gone ? "Workspace not found" : "Workspace"} back={{ label: "Customers", onClick: () => go("workspaces") }} testid="tenant360-detail">
+        {gone ? <Empty title="This workspace doesn't exist, or was deleted." action={<Btn onClick={() => go("workspaces")}>All customers</Btn>} />
           : <LoadError what="this workspace" onRetry={reload} />}
       </AdminPage>
     );
   }
-  if (!sel) return <AdminPage title="Workspace" back={{ label: "Workspaces", onClick: () => go("workspaces") }}><Loading /></AdminPage>;
+  if (!sel) return <AdminPage title="Workspace" back={{ label: "Customers", onClick: () => go("workspaces") }}><Loading /></AdminPage>;
 
   const t = sel.tenant;
   const c = sel.counts;
@@ -54,6 +65,9 @@ export function WorkspacePage({ id }) {
   // here (presence, 2026-10-23) -- reading counts as being active.
   const lastActive = [sel.health.last_activity, ...sel.members.map((m) => m.last_seen_at)]
     .filter(Boolean).sort().pop() || null;
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const activeWeek = sel.members.filter((m) => (m.last_seen_at || "") >= weekAgo).length;
+  const seatsUsed = sel.members.filter((m) => !m.suspended && m.membership_status !== "pending" && m.membership_status !== "removed").length;
 
   const setTenant = (patch) => setData((d) => ({ ...d, tenant: { ...d.tenant, ...patch } }));
   const run = async (key, fn) => {
@@ -137,11 +151,11 @@ export function WorkspacePage({ id }) {
 
   return (
     <AdminPage testid="tenant360-detail"
-      back={{ label: "Workspaces", onClick: () => go("workspaces") }}
+      back={{ label: "Customers", onClick: () => go("workspaces") }}
       title={t.name}
       subtitle={(
         <div className="flex flex-wrap items-center gap-2">
-          {statusChip(t.suspended)}{planChip(t.plan)}
+          <HealthChip health={sel.health_score} testid="workspace-health-chip" /><StageChip stage={sel.stage} />{planChip(t.plan)}
           {t.is_test && <Chip title={t.test_reason}>Test workspace</Chip>}
           <span className="text-slate-500">{[t.industry, t.region, t.currency].filter(Boolean).join(" · ") || "No industry set"} · since {fmtDate(t.created_at)}</span>
         </div>
@@ -161,87 +175,132 @@ export function WorkspacePage({ id }) {
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Stat label="People" value={fmtNum(c.users)} sub={suspendedPeople ? `${suspendedPeople} suspended` : "with a sign-in"} />
-        <Stat label="Tasks" value={fmtNum(c.tasks)} sub={`${fmtNum(c.tasks_done)} done`} />
-        <Stat label="Decisions" value={fmtNum(c.decisions)} sub={`${fmtNum(c.workflows)} workflows`} />
-        <Stat label="AI spend · 30 days" value={fmtInr(usdToInr(sel.spend.last_30d.cost, rate))} sub={`${fmtNum(sel.spend.last_30d.calls)} calls`} />
-        <Stat label="Last active" value={<span className="text-[1.35rem]">{fmtAgo(lastActive)}</span>} sub={fmtDateTime(lastActive)} />
-      </div>
+      <nav className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-900/[0.07]" aria-label="Customer sections" data-testid="workspace-tabs">
+        {TABS.map((tb) => (
+          <a key={tb.key} href={`/admin/workspaces/${t.id}/${tb.key}`} aria-current={tab === tb.key ? "page" : undefined}
+            data-testid={`workspace-tab-${tb.key}`}
+            onClick={(e) => { if (e.metaKey || e.ctrlKey || e.button !== 0) return; e.preventDefault(); go(`workspaces/${t.id}/${tb.key}`, { replace: true }); }}
+            className={`-mb-px shrink-0 border-b-2 px-3 py-2 text-sm transition-colors ${tab === tb.key ? "border-slate-900 font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+            {tb.label}{tb.key === "people" ? ` ${sel.members.length}` : ""}
+          </a>
+        ))}
+      </nav>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Panel title={`People (${sel.members.length})`} hint="Everyone who can sign in to this workspace" testid="workspace-people">
-            {sel.members.length === 0 ? <Empty compact icon={Users} title="No one has signed up here yet." /> : (
-              <ul className="-mx-2 divide-y divide-slate-900/[0.05]">
-                {sel.members.map((m) => (
-                  <li key={m.id} className="flex items-center gap-3 px-2 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-slate-900">{m.name || "No name"} <span className="font-normal text-slate-500">· {roleLabel(m.role, t.roles)}</span></div>
-                      <div className="truncate text-xs text-slate-500">{m.email || "—"}</div>
-                    </div>
-                    <span className="hidden shrink-0 text-xs text-slate-500 sm:block" title={m.last_login_at ? `Last signed in ${fmtDateTime(m.last_login_at)}` : "No sign-in recorded yet"}
-                      data-testid={`person-seen-${m.id}`}>
-                      {m.last_seen_at ? `Seen ${fmtAgo(m.last_seen_at).toLowerCase()}` : "Not seen yet"}
-                    </span>
-                    {statusChip(m.suspended)}
-                    <RowMenu testid={`person-menu-${m.id}`} items={[
-                      { label: "Download this person's data", icon: DownloadSimple, onSelect: () => personData(m) },
-                      { label: "Find in Users", icon: Users, onSelect: () => go("users") },
-                    ]} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
+      {tab === "overview" && (
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <Stat label="People" value={fmtNum(c.users)} sub={suspendedPeople ? `${suspendedPeople} suspended` : "with a sign-in"} />
+            <Stat label="Active · 7 days" value={fmtNum(activeWeek)} sub={`of ${fmtNum(seatsUsed)} seats`} />
+            <Stat label="Tasks" value={fmtNum(c.tasks)} sub={`${fmtNum(c.tasks_done)} done`} />
+            <Stat label="AI spend · 30 days" value={fmtInr(usdToInr(sel.spend.last_30d.cost, rate))} sub={`${fmtNum(sel.spend.last_30d.calls)} calls`} />
+            <Stat label="Last active" value={<span className="text-[1.35rem]">{fmtAgo(lastActive)}</span>} sub={fmtDateTime(lastActive)} />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-4 lg:col-span-2">
+              <Panel title="Active people, last 30 days" testid="workspace-activity-chart"><ActivityChart daily={sel.daily || []} /></Panel>
+              <ActivationPanel milestones={sel.milestones || []} />
+            </div>
+            <div className="space-y-4">
+              <Panel title="Health" hint="Why the score is what it is" testid="workspace-health"><HealthBreakdown health={sel.health_score} /></Panel>
+              <AccountPanel tenantId={t.id} account={sel.account} onSaved={(a) => setData((d) => ({ ...d, account: a }))} />
+            </div>
+          </div>
+        </>
+      )}
 
-          <ActivationPanel milestones={sel.milestones || []} />
+      {tab === "timeline" && <TimelineTab tenantId={t.id} />}
 
-          <Panel title="Recent activity" testid="workspace-activity">
-            {sel.activity.length === 0 ? <Empty compact icon={ClockCounterClockwise} title="Nothing has happened here yet." /> : (
-              <ul className="max-h-[26rem] divide-y divide-slate-900/[0.05] overflow-y-auto">
-                {sel.activity.map((a, i) => (
-                  <li key={i} className="flex items-start justify-between gap-3 py-2.5">
-                    <div className="min-w-0 text-sm text-slate-800 [overflow-wrap:anywhere]">{a.message}</div>
-                    <div className="shrink-0 text-xs text-slate-500" title={fmtDateTime(a.created_at)}>{fmtAgo(a.created_at)}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-        </div>
+      {tab === "people" && (
+        <Panel title={`People (${sel.members.length})`} hint="Everyone who can sign in to this workspace" testid="workspace-people">
+          {sel.members.length === 0 ? <Empty compact icon={Users} title="No one has signed up here yet." /> : (
+            <ul className="-mx-2 divide-y divide-slate-900/[0.05]">
+              {sel.members.map((m) => (
+                <li key={m.id} className="flex items-center gap-3 px-2 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-slate-900">{m.name || "No name"} <span className="font-normal text-slate-500">· {roleLabel(m.role, t.roles)}</span></div>
+                    <div className="truncate text-xs text-slate-500">{m.email || "—"}{m.last_login_at ? ` · signed in ${fmtAgo(m.last_login_at).toLowerCase()}` : ""}</div>
+                  </div>
+                  <span className="hidden shrink-0 text-xs text-slate-500 sm:block" title={m.last_login_at ? `Last signed in ${fmtDateTime(m.last_login_at)}` : "No sign-in recorded yet"}
+                    data-testid={`person-seen-${m.id}`}>
+                    {m.last_seen_at ? `Seen ${fmtAgo(m.last_seen_at).toLowerCase()}` : "Not seen yet"}
+                  </span>
+                  {m.membership_status === "pending" ? <Chip tone="warn">Invited</Chip> : statusChip(m.suspended)}
+                  <RowMenu testid={`person-menu-${m.id}`} items={[
+                    { label: "Download this person's data", icon: DownloadSimple, onSelect: () => personData(m) },
+                    { label: "Find in Users", icon: Users, onSelect: () => go("users") },
+                  ]} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
 
-        <div className="space-y-4">
+      {tab === "usage" && <UsageTab tenantId={t.id} rate={rate} />}
+
+      {tab === "billing" && (
+        <div className="grid gap-4 lg:grid-cols-2">
           <BillingPanel tenant={t} canWrite={canWrite} onChangePlan={() => { setPlanDraft(t.plan || "trial"); setDialog("plan"); }} />
-
-          <Panel title="AI" testid="workspace-ai">
-            <dl className="space-y-2 text-sm">
-              <Row k="Consent to AI processing" v={t.ai_consent ? <Chip tone="good">Given</Chip> : <Chip tone="warn">Not given</Chip>} />
-              <Row k="Spend, 30 days" v={<span title={fmtUsd(sel.spend.last_30d.cost)}>{fmtInr(usdToInr(sel.spend.last_30d.cost, rate))}</span>} />
-              <Row k="Spend, all time" v={<span title={fmtUsd(sel.spend.all_time.cost)}>{fmtInr(usdToInr(sel.spend.all_time.cost, rate))}</span>} />
-              <Row k="Calls, all time" v={fmtNum(sel.spend.all_time.calls)} />
-            </dl>
-          </Panel>
-
           <HistoryPanel events={sel.lifecycle || []} />
-
-          <RetentionPanel tenantId={t.id} canWrite={canWrite} />
-
-          <Panel title="Details">
-            <dl className="space-y-2 text-sm">
-              <Row k="Contacts" v={fmtNum(c.contacts)} />
-              <Row k="Invoices" v={fmtNum(c.invoices)} />
-              <Row k="Open complaints" v={fmtNum(c.complaints)} />
-              <Row k="GST number" v={t.gst || "—"} />
-              <Row k="Workspace id" v={(
-                <button type="button" onClick={copyId} title="Copy" className="inline-flex items-center gap-1 font-mono text-xs text-slate-600 hover:text-slate-900">
-                  {String(t.id).slice(0, 8)}… <Copy size={12} />
-                </button>
-              )} />
-            </dl>
-          </Panel>
         </div>
-      </div>
+      )}
+
+      {tab === "support" && <SupportTab tenantId={t.id} />}
+
+      {tab === "data" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
+            <Panel title="AI" testid="workspace-ai">
+              <dl className="space-y-2 text-sm">
+                <Row k="Consent to AI processing" v={t.ai_consent ? <Chip tone="good">Given</Chip> : <Chip tone="warn">Not given</Chip>} />
+                <Row k="Spend, 30 days" v={<span title={fmtUsd(sel.spend.last_30d.cost)}>{fmtInr(usdToInr(sel.spend.last_30d.cost, rate))}</span>} />
+                <Row k="Spend, all time" v={<span title={fmtUsd(sel.spend.all_time.cost)}>{fmtInr(usdToInr(sel.spend.all_time.cost, rate))}</span>} />
+                <Row k="Calls, all time" v={fmtNum(sel.spend.all_time.calls)} />
+              </dl>
+            </Panel>
+            <RetentionPanel tenantId={t.id} canWrite={canWrite} />
+            <Panel title="Exports">
+              <div className="flex flex-wrap gap-2">
+                <Btn size="sm" icon={DownloadSimple} busy={busy === "export"} onClick={() => exportData("export")}>Download all its data</Btn>
+                <Btn size="sm" icon={ShieldCheck} busy={busy === "consent"} onClick={() => exportData("consent")}>Consent and audit records</Btn>
+              </div>
+            </Panel>
+          </div>
+          <div className="space-y-4">
+            <Panel title="Details">
+              <dl className="space-y-2 text-sm">
+                <Row k="Decisions" v={fmtNum(c.decisions)} />
+                <Row k="Workflows" v={fmtNum(c.workflows)} />
+                <Row k="Contacts" v={fmtNum(c.contacts)} />
+                <Row k="Invoices" v={fmtNum(c.invoices)} />
+                <Row k="Open complaints" v={fmtNum(c.complaints)} />
+                <Row k="GST number" v={t.gst || "—"} />
+                <Row k="Workspace id" v={(
+                  <button type="button" onClick={copyId} title="Copy" className="inline-flex items-center gap-1 font-mono text-xs text-slate-600 hover:text-slate-900">
+                    {String(t.id).slice(0, 8)}… <Copy size={12} />
+                  </button>
+                )} />
+              </dl>
+            </Panel>
+            <Panel title="Recent activity" testid="workspace-activity">
+              {sel.activity.length === 0 ? <Empty compact icon={ClockCounterClockwise} title="Nothing has happened here yet." /> : (
+                <ul className="max-h-[26rem] divide-y divide-slate-900/[0.05] overflow-y-auto">
+                  {sel.activity.map((a, i) => (
+                    <li key={i} className="flex items-start justify-between gap-3 py-2.5">
+                      <div className="min-w-0 text-sm text-slate-800 [overflow-wrap:anywhere]">{a.message}</div>
+                      <div className="shrink-0 text-xs text-slate-500" title={fmtDateTime(a.created_at)}>{fmtAgo(a.created_at)}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+        </div>
+      )}
+
+      {tab === "notes" && (
+        <NotesTab tenantId={t.id} account={sel.account} onAccountSaved={(a) => setData((d) => ({ ...d, account: a }))} />
+      )}
 
       <ReasonDialog open={dialog === "viewas"} onOpenChange={(v) => !v && setDialog(null)} busy={busy === "viewas"}
         title={`View ${t.name} as its owner?`}

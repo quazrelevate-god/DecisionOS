@@ -63,6 +63,7 @@ KNOWN_TENANT_SCOPED_COLLECTIONS = {
     "content_reports",
     # 2026-10-23 (admin console v2): presence, daily roll-up, lifecycle events.
     "presence_days", "tenant_daily", "lifecycle_events",
+    "customer_notes",
 }
 
 

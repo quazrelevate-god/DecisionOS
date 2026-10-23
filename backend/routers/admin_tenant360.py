@@ -121,8 +121,11 @@ async def admin_tenant_360(tenant_id: str, admin: dict = Depends(get_platform_ad
         m["membership_status"] = s.get("status")
     ms = t.get("milestones") or {}
     milestones = [{"key": k, "label": label, "at": ms.get(k)} for k, label in MILESTONE_LABELS.items()]
-    events, daily = await asyncio.gather(lifecycle.events_for(tenant_id, 30, database=db),
-                                         rollups.series(tenant_id, 30, database=db))
+    from services import customer_health
+    events, daily, computed = await asyncio.gather(lifecycle.events_for(tenant_id, 30, database=db),
+                                                   rollups.series(tenant_id, 30, database=db),
+                                                   customer_health.compute_all(db, [tenant_id]))
+    ch = computed.get(tenant_id) or {}
 
     activity = await db.activity.find(
         {"tenant_id": tenant_id}, {"_id": 0}).sort("created_at", -1).to_list(20)
@@ -155,6 +158,9 @@ async def admin_tenant_360(tenant_id: str, admin: dict = Depends(get_platform_ad
         },
         "members": members,
         "milestones": milestones,
+        "health_score": ch.get("health"), "stage": ch.get("stage"),
+        "account": {"tags": t.get("tags") or [], "owner_admin_id": t.get("owner_admin_id"),
+                    "next_follow_up_at": t.get("next_follow_up_at")},
         "lifecycle": events,
         "daily": daily,
         "spend": {"last_30d": spend_30d, "all_time": spend_all},

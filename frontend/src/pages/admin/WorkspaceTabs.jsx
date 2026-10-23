@@ -13,19 +13,20 @@ import {
 } from "./adminUi";
 import { auditLabel, humanize, planLabel, ticketStatusLabel, priorityLabel, priorityTone } from "./adminLabels";
 import { AdoptionGrid } from "./customerKit";
+import { SlaChip, MessageList, WeekTally } from "./supportKit";
 import { ADMIN_H3 } from "./adminStyle";
 
-const KIND = {
+export const KIND = {
   lifecycle: "Lifecycle", activity: "Activity", admin: "Admin action", ticket: "Ticket", note: "Note",
   member: "People", payment: "Payment",
 };
-const KIND_TONE = { lifecycle: "info", admin: "warn", ticket: "warn", note: "neutral", member: "good", payment: "good", activity: "neutral" };
+export const KIND_TONE = { lifecycle: "info", admin: "warn", ticket: "warn", note: "neutral", member: "good", payment: "good", activity: "neutral" };
 const EVENT = {
   signed_up: "Signed up", plan_changed: "Plan changed", payment_received: "Payment received", payment_failed: "Payment failed",
   subscription_halted: "Subscription halted", suspended: "Suspended", reactivated: "Reactivated",
 };
 
-function describe(i) {
+export function describeEvent(i) {
   if (i.kind === "lifecycle") {
     const base = EVENT[i.type] || humanize(i.type);
     if (i.type === "plan_changed") return `${base}: ${planLabel(i.data?.from)} to ${planLabel(i.data?.to)}${i.reason ? ` · ${i.reason}` : ""}`;
@@ -66,8 +67,8 @@ export function TimelineTab({ tenantId }) {
               </div>
               <div className="mt-1 text-sm text-slate-800 [overflow-wrap:anywhere]">
                 {i.kind === "ticket" && i.ref
-                  ? <button type="button" onClick={() => go(`support/${i.ref}`)} className="text-left underline-offset-2 hover:underline">{describe(i)}</button>
-                  : describe(i)}
+                  ? <button type="button" onClick={() => go(`support/${i.ref}`)} className="text-left underline-offset-2 hover:underline">{describeEvent(i)}</button>
+                  : describeEvent(i)}
               </div>
             </li>
           ))}
@@ -115,6 +116,15 @@ export function UsageTab({ tenantId, rate }) {
 }
 
 export function SupportTab({ tenantId }) {
+  return (
+    <div className="space-y-4">
+      <TicketsPanel tenantId={tenantId} />
+      <MessagesPanel tenantId={tenantId} />
+    </div>
+  );
+}
+
+function TicketsPanel({ tenantId }) {
   const { go } = useAdmin();
   const { data, error, reload } = useAdminGet(`/admin/tickets?tenant_id=${encodeURIComponent(tenantId)}`);
   if (error && !data) return <LoadError what="tickets" onRetry={reload} />;
@@ -130,6 +140,7 @@ export function SupportTab({ tenantId }) {
                   <span className="block truncate text-sm font-medium text-slate-900">{t.subject}</span>
                   <span className="block text-xs text-slate-500">Updated {fmtAgo(t.updated_at)}</span>
                 </span>
+                <span className="hidden sm:inline-flex"><SlaChip sla={t.sla} /></span>
                 {t.priority !== "normal" && <Chip tone={priorityTone(t.priority)}>{priorityLabel(t.priority)}</Chip>}
                 <Chip>{ticketStatusLabel(t.status)}</Chip>
               </button>
@@ -137,6 +148,22 @@ export function SupportTab({ tenantId }) {
           ))}
         </ul>
       )}
+    </Panel>
+  );
+}
+
+// "Did they get the invite?" -- every email, code, reply and notification we
+// tried to send this company (P4). Never the text.
+function MessagesPanel({ tenantId }) {
+  const { go } = useAdmin();
+  const { data, error, reload } = useAdminGet(`/admin/messages?tenant_id=${encodeURIComponent(tenantId)}&limit=50`);
+  if (error && !data) return <LoadError what="messages" onRetry={reload} />;
+  if (!data) return <Loading />;
+  return (
+    <Panel title="Messages we sent" hint="Emails, sign-in codes, WhatsApp replies and notifications. Never the text." testid="workspace-messages"
+      actions={<Btn size="sm" variant="ghost" onClick={() => go("support/messages")}>All messages</Btn>}>
+      {data.messages.length > 0 && <div className="mb-3"><WeekTally week={data.week} /></div>}
+      <MessageList rows={data.messages} emptyHint="Nothing sent to this company yet, or it was sent before the log began (23 Oct 2026)." />
     </Panel>
   );
 }

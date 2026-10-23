@@ -73,6 +73,7 @@ export function fmtAgo(iso) {
   if (s < 60) return "Just now";
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  if (s < 86400 * 2) return "Yesterday";
   if (s < 86400 * 14) return `${Math.floor(s / 86400)} days ago`;
   if (s < 86400 * 60) return `${Math.floor(s / 86400 / 7)} weeks ago`;
   return fmtDate(iso);

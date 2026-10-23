@@ -41,6 +41,7 @@ OPEN_TO_EVERY_MEMBER = {
     # about the caller themselves
     "/api/auth/me": "self", "/api/auth/me/sessions": "self", "/api/auth/me/workspaces": "self",
     "/api/account/deletion": "self", "/api/me/acting-as": "self", "/api/notifications": "self",
+    "/api/nps/ask": "self (whether to show this person the recommend card)",
     "/api/dex/inflight-count": "self", "/api/work-coach": "self, or owner-only for others (_resolve_coach_target)",
     "/api/operating-score": "self view for members; company view for owners (handler)",
     "/api/routines/setup": "people list owner-only inside the handler",

@@ -13,6 +13,10 @@ import { humanize } from "./adminLabels";
 
 const DEFAULT_RATE = 84;
 
+const KNOWN_FLAGS = {
+  nps: { label: "Ask the recommend question", hint: "A one-question card, once a quarter per person; answers in Support › Recommend score" },
+};
+
 export function ConfigSection() {
   const { canWrite } = useAdmin();
   const { data: cfg, error, reload } = useAdminGet("/admin/config");
@@ -30,6 +34,8 @@ export function ConfigSection() {
     save("/admin/config/models", { overrides }, `${humanize(task)} now uses ${model === "__default__" ? "its default" : model}`);
   };
   const setSarvam = (patch) => save("/admin/config/sarvam", { ...cfg.sarvam.config, ...patch }, "Voice settings saved");
+  // Flags the product reads, shown even before anyone has switched them (P4).
+  const flags = { ...Object.fromEntries(Object.keys(KNOWN_FLAGS).map((k) => [k, false])), ...cfg.global_flags };
   const setFlag = (key, val) => save("/admin/config/flags", { flags: { ...cfg.global_flags, [key]: val } }, `${humanize(key)} is ${val ? "on" : "off"}`);
   const saveRate = (e) => {
     e.preventDefault();
@@ -83,10 +89,11 @@ export function ConfigSection() {
       </div>
 
       <Panel title="Feature flags" hint="Switches that apply to every workspace" className="mb-4">
-        {Object.keys(cfg.global_flags).length === 0 ? <Empty compact title="No flags yet." /> : (
+        {Object.keys(flags).length === 0 ? <Empty compact title="No flags yet." /> : (
           <ul className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-            {Object.entries(cfg.global_flags).map(([k, v]) => (
-              <li key={k}><Toggle checked={!!v} onChange={(val) => setFlag(k, val)} disabled={!canWrite} label={humanize(k)} hint={k} testid={`flag-${k}`} /></li>
+            {Object.entries(flags).map(([k, v]) => (
+              <li key={k}><Toggle checked={!!v} onChange={(val) => setFlag(k, val)} disabled={!canWrite}
+                label={KNOWN_FLAGS[k]?.label || humanize(k)} hint={KNOWN_FLAGS[k] ? `${KNOWN_FLAGS[k].hint} · ${k}` : k} testid={`flag-${k}`} /></li>
             ))}
           </ul>
         )}

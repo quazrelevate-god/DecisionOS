@@ -76,5 +76,6 @@ async def reply_ticket(ticket_id: str, payload: SupportReplyInput, user: dict = 
     now = now_iso()
     msg = {"author": user.get("name") or user["id"], "author_type": "tenant", "body": body[:4000], "created_at": now}
     await db.support_tickets.update_one(
-        {"id": ticket_id}, {"$push": {"messages": msg}, "$set": {"updated_at": now, "status": "open"}})
+        {"id": ticket_id}, {"$push": {"messages": msg}, "$set": {"updated_at": now, "status": "open"},
+                            "$unset": {"resolved_at": ""}})
     return {"status": "ok", "message": msg}

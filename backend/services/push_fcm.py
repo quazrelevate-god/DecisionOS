@@ -28,7 +28,7 @@ import binascii
 import json
 import os
 
-from core import db, logger
+from core import db, logger, outbound
 
 # FCM accepts at most 500 tokens per multicast call.
 _CHUNK = 500
@@ -165,9 +165,13 @@ async def send_push_to_users(tenant_id, user_ids, title, body, data=None) -> Non
 
     Safe no-op when push is not configured or no recipient has a device token.
     """
-    if not _init():
-        return
+    kind = str((data or {}).get("type") or "push")
     ids = [u for u in set(user_ids or []) if u]
+    if not _init():
+        if ids:
+            await outbound.record("push", kind, status="skipped", tenant_id=tenant_id,
+                                  user_id=ids[0] if len(ids) == 1 else None, count=len(ids), error="not_configured")
+        return
     if not ids:
         return
     rows = await db.device_tokens.find(
@@ -175,14 +179,21 @@ async def send_push_to_users(tenant_id, user_ids, title, body, data=None) -> Non
         {"_id": 0, "token": 1},
     ).to_list(2000)
     tokens = sorted({r["token"] for r in rows if r.get("token")})
+    one = ids[0] if len(ids) == 1 else None
     if not tokens:
         logger.info(f"[push] '{title}': {len(ids)} recipient(s) but no registered device — nothing to send")
+        await outbound.record("push", kind, status="skipped", tenant_id=tenant_id, user_id=one,
+                              count=len(ids), error="no_device")
         return
     try:
         sent, dead = await asyncio.to_thread(_send_sync, tokens, title, body, data)
     except Exception as e:  # network, quota — the in-app row already landed
         logger.warning(f"[push] send failed: {e}")
+        await outbound.record("push", kind, status="failed", tenant_id=tenant_id, user_id=one,
+                              count=len(ids), provider="fcm", error=type(e).__name__)
         return
+    await outbound.record("push", kind, status="sent" if sent else "failed", tenant_id=tenant_id, user_id=one,
+                          count=len(ids), provider="fcm", error=None if sent else "no_device_accepted")
     logger.info(
         f"[push] '{title}' -> sent {sent}/{len(tokens)} to {len(ids)} user(s); pruned {len(dead)}"
     )

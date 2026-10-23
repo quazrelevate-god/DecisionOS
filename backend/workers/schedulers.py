@@ -201,7 +201,7 @@ async def _notify_provider_outages():
             f"<b>Detail:</b> {a.get('message','')}</p>"
             f"<p>Open the Admin Console → AI Keys to update the key or clear it so AI falls back to the Emergent universal key.</p>"
         )
-        res = await send_email(admin_email, subject, html)
+        res = await send_email(admin_email, subject, html, kind="platform_alert")
         await db.platform_alerts.update_one(
             {"id": a["id"]},
             {

@@ -37,6 +37,7 @@ import { NeuGlassLogo } from "./neuglass/Logo";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandItem } from "./ui/command";
 import { ProfileDialog } from "./ProfileDialog";
 import AnnouncementBanner from "./AnnouncementBanner";
+import RecommendCard from "./RecommendCard";  // P4 2026-10-23: off unless the `nps` flag is on
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { WelcomeOverlay } from "./WelcomeOverlay";
 // B20 — the demo workspace says it is one.
@@ -1154,6 +1155,7 @@ export default function Layout({ children }) {
           )}
         >
           <AnnouncementBanner />
+          <RecommendCard />
           {/* ASK-39 1 — and /inbox drops the wrapper's own bottom padding on a
               phone too, for the same reason: the Desk's sheet runs to the floor
               and carries its own clearance, so 1rem of wrapper below it is 1rem

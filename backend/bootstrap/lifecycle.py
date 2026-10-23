@@ -121,6 +121,13 @@ async def _bootstrap():
             await db.lifecycle_events.create_index([("tenant_id", 1), ("created_at", -1)], name="lifecycle_tenant_at")
             await db.lifecycle_events.create_index([("kind", 1), ("created_at", -1)], name="lifecycle_kind_at")
             await db.customer_notes.create_index([("tenant_id", 1), ("created_at", -1)], name="customer_notes_tenant_at")
+            # P4: the outbound message log keeps 180 days; NPS answers by person.
+            await db.outbound_messages.create_index([("tenant_id", 1), ("at", -1)], name="outbound_tenant_at")
+            await db.outbound_messages.create_index([("at", -1)], name="outbound_at")
+            await db.outbound_messages.create_index([("created", 1)], name="outbound_ttl",
+                                                    expireAfterSeconds=180 * 24 * 3600)
+            await db.nps_responses.create_index([("user_id", 1), ("created_at", -1)], name="nps_user_at")
+            await db.nps_responses.create_index([("created_at", -1)], name="nps_at")
         except Exception as e:
             logger.warning(f"admin analytics indexes: {e}")
         # FIX-004-B (RBAC-13): memberships collection indexes.

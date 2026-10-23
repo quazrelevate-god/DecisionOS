@@ -115,7 +115,8 @@ async def dispatch_owner_alert(tenant_id, message):
     owners = await db.users.find({"tenant_id": tenant_id, "role": "owner"}, {"_id": 0, "email": 1}).to_list(10)
     emails = [o["email"] for o in owners if o.get("email")]
     if emails:
-        await send_email(emails, "DecisionOS — Owner Alert", f"<p>{message}</p>")
+        await send_email(emails, "DecisionOS — Owner Alert", f"<p>{message}</p>",
+                         kind="owner_alert", tenant_id=tenant_id)
     # WhatsApp: ready-to-plug (requires WHATSAPP_API_KEY / provider)
     if not os.environ.get("WHATSAPP_API_KEY", ""):
         logger.info(f"[WHATSAPP MOCK] Owner alert: {message}")

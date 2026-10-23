@@ -12,7 +12,7 @@ import { saveFile } from "../../lib/native/files";
 import { GlassSelect } from "../../components/neuglass/GlassSelect";
 import { GLASS_MENU, GLASS_MENU_ITEM, GLASS_MENU_LABEL } from "../../components/neuglass/glass";
 import {
-  ArrowClockwise, Buildings, Columns, DownloadSimple, Tag, UserCircle, Flask, Storefront, X, BookmarkSimple, Check,
+  ArrowClockwise, Buildings, Columns, DownloadSimple, Tag, UserCircle, Flask, Storefront, X, BookmarkSimple, Check, Eye,
 } from "@phosphor-icons/react";
 import {
   useAdmin, useAdminGet, usePersisted, errText, fmtNum, fmtInr, usdToInr, fmtDate, fmtDateTime, fmtAgo, Btn, Chip,
@@ -20,6 +20,7 @@ import {
 } from "./adminUi";
 import { PLAN_OPTIONS, planLabel } from "./adminLabels";
 import { HealthChip, StageChip, STAGE_OPTIONS, stageLabel } from "./customerKit";
+import { QuickLook } from "./QuickLook";
 
 const DAY = 86400000;
 const ago = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / DAY : Infinity);
@@ -56,9 +57,16 @@ export function CustomersList() {
   const views = useAdminGet("/admin/views");
   const admins = useAdminGet("/admin/admin-names");
   const [columns, setColumns] = usePersisted("customer_columns", DEFAULT_COLUMNS);
-  const [viewId, setViewId] = useState(() => (new URLSearchParams(location.search).get("plan") === "trial" ? "trials_ending" : "all"));
+  // ?view=<built-in view> and ?stage=<stage> arrive from Home (P5); ?plan=trial from older links.
+  const params = new URLSearchParams(location.search);
+  const [viewId, setViewId] = useState(() => {
+    const v = params.get("view");
+    if (v && BUILT_IN.some((b) => b.id === v)) return v;
+    return params.get("plan") === "trial" ? "trials_ending" : "all";
+  });
   const [q, setQ] = useState("");
-  const [stage, setStage] = useState("");
+  const [look, setLook] = useState(null); // P5: the customer in the quick-look drawer
+  const [stage, setStage] = useState(() => params.get("stage") || "");
   const [plan, setPlan] = useState("");
   const [owner, setOwner] = useState("");
   const [tag, setTag] = useState("");
@@ -157,6 +165,13 @@ export function CustomersList() {
     ) },
     visible.includes("follow_up") && { key: "next_follow_up_at", label: "Follow up", render: (c) => (c.next_follow_up_at ? fmtDate(c.next_follow_up_at) : "—") },
     visible.includes("created") && { key: "created_at", label: "Signed up", mobile: false, render: (c) => fmtDate(c.created_at) },
+    { key: "_look", sortable: false, className: "w-10", label: <span className="sr-only">Quick look</span>, render: (c) => (
+      <button type="button" onClick={(e) => { e.stopPropagation(); setLook(c); }} aria-label={`Quick look at ${c.name}`} title="Quick look"
+        data-testid={`quicklook-${c.id}`}
+        className="grid h-8 w-8 place-items-center rounded-full text-slate-500 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30">
+        <Eye size={16} />
+      </button>
+    ) },
   ].filter(Boolean);
 
   return (
@@ -230,7 +245,8 @@ export function CustomersList() {
               hint={rows.length ? "Try another view, or clear the filters." : "Customers appear here when a company signs up."} />} />
         </div>
       )}
-      <p className="mt-3 text-xs text-slate-500">Health is out of 100: activity, breadth, momentum, setup and friction. Open a customer to see why.</p>
+      <p className="mt-3 text-xs text-slate-500">Health is out of 100: activity, breadth, momentum, setup and friction. The eye on a row is a quick look; open a customer for everything.</p>
+      <QuickLook customer={look} rate={rate} onOpenChange={(v) => !v && setLook(null)} />
 
       <AdminDialog open={!!dialog} onOpenChange={(v) => !v && setDialog(null)} busy={busy} testid="customers-dialog"
         title={dialog?.kind === "save" ? "Save this view for the team" : dialog?.kind === "owner" ? `Assign an owner to ${picked.size}` : dialog?.kind === "untag" ? `Remove a tag from ${picked.size}` : `Tag ${picked.size} customer${picked.size === 1 ? "" : "s"}`}>

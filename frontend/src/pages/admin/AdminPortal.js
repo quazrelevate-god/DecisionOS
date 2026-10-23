@@ -11,7 +11,9 @@
  *     not a red banner on every page;
  *   - an admin without two-step sign-in is asked to turn it on, every sign-in;
  *   - a read-only admin sees no controls that would only be refused.
- * Old tab names still land in the right place (LEGACY). */
+ * Old tab names still land in the right place (LEGACY).
+ * P5 (2026-10-23): a Display menu (light / dark / this computer; comfortable /
+ * compact) and keys (G then a letter, /, ?, Shift D) -- adminShell.jsx. */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../lib/api";
@@ -34,6 +36,7 @@ import { ConfigSection } from "./ConfigSection";
 import { AdminRbacSection } from "./AdminRbacSection";
 import { AnnouncementsSection } from "./AnnouncementsSection";
 import { ComplianceSection } from "./ComplianceSection";
+import { DisplayMenu, ShortcutsDialog, useDisplay, useShortcuts } from "./adminShell";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner, ClockCounterClockwise, ChartBar,
   WarningCircle, MagnifyingGlass, Lifebuoy, CurrencyInr, Sliders, ShieldCheck, Megaphone, Scales, Flag, List, X,
@@ -163,6 +166,8 @@ export default function AdminPortal() {
   const [counts, setCounts] = useState(null);
   const [findOpen, setFindOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const display = useDisplay();
   const [nudgeLater, setNudgeLater] = useState(() => {
     try { return window.sessionStorage.getItem(NUDGE_KEY) === "1"; } catch { return false; }
   });
@@ -206,6 +211,12 @@ export default function AdminPortal() {
   }, [admin]);
 
   useEffect(() => { window.scrollTo?.(0, 0); }, [rawSection, id]);
+
+  const openFind = useCallback(() => setFindOpen(true), []);
+  const openKeys = useCallback(() => setKeysOpen(true), []);
+  const { dark, setTheme } = display;
+  const toggleDark = useCallback(() => setTheme(dark ? "light" : "dark"), [dark, setTheme]);
+  useShortcuts({ enabled: !!admin, go, openFind, openHelp: openKeys, toggleDark });
 
   const ctx = useMemo(() => ({
     admin, go,
@@ -267,6 +278,7 @@ export default function AdminPortal() {
                     <div className="text-[11px] text-slate-500">{adminRoleLabel(admin.role)}</div>
                   </div>
                 </div>
+                <DisplayMenu display={display} onShortcuts={openKeys} />
                 <button data-testid="admin-logout" onClick={logout} type="button"
                   className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-pill px-3.5 text-xs font-medium text-slate-700 hover:text-[#b91c1c] ${GLASS_PILL}`}>
                   <SignOut size={14} /> <span className="hidden sm:inline">Sign out</span>
@@ -321,6 +333,7 @@ export default function AdminPortal() {
         </Sheet>
 
         <FindDialog open={findOpen} onOpenChange={setFindOpen} places={PLACES} onGo={go} />
+        <ShortcutsDialog open={keysOpen} onOpenChange={setKeysOpen} />
       </div>
     </AdminContext.Provider>
   );

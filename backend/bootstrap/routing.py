@@ -28,6 +28,8 @@ from routers.admin_overview import router as admin_overview_router  # 2026-10-22
 from routers.admin_invites import router as admin_invites_router  # 2026-10-22: accepting an admin invite (public)
 from routers.admin_analytics import router as admin_analytics_router  # 2026-10-23: analytics foundations
 from routers.admin_customers import router as admin_customers_router  # 2026-10-23: managing customers
+from routers.admin_messages import router as admin_messages_router  # 2026-10-23: outbound log + NPS (P4)
+from routers.nps import router as nps_router  # 2026-10-23: the recommend card (flag `nps`, off by default)
 from routers.brain import router as brain_router
 from routers.brain_docs import router as brain_docs_router
 from routers.brain_notes import router as brain_notes_router
@@ -89,6 +91,8 @@ _DOMAIN_ROUTERS = (
     admin_invites_router,      # 2026-10-22: invite links, outside the /api/admin gate by design
     admin_analytics_router,    # 2026-10-23: presence, daily roll-up, milestones
     admin_customers_router,    # 2026-10-23: health, notes, tags, owners, views, timeline
+    admin_messages_router,     # 2026-10-23: what we sent each customer; the recommend score
+    nps_router,                # 2026-10-23: the recommend card (off until the `nps` flag is on)
     brain_router,
     brain_docs_router,
     brain_notes_router,   # 2026-10-06: Company Brain notes

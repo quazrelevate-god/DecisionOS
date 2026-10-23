@@ -54,6 +54,8 @@ TENANT_COLLECTIONS = [
     "presence_days", "tenant_daily", "lifecycle_events",
     # 2026-10-23 (admin console v2 P2): our notes about the company.
     "customer_notes",
+    # 2026-10-23 (P4): what we sent them, and their recommend answers.
+    "outbound_messages", "nps_responses",
 ]
 
 

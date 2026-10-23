@@ -127,13 +127,14 @@ async def email_announcement(aid: str, admin: dict = Depends(get_platform_admin)
     target_ids = [t["id"] for t in tenants if _targets_tenant(a, t)]
     owners = await db.users.find(
         {"tenant_id": {"$in": target_ids}, "role": "owner", "email": {"$exists": True, "$nin": [None, ""]}},
-        {"_id": 0, "email": 1, "name": 1}).to_list(5000)
+        {"_id": 0, "id": 1, "tenant_id": 1, "email": 1, "name": 1}).to_list(5000)
     from services.email import send_email
     html = f"<h2>{a['title']}</h2><p>{(a.get('body') or '').replace(chr(10), '<br/>')}</p>"
     sent = 0
     for o in owners[:1000]:
         try:
-            res = await send_email(o["email"], f"[DecisionOS] {a['title']}", html)
+            res = await send_email(o["email"], f"[DecisionOS] {a['title']}", html,
+                                   kind="announcement", tenant_id=o.get("tenant_id"), user_id=o.get("id"))
             if res.get("sent") or res.get("provider"):
                 sent += 1
         except Exception:

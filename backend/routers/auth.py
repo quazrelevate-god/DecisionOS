@@ -620,7 +620,8 @@ async def register(inp: RegisterInput, request: Request, response: Response,
                  or "http://localhost:3000").rstrip("/")
         _verify_url = f"{_base}/verify-email?token={_row['token']}"
         _html = auth_emails.render_verify_email(inp.name or "", _verify_url)
-        await send_email(email, "Verify your DecisionOS email", _html)
+        await send_email(email, "Verify your DecisionOS email", _html,
+                         kind="verify_email", tenant_id=tenant_id, user_id=user_id)
     except Exception:
         # Never fail registration on an email hiccup — the user is
         # already logged in with a valid JWT below.
@@ -1396,7 +1397,8 @@ async def set_owner_credentials(inp: OwnerCredentialsInput, request: Request,
                                       user_id=user["id"], tenant_id=user["tenant_id"], email=email)
         await send_email(email, "Verify your DecisionOS email",
                          auth_emails.render_verify_email(full.get("name") or "",
-                                                         f"{_app_base_url()}/verify-email?token={row['token']}"))
+                                                         f"{_app_base_url()}/verify-email?token={row['token']}"),
+                         kind="verify_email", tenant_id=user["tenant_id"], user_id=user["id"])
     except Exception:
         pass
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
@@ -1476,7 +1478,8 @@ async def send_verification_email(user: dict = Depends(get_current_user)):
     )
     verify_url = f"{_app_base_url()}/verify-email?token={row['token']}"
     html = auth_emails.render_verify_email(user.get("name") or "", verify_url)
-    delivery = await send_email(email, "Verify your DecisionOS email", html)
+    delivery = await send_email(email, "Verify your DecisionOS email", html,
+                                kind="verify_email", tenant_id=user["tenant_id"], user_id=user["id"])
     # Response does NOT leak the token (it's in the email link only).
     return {"ok": True, "sent": bool(delivery.get("sent")),
             "provider": delivery.get("provider") or "mock"}
@@ -1532,7 +1535,8 @@ async def password_forgot(inp: PasswordForgotInput):
     reset_url = f"{_app_base_url()}/reset-password?token={row['token']}"
     html = auth_emails.render_reset_email(user.get("name") or "", reset_url)
     # Best-effort email; if SMTP is down the user can retry.
-    await send_email(email, "Reset your DecisionOS password", html)
+    await send_email(email, "Reset your DecisionOS password", html,
+                     kind="password_reset", tenant_id=user["tenant_id"], user_id=user["id"])
     return canonical_response
 
 

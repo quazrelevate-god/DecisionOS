@@ -71,7 +71,7 @@ def test_overdue_work_uses_the_companys_days_and_alert_email(with_test_db):
 
     sent = []
 
-    async def fake_email(to, subject, html):
+    async def fake_email(to, subject, html, **_label):
         sent.append(to)
 
     async def scenario(db):

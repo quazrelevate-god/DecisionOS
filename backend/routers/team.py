@@ -570,7 +570,8 @@ async def _email_invite(user: dict, member_name: str, email: str, url: str) -> b
     t = await db.tenants.find_one({"id": user["tenant_id"]}, {"_id": 0, "name": 1}) or {}
     try:
         res = await send_email(email, f"You're invited to {t.get('name') or 'DecisionOS'}",
-                               render_invite_email(member_name, t.get("name") or "", user.get("name") or "", url))
+                               render_invite_email(member_name, t.get("name") or "", user.get("name") or "", url),
+                               kind="invite", tenant_id=user["tenant_id"], user_id=user.get("id"))
     except Exception:  # noqa: BLE001 -- never fails the add
         return False
     return bool((res or {}).get("sent"))

@@ -5,6 +5,7 @@ import { CARD_BASE } from "./adminStyle";
  * then the numbers that matter with their trend; then whose health moved. */
 import {
   WarningCircle, CurrencyInr, Lifebuoy, Hourglass, TrendDown, CalendarCheck, Flag, CheckCircle, ArrowRight, ArrowUp, ArrowDown,
+  Plant, ChatCircleText,
 } from "@phosphor-icons/react";
 import { useAdmin, useAdminGet, usePersisted, fmtNum, fmtInr, Chip, Toggle, AdminPage, Panel, Loading, LoadError, Empty } from "./adminUi";
 import { KpiTile, SERIES, pct, shortMonth } from "./analyticsKit";
@@ -19,6 +20,13 @@ const KIND = {
   follow_up: { icon: CalendarCheck, label: "Follow up", tone: "info" },
   reports: { icon: Flag, label: "Reports", tone: "neutral" },
 };
+
+const QUIET = [
+  { id: "follow_up", to: "workspaces?view=follow_up", icon: CalendarCheck, title: "Follow-ups due", hint: "Customers you promised to get back to" },
+  { id: "not_activated", to: "workspaces?view=not_activated", icon: Plant, title: "Not activated yet", hint: "Two weeks in, no decision approved or teammate invited" },
+  { id: "trials", to: "workspaces?view=trials_ending", icon: Hourglass, title: "Trials ending this week", hint: "A call now is worth more than a reminder email" },
+  { id: "nps", to: "support/nps", icon: ChatCircleText, title: "What customers said", hint: "The recommend score and its comments" },
+];
 
 function greeting() {
   const h = new Date().getHours();
@@ -55,8 +63,27 @@ export function HomeSection() {
         <Panel title="Needs you today" className="lg:col-span-2" testid="home-needs"
           hint="Money first, then customers waiting on us, then customers slipping">
           {h.needs.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl bg-emerald-600/[0.06] px-4 py-5 text-sm text-[#116329]">
-              <CheckCircle size={22} weight="fill" /> All clear. No failed payments, no one waiting on a reply, no paying customer slipping.
+            <div data-testid="home-all-clear">
+              <div className="flex items-center gap-3 rounded-xl bg-emerald-600/[0.06] px-4 py-5 text-sm text-[#116329]">
+                <CheckCircle size={22} weight="fill" className="shrink-0" /> All clear. No failed payments, no one waiting on a reply, no paying customer slipping.
+              </div>
+              {/* A quiet week is the time for the slower work (P5). */}
+              <div className="mt-4">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">While it&apos;s quiet</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {QUIET.map((x) => (
+                    <button key={x.to} type="button" onClick={() => go(x.to)} data-testid={`quiet-${x.id}`}
+                      className="group flex items-center gap-3 rounded-xl bg-slate-500/[0.07] px-3.5 py-3 text-left hover:bg-slate-500/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25">
+                      <x.icon size={18} className="shrink-0 text-slate-600" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-slate-900">{x.title}</span>
+                        <span className="block truncate text-xs text-slate-500">{x.hint}</span>
+                      </span>
+                      <ArrowRight size={14} className="shrink-0 text-slate-300 group-hover:text-slate-600" />
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             <ul className="-mx-2 divide-y divide-slate-900/[0.05]">
@@ -89,7 +116,8 @@ export function HomeSection() {
             <ul className="space-y-1.5">
               {Object.entries(STAGE).filter(([s]) => s !== "test" && h.stages[s]).map(([s, meta]) => (
                 <li key={s}>
-                  <button type="button" onClick={() => go("workspaces")} className="flex w-full items-center gap-3 text-left text-sm">
+                  <button type="button" onClick={() => go(`workspaces?stage=${s}`)} data-testid={`home-stage-${s}`}
+                    className="flex w-full items-center gap-3 rounded-lg text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25">
                     <Chip tone={meta.tone}>{meta.label}</Chip>
                     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-500/[0.1]">
                       <span className="block h-full rounded-full bg-slate-700" style={{ width: `${Math.round((h.stages[s] / Math.max(1, h.customers)) * 100)}%` }} />

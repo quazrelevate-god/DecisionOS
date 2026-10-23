@@ -12,6 +12,7 @@ import httpx
 
 from core import logger, get_ai_key
 from integrations.base import mock_for
+from core import outbound
 
 GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v21.0")
 
@@ -47,11 +48,17 @@ async def send_wa_reply(to_phone: str, text: str):
     pnid = wa_phone_id()
     ver = os.environ.get("GRAPH_API_VERSION", "v21.0")
     if not (token and pnid):
+        await outbound.record("whatsapp", "whatsapp_reply", status="skipped", to=to_phone)
         return
     try:
         async with httpx.AsyncClient(timeout=30) as c:
-            await c.post(f"https://graph.facebook.com/{ver}/{pnid}/messages",
-                         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                         json={"messaging_product": "whatsapp", "to": to_phone, "type": "text", "text": {"body": text}})
+            r = await c.post(f"https://graph.facebook.com/{ver}/{pnid}/messages",
+                             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                             json={"messaging_product": "whatsapp", "to": to_phone, "type": "text", "text": {"body": text}})
+        ok = 200 <= r.status_code < 300
+        await outbound.record("whatsapp", "whatsapp_reply", status="sent" if ok else "failed", to=to_phone,
+                              provider="meta", error=None if ok else f"http_{r.status_code}")
     except Exception:
         logger.exception("WhatsApp reply failed")
+        await outbound.record("whatsapp", "whatsapp_reply", status="failed", to=to_phone,
+                              provider="meta", error="network")

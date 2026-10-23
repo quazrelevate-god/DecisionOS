@@ -13,6 +13,7 @@ from email.message import EmailMessage
 
 from core import logger
 from integrations.base import with_retry, mock_for, ProviderError
+from core import outbound
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "465") or "465")
@@ -41,14 +42,25 @@ def _smtp_send_sync(to_list: list, subject: str, html: str) -> None:
             s.send_message(msg)
 
 
-async def send_email(to, subject: str, html: str) -> dict:
-    """Send an HTML email. Returns {sent, provider|mocked, to, [error]}."""
+async def send_email(to, subject: str, html: str, *, kind: str = "email",
+                     tenant_id: str = None, user_id: str = None) -> dict:
+    """Send an HTML email. Returns {sent, provider|mocked, to, [error]}.
+
+    `kind` / `tenant_id` / `user_id` only label the outbound log row (P4)."""
     to_list = [to] if isinstance(to, str) else [t for t in to if t]
     if not to_list:
         return {"sent": False, "to": [], "error": "no recipients"}
     _mock = mock_for("email", "send")
     if _mock is not None:
         return _mock(to_list, subject, html)
+    res = await _deliver(to_list, subject, html)
+    status = "sent" if res.get("sent") else ("skipped" if res.get("mocked") else "failed")
+    await outbound.record("email", kind, status=status, to=to_list, tenant_id=tenant_id, user_id=user_id,
+                          provider=res.get("provider"), error=res.get("error"))
+    return res
+
+
+async def _deliver(to_list: list, subject: str, html: str) -> dict:
     if SMTP_ENABLED:
         try:
             # SMTP auth failures are permanent — don't retry those; transient

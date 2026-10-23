@@ -21,7 +21,7 @@ from datetime import datetime, timezone, timedelta
 import httpx  # noqa: F401  (APM gateway calls)
 from fastapi import HTTPException
 
-from core import db
+from core import db, outbound
 
 # ---------------------------------------------------------------------------
 # Mobile + OTP login (alternate auth). DEV mode returns OTP until Twilio keys added.
@@ -235,6 +235,9 @@ async def _issue_otp(norm: str, display_phone: str, tenant_id: str, enforce_cool
         },
         upsert=True,
     )
+    await outbound.record("sms", "sign_in_code", status="sent" if sent else ("skipped" if dev else "failed"),
+                          to=norm, tenant_id=tenant_id,
+                          provider="apm" if apm_code else ("twilio" if not dev else None))
     resp = {"sent": sent, "dev_mode": dev, "tenant_id": tenant_id}
     # FIX-006-C (S0-04): dev_otp is a REAL, WORKING code — returning it
     # in a JSON body means anyone who can hit /auth/otp/request gets a

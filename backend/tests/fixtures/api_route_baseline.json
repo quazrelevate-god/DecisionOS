@@ -1,6 +1,6 @@
 {
-  "count": 424,
-  "sha": "256c3c49d977b391399ddb37b241fdb39174d56d20746363d1372d2bce9ab3e5",
+  "count": 430,
+  "sha": "9f08731b09d3771a9ffd7edb6351a1b383866bba2ce11b8a51f1cab56e7281ad",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -46,6 +46,11 @@
     "GET /api/admin/ai-keys/status",
     "GET /api/admin/ai-quality",
     "GET /api/admin/alerts",
+    "GET /api/admin/analytics/ai",
+    "GET /api/admin/analytics/engagement",
+    "GET /api/admin/analytics/growth",
+    "GET /api/admin/analytics/retention",
+    "GET /api/admin/analytics/revenue",
     "GET /api/admin/analytics/status",
     "GET /api/admin/announcements",
     "GET /api/admin/audit",
@@ -57,6 +62,7 @@
     "GET /api/admin/config",
     "GET /api/admin/customers",
     "GET /api/admin/health",
+    "GET /api/admin/home",
     "GET /api/admin/impersonation",
     "GET /api/admin/me",
     "GET /api/admin/metrics",

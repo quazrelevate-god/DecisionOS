@@ -12,9 +12,7 @@ import api from "../../lib/api";
 import { ConfirmAction } from "../../components/common";
 import { GlassSelect } from "../../components/neuglass/GlassSelect";
 import {
-  Users, ArrowClockwise, PencilSimple, Prohibit, ShieldCheck, Key as KeyIcon, WarningCircle,
-  CheckCircle, Lifebuoy, Flag, CurrencyInr, Eye, Hourglass, Pulse, ClockCounterClockwise, ArrowSquareOut,
-  ChartBar,
+  Users, ArrowClockwise, PencilSimple, Prohibit, ShieldCheck, Key as KeyIcon, WarningCircle, CheckCircle, Pulse, ClockCounterClockwise, ArrowSquareOut, ChartBar,
 } from "@phosphor-icons/react";
 import {
   useAdmin, useAdminGet, usePersisted, errText, fmtNum, fmtInr, fmtUsd, usdToInr, fmtDate, fmtDateTime, fmtAgo,
@@ -28,128 +26,6 @@ import {
 import { WorkspacePage } from "./WorkspacePage";
 import { CustomersList } from "./CustomersList";
 import { ImpersonationSection } from "./ImpersonationSection";
-
-// --- Overview -----------------------------------------------------------------------------
-const ATTENTION = [
-  { key: "outages", one: "AI provider problem", many: "AI provider problems", to: "health", icon: WarningCircle, tone: "bad" },
-  { key: "open_tickets", one: "support ticket waiting", many: "support tickets waiting", to: "support", icon: Lifebuoy },
-  { key: "open_reports", one: "report to review", many: "reports to review", to: "reports", icon: Flag },
-  { key: "failed_payments", one: "failed payment (30 days)", many: "failed payments (30 days)", to: "billing", icon: CurrencyInr, tone: "bad" },
-  { key: "trials_ending", one: "trial ends this week", many: "trials end this week", to: "workspaces?plan=trial", icon: Hourglass },
-  { key: "live_view_as", one: "live view-as session", many: "live view-as sessions", to: "audit?view=sessions", icon: Eye },
-];
-
-export function OverviewSection() {
-  const { go } = useAdmin();
-  const [includeTest, setIncludeTest] = usePersisted("overview_include_test", false);
-  const { data: o, error, reload } = useAdminGet(`/admin/overview?include_test=${includeTest}`);
-
-  if (error && !o) return <AdminPage title="Overview" testid="admin-overview"><LoadError what="the overview" onRetry={reload} /></AdminPage>;
-  if (!o) return <AdminPage title="Overview" testid="admin-overview"><Loading /></AdminPage>;
-
-  const w = o.last_7_days;
-  const rate = o.usd_inr;
-  const waiting = ATTENTION.filter((a) => (o.needs_attention[a.key] || 0) > 0);
-  const subtitle = includeTest
-    ? `${o.workspaces.total} workspaces, test workspaces included`
-    : `${o.workspaces.total} customer workspaces${o.workspaces.test_hidden ? ` · ${o.workspaces.test_hidden} test workspaces left out` : ""}`;
-
-  return (
-    <AdminPage title="Overview" subtitle={subtitle} testid="admin-overview"
-      actions={<Toggle checked={includeTest} onChange={setIncludeTest} label="Include test workspaces" testid="overview-include-test" />}>
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Panel title="Needs attention" className="lg:col-span-2" testid="overview-attention">
-          {waiting.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl bg-emerald-600/[0.06] px-4 py-4 text-sm text-[#116329]">
-              <CheckCircle size={20} weight="fill" /> Nothing needs you right now.
-            </div>
-          ) : (
-            <ul className="-mx-2 space-y-0.5">
-              {waiting.map((a) => {
-                const n = o.needs_attention[a.key];
-                return (
-                  <li key={a.key}>
-                    <button type="button" onClick={() => go(a.to)} data-testid={`attention-${a.key}`}
-                      className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-slate-900/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25">
-                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${a.tone === "bad" ? "bg-[#cf222e]/[0.08] text-[#b91c1c]" : "bg-slate-500/[0.08] text-slate-600"}`}>
-                        <a.icon size={16} weight="bold" />
-                      </span>
-                      <span className="min-w-0 flex-1 text-sm text-slate-800">
-                        <strong className="font-semibold tabular-nums text-slate-900">{n}</strong> {n === 1 ? a.one : a.many}
-                      </span>
-                      <span className="text-xs text-slate-400">Open</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-3">
-          <Stat label="Active workspaces · 7 days" value={fmtNum(w.active_workspaces.now)} change={w.active_workspaces.change}
-            sub={`vs ${w.active_workspaces.before} the week before`} onClick={() => go("workspaces")} testid="stat-active" />
-          <Stat label="New sign-ups · 7 days" value={fmtNum(w.signups.now)} change={w.signups.change}
-            sub={`vs ${w.signups.before} the week before`} onClick={() => go("workspaces")} testid="stat-signups" />
-          <Stat label="AI spend · 7 days" value={fmtInr(usdToInr(w.ai_cost_usd.now, rate))} good="down"
-            change={usdToInr(w.ai_cost_usd.change, rate)} formatChange={fmtInr}
-            sub={`${fmtUsd(w.ai_cost_usd.now)} at ₹${rate}/$`} onClick={() => go("usage")} testid="stat-ai" />
-          <Stat label="Monthly recurring revenue" value={fmtInr(o.mrr_inr)}
-            sub={`${o.paying_workspaces} paying workspace${o.paying_workspaces === 1 ? "" : "s"}`} onClick={() => go("billing")} testid="stat-mrr" />
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <Panel title="Most active this week" hint="By actions recorded in the last 7 days">
-          {o.most_active.length === 0 ? <Empty compact title="No activity this week." /> : (
-            <ol className="-mx-2">
-              {o.most_active.map((t, i) => (
-                <li key={t.id}>
-                  <button type="button" onClick={() => go(`workspaces/${t.id}`)}
-                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-900/[0.04]">
-                    <span className="w-4 text-xs tabular-nums text-slate-400">{i + 1}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{t.name}</span>
-                    <span className="text-xs tabular-nums text-slate-500">{fmtNum(t.actions)} actions</span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Panel>
-        <Panel title="Gone quiet" hint="Active 2 to 8 weeks ago, nothing since">
-          {o.gone_quiet.length === 0 ? <Empty compact title="No one has gone quiet." /> : (
-            <ul className="-mx-2">
-              {o.gone_quiet.map((t) => (
-                <li key={t.id}>
-                  <button type="button" onClick={() => go(`workspaces/${t.id}`)}
-                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-900/[0.04]">
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{t.name}</span>
-                    <span className="text-xs text-slate-500">{fmtAgo(t.last_activity)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-        <Panel title="Trials ending this week">
-          {o.trials_ending.length === 0 ? <Empty compact title="No trials end this week." /> : (
-            <ul className="-mx-2">
-              {o.trials_ending.map((t) => (
-                <li key={t.id}>
-                  <button type="button" onClick={() => go(`workspaces/${t.id}`)}
-                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-slate-900/[0.04]">
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-800">{t.name}</span>
-                    <span className="text-xs text-slate-500">{fmtAgo(t.trial_ends_at)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </div>
-    </AdminPage>
-  );
-}
 
 // --- Workspaces --------------------------------------------------------------------------
 export function WorkspacesSection({ id, sub }) {

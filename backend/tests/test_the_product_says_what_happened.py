@@ -200,6 +200,7 @@ ADMIN_FILES = [
     "ConfigSection.js", "ImpersonationSection.js", "ReportsSection.js",
     "SupportDeskSection.js", "WorkspacePage.js", "AdminInvite.js", "adminUi.jsx",
     "CustomersList.js", "WorkspaceTabs.jsx",   # 2026-10-23 admin console v2 P2
+    "HomeSection.js", "AnalyticsPages.js", "analyticsKit.jsx",   # P3
 ]   # 2026-10-22: Tenant360 -> WorkspacePage, Observability folded into Health
 
 

@@ -24,7 +24,7 @@ import pytest
 
 # Bump this when an admin route is intentionally added/removed (same discipline
 # as regenerating the whole-app baseline).
-EXPECTED_ADMIN_ROUTE_COUNT = 90   # 2026-10-23: +13, managing customers (admin console v2 P2)
+EXPECTED_ADMIN_ROUTE_COUNT = 96   # 2026-10-23: +6, analytics pages + Home (admin console v2 P3)
 
 # Two /api/admin/* paths are legitimately NOT behind the platform-admin gate:
 #   * POST /api/admin/login -- the login entry point, open by design;

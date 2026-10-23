@@ -22,8 +22,10 @@ import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../../compone
 import { AdminContext, FindDialog } from "./adminUi";
 import { adminRoleLabel, providerLabel, humanize } from "./adminLabels";
 import {
-  OverviewSection, AiKeysSection, WorkspacesSection, UsersSection, HealthSection, AuditSection, UsageSection,
+  AiKeysSection, WorkspacesSection, UsersSection, HealthSection, AuditSection, UsageSection,
 } from "./AdminSections";
+import { HomeSection } from "./HomeSection";
+import { AiEconomicsSection, EngagementSection, GrowthSection, RetentionSection, RevenueSection } from "./AnalyticsPages";
 import { WorkspacePage } from "./WorkspacePage";
 import { SupportDeskSection } from "./SupportDeskSection";
 import { ReportsSection } from "./ReportsSection";
@@ -35,16 +37,24 @@ import { ComplianceSection } from "./ComplianceSection";
 import {
   ShieldStar, SquaresFour, Key, Buildings, Users, Pulse, SignOut, Spinner, ClockCounterClockwise, ChartBar,
   WarningCircle, MagnifyingGlass, Lifebuoy, CurrencyInr, Sliders, ShieldCheck, Megaphone, Scales, Flag, List, X,
+  ChartLineUp, UsersThree, ArrowsClockwise, TrendUp, Robot,
 } from "@phosphor-icons/react";
 
 // The app's quiet grey ground.
 const PAGE = "min-h-[calc(100vh/var(--ui-scale,1))] bg-[linear-gradient(180deg,hsl(220_20%_97%),hsl(220_14%_91%))] text-slate-900";
 
 const NAV = [
-  { items: [{ key: "", label: "Overview", icon: SquaresFour }] },
+  { items: [{ key: "", label: "Home", icon: SquaresFour }] },
   { group: "Customers", items: [
     { key: "workspaces", label: "Customers", icon: Buildings },
     { key: "users", label: "Users", icon: Users },
+  ] },
+  { group: "Analytics", items: [
+    { key: "growth", label: "Growth", icon: ChartLineUp },
+    { key: "engagement", label: "Engagement", icon: UsersThree },
+    { key: "retention", label: "Retention", icon: ArrowsClockwise },
+    { key: "revenue", label: "Revenue", icon: TrendUp },
+    { key: "ai-economics", label: "AI economics", icon: Robot },
   ] },
   { group: "Support", items: [
     { key: "support", label: "Support desk", icon: Lifebuoy, badge: "open_tickets" },
@@ -75,7 +85,9 @@ const LEGACY = {
 };
 
 const SECTIONS = {
-  "": OverviewSection, workspaces: WorkspacesSection, users: UsersSection,
+  "": HomeSection, workspaces: WorkspacesSection, users: UsersSection,
+  growth: GrowthSection, engagement: EngagementSection, retention: RetentionSection, revenue: RevenueSection,
+  "ai-economics": AiEconomicsSection,
   support: SupportDeskSection, reports: ReportsSection, announcements: AnnouncementsSection,
   billing: BillingSection, usage: UsageSection,
   health: HealthSection, "ai-keys": AiKeysSection, config: ConfigSection,

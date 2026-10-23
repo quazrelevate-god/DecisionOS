@@ -169,7 +169,26 @@ async def roll_recent(database=None) -> int:
     from services.presence import sync_from_sessions
     await sync_from_sessions(database, (datetime.now(timezone.utc) - timedelta(hours=26)).isoformat())
     today = datetime.now(IST).date()
-    return await write_window((today - timedelta(days=1)).isoformat(), today.isoformat(), database=database)
+    n = await write_window((today - timedelta(days=1)).isoformat(), today.isoformat(), database=database)
+    await snapshot_health(database)
+    return n
+
+
+async def snapshot_health(database=None) -> int:
+    """Today's health and stage on each company's row, so the console can
+    say who moved up or down this week (2026-10-23, admin console v2 P3).
+    Health is worked out live everywhere else; this is only its history."""
+    database = database if database is not None else _db
+    from services.customer_health import compute_all
+    today = datetime.now(IST).date().isoformat()
+    computed = await compute_all(database)
+    for tid, c in computed.items():
+        await database[COLLECTION].update_one(
+            {"_id": f"{tid}:{today}"},
+            {"$set": {"health": (c.get("health") or {}).get("score"), "stage": c.get("stage")},
+             "$setOnInsert": {"tenant_id": tid, "day": today}},
+            upsert=True)
+    return len(computed)
 
 
 async def backfill(days: int = 180, database=None) -> dict:

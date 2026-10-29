@@ -149,7 +149,7 @@ def test_a_routine_brings_its_steps_round_unticked(with_test_db):
     ("workers/schedulers.py", "auto_plan.sweep(db, tid)"),
 ])
 def test_every_way_a_task_is_made_asks_for_one(path, needle):
-    assert needle in (ROOT / path).read_text(), f"{path} no longer schedules the checklist"
+    assert needle in (ROOT / path).read_text(encoding="utf-8"), f"{path} no longer schedules the checklist"
 
 
 def test_a_failed_call_is_retried_a_few_times_then_left(with_test_db):

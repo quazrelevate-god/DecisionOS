@@ -134,7 +134,7 @@ def test_my_work_can_ask_for_the_missing_checklists(with_test_db):
 def test_the_routes_and_the_phone_are_wired():
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
-    src = (root / "routers" / "tasks.py").read_text()
+    src = (root / "routers" / "tasks.py").read_text(encoding="utf-8")
     assert '@router.post("/tasks/auto-plan")' in src and '@router.get("/finished-tasks")' in src
     assert "await _tell_owners_done(user, t, task_id)" in src
     fe = root.parent / "frontend" / "src"

@@ -117,7 +117,7 @@ def test_approval_creates_the_tags_and_the_wait(monkeypatch):
 
 
 def test_approving_to_start_does_not_open_a_task_still_waiting_for_another():
-    src = (Path(__file__).resolve().parents[1] / "routers" / "tasks.py").read_text()
+    src = (Path(__file__).resolve().parents[1] / "routers" / "tasks.py").read_text(encoding="utf-8")
     assert '"todo" if t.get("status") == "blocked" and not open_before else' in src
 
 

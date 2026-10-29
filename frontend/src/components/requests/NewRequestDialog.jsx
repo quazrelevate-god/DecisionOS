@@ -22,7 +22,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
-import { X, Plus, Paperclip, Trash, UserCircle, Crown, Info, CaretLeft } from "@phosphor-icons/react";
+import { X, Plus, Paperclip, Trash, UserCircle, Crown, Info, CaretLeft, Camera } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { inr } from "../../lib/format";
 import { useAuth } from "../../context/AuthContext";
@@ -56,6 +56,8 @@ export function NewRequestDialog({ open, onOpenChange, onCreated }) {
   const [step, setStep] = useState(1);
   const [picked, setPicked] = useState(false);   // a kind was tapped this visit
   const fileRef = useRef(null);
+  // 2026-10-30 (founder) — a live photo of the bill, beside the file picker.
+  const cameraRef = useRef(null);
   const advanceRef = useRef(0);
 
   const optsQ = useQuery({
@@ -343,11 +345,20 @@ export function NewRequestDialog({ open, onOpenChange, onCreated }) {
                   <span className={`block ${DRAWER_LABEL}`}>Bill or photo</span>
                   <input ref={fileRef} type="file" multiple accept="image/*,application/pdf" className="hidden"
                     data-testid="request-file-input" onChange={pickFiles} />
-                  <button type="button" onClick={() => fileRef.current?.click()} data-testid="request-attach"
-                    disabled={files.length >= MAX_FILES}
-                    className={`flex h-11 w-full items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
-                    <Paperclip size={15} weight="bold" aria-hidden="true" /> {files.length ? "Add another" : "Attach a bill or quote"}
-                  </button>
+                  <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+                    data-testid="request-camera-input" onChange={pickFiles} />
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => fileRef.current?.click()} data-testid="request-attach"
+                      disabled={files.length >= MAX_FILES}
+                      className={`flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
+                      <Paperclip size={15} weight="bold" aria-hidden="true" /> {files.length ? "Add another" : "Attach a bill or quote"}
+                    </button>
+                    <button type="button" onClick={() => cameraRef.current?.click()} data-testid="request-camera"
+                      disabled={files.length >= MAX_FILES} aria-label="Take a photo" title="Take a photo"
+                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-pill text-neutral-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
+                      <Camera size={16} weight="bold" aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
               </div>
               {files.length > 0 && (

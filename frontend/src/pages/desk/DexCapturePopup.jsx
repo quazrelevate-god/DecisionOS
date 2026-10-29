@@ -33,7 +33,7 @@
 // Decisions column, and opening it again shows where it got to.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, File as FileGlyph, Paperclip, WarningCircle, X } from "@phosphor-icons/react";
+import { Camera, Check, File as FileGlyph, Paperclip, WarningCircle, X } from "@phosphor-icons/react";
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../../components/ui/dialog";
 import { DecisionPanel } from "../../components/DecisionDialog";
@@ -243,7 +243,7 @@ const FOOT = "shrink-0 border-t border-slate-900/[0.06] px-5 pt-3 pb-[calc(0.75r
 export function DexCapturePopup({
   open, onClose, phone = false, step = "said",
   text = "", onText, transcribing = false, files = [], onRemoveFile, busy = false, onNext, onDiscard,
-  onAttach, attaching = false,
+  onAttach, onCamera, attaching = false,
   sentText = "", stages = [],
   decisionId = null, userId, onSaveDraft,
   outcome = null, onRetry,
@@ -422,6 +422,22 @@ export function DexCapturePopup({
             className={cn(glassBtn, "w-14 flex-none p-0 lg:mr-auto lg:w-12")}
           >
             <Paperclip size={18} weight="bold" aria-hidden="true" />
+          </button>
+        )}
+        {/* A live photo, beside the paperclip (2026-10-30, founder: "when I
+            click attach it only shows document attach — I want a camera
+            button for live shooting"). Same square, same upload. */}
+        {onCamera && (
+          <button
+            type="button"
+            onClick={onCamera}
+            disabled={busy || attaching}
+            data-testid="dex-popup-camera"
+            aria-label="Take a photo"
+            title="Take a photo"
+            className={cn(glassBtn, "w-14 flex-none p-0 lg:w-12")}
+          >
+            <Camera size={18} weight="bold" aria-hidden="true" />
           </button>
         )}
         <button type="button" onClick={onDiscard} data-testid="dex-popup-discard" className={glassBtn}>Discard</button>

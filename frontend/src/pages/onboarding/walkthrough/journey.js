@@ -35,6 +35,8 @@ export function buildJourney({ company, founder, bp, pipelines }) {
   return {
     company: company || "Your company",
     flows,
+    // As the app lists them (the Workflows page's tabs), for pointing at the real board.
+    flowsInOrder: list.map(shape),
     counts: [
       { key: "teams", n: teams.length, label: "Teams" },
       { key: "workflows", n: list.length, label: "Workflows" },

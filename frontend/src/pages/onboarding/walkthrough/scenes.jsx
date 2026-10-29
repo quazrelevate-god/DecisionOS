@@ -418,7 +418,7 @@ export function buildScenes(j, device) {
     notes: st.map((s, i) => {
       const a = 0.14 + (i / n) * 0.8;
       return {
-        id: `st-${i}`, at: [a, a + 0.8 / n - 0.02],
+        id: `st-${i}`, at: [a, a + 0.8 / n - 0.05],
         target: `stage-${i}`,
         side: phone ? "right" : i >= n - 2 ? "left" : "right",
         title: s.gate ? "It waits for you" : `${short(s.team, 24)} takes it`,

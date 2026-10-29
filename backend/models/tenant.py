@@ -47,6 +47,10 @@ class TenantUpdateInput(BaseModel):
     # Audit B-12 (2026-10-08): the two defaults an invoice asks for every time.
     payment_terms_days: Optional[int] = Field(default=None, ge=0, le=365)   # due = date + N
     default_gst_rate: Optional[float] = None                                # one of invoicing.GST_RATES
+    # 2026-10-29 (founder): the month the company's financial year starts in
+    # (1-12; unset = April). Finance's periods follow it: This financial year,
+    # this half, this quarter. Invoice numbering stays April-March (GST).
+    fy_start_month: Optional[int] = Field(default=None, ge=1, le=12)
 
 
 class InvoiceLogoInput(BaseModel):

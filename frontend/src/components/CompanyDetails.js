@@ -114,6 +114,8 @@ function InvoiceLogo({ canManage, has, onChanged }) {
   );
 }
 
+const FY_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
 export function CompanyDetails() {
   const { tenant, user, refreshTenant } = useAuth();
   const canManage = hasPerm(user, "team_manage");
@@ -137,6 +139,7 @@ export function CompanyDetails() {
       ...Object.fromEntries(INVOICE_FIELDS.map((f) => [f.key, tenant[f.key] || ""])),
       payment_terms_days: tenant.payment_terms_days ?? "",
       default_gst_rate: tenant.default_gst_rate ?? "",
+      fy_start_month: tenant.fy_start_month ?? 4,
     });
     setProducts((tenant.products || []).map((p) => ({ name: p.name || "", description: p.description || "", _key: uid() })));
   }, [tenant]);
@@ -162,6 +165,7 @@ export function CompanyDetails() {
         // Audit B-12: numbers, and left alone when blank.
         ...(String(terms ?? "").trim() !== "" ? { payment_terms_days: Number(terms) } : {}),
         ...(String(rate ?? "").trim() !== "" ? { default_gst_rate: Number(rate) } : {}),
+        fy_start_month: Number(form.fy_start_month) || 4,
         products: products.filter((p) => p.name.trim()).map(({ _key, ...r }) => r),
       });
       qc.invalidateQueries({ queryKey: ["invoice-next-number"] });
@@ -220,6 +224,15 @@ export function CompanyDetails() {
             <option value="">Not set</option>
             {(nextQ.data?.gst_rates || [0, 0.25, 3, 5, 12, 18, 28]).map((r) => <option key={r} value={r}>{r}%</option>)}
           </select>
+        </div>
+        {/* 2026-10-29 (founder) — Finance's year, half and quarter follow this. */}
+        <div>
+          <label htmlFor="company-field-fy_start_month" className={FIELD_LABEL}>Financial year starts in</label>
+          <select id="company-field-fy_start_month" data-testid="company-field-fy_start_month" className={`${DRAWER_FIELD} mt-1`}
+            value={form.fy_start_month ?? 4} disabled={!canManage} onChange={(e) => setField("fy_start_month", e.target.value)}>
+            {FY_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}{i === 3 ? " (India)" : ""}</option>)}
+          </select>
+          <p className="mt-1 text-[11px] text-muted-foreground">Finance shows this year, half and quarter from it.</p>
         </div>
         {nextQ.data?.number && (
           <p className="text-xs text-muted-foreground sm:col-span-2" data-testid="company-next-invoice-number">

@@ -29,18 +29,150 @@ export const REVENUE_LIST_CAP = 3000;
 // Revenue tab's filter and the brief's "Oldest overdue" share this rule.
 export const REVENUE_OVERDUE_DAYS = 30;
 
-export const PERIODS = [
-  { value: "30d", label: "Last 30 days", days: 30, prevLabel: "the previous 30 days" },
-  { value: "90d", label: "Last 90 days", days: 90, prevLabel: "the previous 90 days" },
-  { value: "365d", label: "Last 12 months", days: 365, prevLabel: "the previous 12 months" },
-  { value: "all", label: "All time", days: null, prevLabel: "" },
-];
-export const periodOf = (value) => PERIODS.find((p) => p.value === value) || PERIODS[0];
+/* 2026-10-29 (founder) — THE COMPANY'S OWN YEAR, AND IT ROLLS OVER BY ITSELF.
+   "Last 30 days" was the default, and a period counts a record by the date
+   written on it: an invoice entered today but dated in July moved nothing, and
+   the client read that as "it doesn't save". Now:
+   - The default is the current financial year, worked out from today and the
+     company's start month (Settings › Company › Financial year starts in;
+     April when unset). Nothing is hard-coded: on 1 April 2027 it is FY 2027–28.
+   - A pick names its year: "q4:2026" is Q4 of FY 2026–27 for good, so a choice
+     made in December still means that quarter in May. Only "fy" (and 30d /
+     all) is relative — "this year", whatever year it is.
+   - Any year's halves and quarters can be picked, back to the oldest record, so
+     on 1 April the year that just closed is one tap away.
+   - Labels are the standard ones: "FY 2026–27", "Q2 FY 2026–27" ("FY 2026" for
+     a January year). A window still running compares with the same point of
+     the one before; a finished one with the whole of the one before. */
+const PERIOD_VALUE = /^(fy|30d|all|(fy|q[1-4]|h[12]):\d{4}|custom:\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2})$/;
+// Choices saved by earlier versions still open (relative to the current year).
+const LEGACY = /^(fy-1|q[1-4]|h[12]|half|quarter|90d|365d)$/;
+export const PERIODS = [{ value: "fy", label: "Financial year" }];   // [0] is the default
+export const periodOf = (value) => ({ value: PERIOD_VALUE.test(String(value)) || LEGACY.test(String(value)) ? String(value) : "fy" });
+export const customPeriod = (from, to) => `custom:${from}:${to}`;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const fyStartOf = (m) => (Number.isInteger(Number(m)) && Number(m) >= 1 && Number(m) <= 12 ? Number(m) : 4);
+const addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export const todayYmd = (now = Date.now()) => ymd(new Date(now));
+
+/** The calendar year the financial year containing `t` started in. */
+export function fyYearOf(t, fyStartMonth) {
+  const fy = fyStartOf(fyStartMonth);
+  const d = new Date(t);
+  return d.getMonth() + 1 >= fy ? d.getFullYear() : d.getFullYear() - 1;
+}
+
+/** "FY 2026–27", or "FY 2026" when the year starts in January. */
+export function fyLabel(year, fyStartMonth) {
+  return fyStartOf(fyStartMonth) === 1 ? `FY ${year}` : `FY ${year}–${String(year + 1).slice(2)}`;
+}
+
+/** "1 Jul – 30 Sep 2026"; years on both ends when they differ. */
+export function dateRange(a, b) {
+  const s = new Date(a), e = new Date(b);
+  return s.getFullYear() === e.getFullYear()
+    ? `${s.getDate()} ${MONTHS[s.getMonth()]} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`
+    : `${s.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`;
+}
+
+/** Old relative values ("q3", "half", "fy-1"…) as the year-stamped value they meant. */
+function canonical(value, fy, now) {
+  const cur = fyYearOf(now, fy);
+  const into = (() => {
+    const d = new Date(now), s = new Date(cur, fy - 1, 1);
+    return (d.getFullYear() - s.getFullYear()) * 12 + d.getMonth() - s.getMonth();
+  })();
+  if (value === "fy-1") return `fy:${cur - 1}`;
+  if (value === "half") return `h${Math.floor(into / 6) + 1}:${cur}`;
+  if (value === "quarter") return `q${Math.floor(into / 3) + 1}:${cur}`;
+  if (/^[qh][1-4]$/.test(value)) return `${value}:${cur}`;
+  if (value === "90d" || value === "365d") return "fy";
+  return PERIOD_VALUE.test(value) ? value : "fy";
+}
+
+/** The window a period covers for a company whose year starts in `fyStartMonth`
+ *  (1-12): {value, kind, year, label, range, months, start, end, prevStart,
+ *  prevEnd, prevLabel, windowed, running, future, points}. Times are ms. */
+export function periodWindow(period, fyStartMonth, now = Date.now()) {
+  const fy = fyStartOf(fyStartMonth);
+  const value = canonical(String(typeof period === "string" ? period : period?.value || "fy"), fy, now);
+
+  if (value === "all") return { value, kind: "all", label: "All time", windowed: false, prevLabel: "", points: 12 };
+  if (value === "30d") {
+    const start = now - 30 * DAY;
+    return { value, kind: "30d", label: "Last 30 days", range: dateRange(start, now), windowed: true, running: true,
+      start, end: now, prevStart: start - 30 * DAY, prevEnd: start, prevLabel: "the previous 30 days", points: 15 };
+  }
+  if (value.startsWith("custom:")) {
+    const [, a, b] = value.split(":");
+    const [from, to] = a <= b ? [a, b] : [b, a];
+    const start = new Date(`${from}T00:00:00`).getTime();
+    const end = Math.min(new Date(`${to}T23:59:59.999`).getTime(), Math.max(now, start));
+    const span = Math.max(end - start, DAY);
+    return { value, kind: "custom", label: dateRange(start, end), range: dateRange(start, end), windowed: true,
+      running: false, from, to, start, end, prevStart: start - span, prevEnd: start,
+      prevLabel: "the same length of time before", points: span > 120 * DAY ? 12 : 13 };
+  }
+  // A financial year, or one of its halves or quarters.
+  const [head, y] = value.split(":");
+  const year = y ? Number(y) : fyYearOf(now, fy);      // "fy" alone = the current year
+  const fyStart = new Date(year, fy - 1, 1);
+  const kind = head === "fy" ? "fy" : head[0] === "q" ? "quarter" : "half";
+  const months = kind === "fy" ? 12 : kind === "half" ? 6 : 3;
+  const n = kind === "fy" ? 1 : Number(head[1]);
+  const start = addMonths(fyStart, (n - 1) * months);
+  const fullEnd = addMonths(start, months).getTime();
+  const running = start.getTime() <= now && now < fullEnd;
+  const future = start.getTime() > now;
+  const end = running ? now : fullEnd;
+  const prevStart = addMonths(start, -months).getTime();
+  const what = kind === "fy" ? "year" : kind;
+  return {
+    value, kind, year, label: kind === "fy" ? fyLabel(year, fy) : `${head.toUpperCase()} ${fyLabel(year, fy)}`,
+    range: dateRange(start.getTime(), fullEnd - 1),
+    months: `${MONTHS[start.getMonth()]}–${MONTHS[addMonths(start, months - 1).getMonth()]}`,
+    windowed: true, running, future,
+    start: start.getTime(), end, prevStart, prevEnd: running ? prevStart + (now - start.getTime()) : start.getTime(),
+    prevLabel: running ? `the same point last ${what}` : `the ${what} before`, points: kind === "quarter" ? 13 : 12,
+  };
+}
+
+/** The value for a financial year: "fy" for the current one (it follows the
+ *  calendar), "fy:YYYY" for any other. */
+export const fyValue = (year, fyStartMonth, now = Date.now()) => (year === fyYearOf(now, fyStartMonth) ? "fy" : `fy:${year}`);
+
+/** What the picker offers for a company: the years it can step through
+ *  (newest first, back to the oldest record, at least last year), and for a
+ *  year its halves and quarters (the ones that haven't started marked `future`). */
+export function periodChoices(fyStartMonth, earliest, now = Date.now()) {
+  const cur = fyYearOf(now, fyStartMonth);
+  const first = Math.min(cur - 1, earliest != null && Number.isFinite(earliest) ? fyYearOf(earliest, fyStartMonth) : cur - 1);
+  const years = [];
+  for (let y = cur; y >= Math.max(first, cur - 20); y -= 1) years.push(y);
+  const w = (v) => periodWindow(v, fyStartMonth, now);
+  return {
+    years,
+    current: cur,
+    fy: years.map((y) => w(fyValue(y, fyStartMonth, now))),
+    half: (y) => [w(`h1:${y}`), w(`h2:${y}`)],
+    quarter: (y) => [w(`q1:${y}`), w(`q2:${y}`), w(`q3:${y}`), w(`q4:${y}`)],
+  };
+}
+
+/** The oldest dated record on the page (for how far back the picker goes). */
+export function oldestRecord(...lists) {
+  let min = null;
+  lists.flat().forEach((r) => {
+    const t = timeOf(r?.date, r?.purchase_date, r?.created_at);
+    if (t != null && (min == null || t < min)) min = t;
+  });
+  return min;
+}
 
 const DAY = 86400000;
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
-// Trend points per window: every 2 days, weekly-ish, monthly-ish.
-const TREND_POINTS = { 30: 15, 90: 13, 365: 12 };
 
 export const num = (v) => {
   const n = Number(v);
@@ -137,8 +269,8 @@ export function change(cur, prev) {
  *  carry no amount_base: they are taken at face value, as before. */
 export const baseOf = (d) => (d && "amount_base" in d ? (d.amount_base == null ? null : num(d.amount_base)) : num(d?.amount));
 
-export function financeMetrics({ summary, revenue, expenses, assets, inventory, period, now = Date.now() }) {
-  const p = periodOf(period);
+export function financeMetrics({ summary, revenue, expenses, assets, inventory, period, fyStartMonth, now = Date.now() }) {
+  const p = periodWindow(period, fyStartMonth, now);
   const rows = {
     /* Audit 2026-10-08 — in the company's currency. An export invoice of
        GBP 160 was counted as Rs 160; the server now sends amount_base (null
@@ -164,14 +296,16 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
     stockUsed: (summary?.stock_used || []).map((u) => ({ t: timeOf(u.date), v: num(u.value) })),
   };
   const tt = summary?.totals || {};
-  const windowed = Boolean(p.days);
+  const windowed = p.windowed;
   // "All time" still draws a trend: the last 12 months.
-  const span = (p.days || 365) * DAY;
-  const end = now;
-  const start = end - span;
-  const prevStart = start - span;
-  const points = TREND_POINTS[p.days || 365];
-  const step = span / points;
+  // A finished quarter / half / year ends where it ended, not today.
+  const end = windowed ? p.end : now;
+  const start = windowed ? p.start : end - 365 * DAY;
+  const prevStart = windowed ? p.prevStart : start - 365 * DAY;
+  const prevEnd = windowed ? p.prevEnd : start;   // the same point of the window before
+  const points = p.points;
+  // A window a day old still draws: at least one day per trend step.
+  const step = Math.max((end - start) / points, DAY / points);
   const edges = Array.from({ length: points }, (_, i) => [start + i * step, start + (i + 1) * step]);
   const flowTrend = (list) => edges.map(([a, b]) => sumIn(list, a, b));
   const balanceTrend = (list) => edges.map(([, b]) => balanceAt(list, b));
@@ -179,7 +313,7 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
   const flow = (list, allTime) => {
     if (!windowed) return { value: allTime ?? sumAll(list), change: null, trend: flowTrend(list) };
     const cur = sumIn(list, start, end);
-    return { value: cur, change: change(cur, sumIn(list, prevStart, start)), trend: flowTrend(list) };
+    return { value: cur, change: change(cur, sumIn(list, prevStart, prevEnd)), trend: flowTrend(list) };
   };
   const billed = flow(rows.billed, tt.revenue_billed);
   const received = flow(rows.received, tt.revenue_received);
@@ -201,14 +335,15 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
   const net = {
     value: windowed ? netNow : (tt.net_profit ?? netNow),
     change: windowed
-      ? change(netNow, sumIn(rows.billed, prevStart, start) - sumIn(operatingRows, prevStart, start)
-        - sumIn(rows.stockUsed, prevStart, start))
+      ? change(netNow, sumIn(rows.billed, prevStart, prevEnd) - sumIn(operatingRows, prevStart, prevEnd)
+        - sumIn(rows.stockUsed, prevStart, prevEnd))
       : null,
     trend: billed.trend.map((v, i) => v - operating.trend[i] - used.trend[i]),
     stockUsed: used.value,
   };
   const balance = (list, total) => ({
-    value: total ?? balanceAt(list, Infinity),
+    // A finished quarter / half / year shows what it stood at when it ended.
+    value: windowed && !p.running ? balanceAt(list, end) : (total ?? balanceAt(list, Infinity)),
     change: windowed ? change(balanceAt(list, end), balanceAt(list, start)) : null,
     trend: balanceTrend(list),
   });

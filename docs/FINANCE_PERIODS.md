@@ -1,0 +1,39 @@
+# Finance periods follow your financial year
+
+Epic 11 · Sprint 9 · Feature · 2026-10-29
+
+## What's new (announcement)
+
+**Finance now works in your company's financial year.**
+
+- **Finance › Overview opens on your financial year** (FY 2026–27), not the last 30 days. Every record dated in the year counts — including invoices you enter today with an older date.
+- **Pick any quarter or half.** One tap on the period button opens a panel: choose *Financial year*, *Half year*, *Quarter*, *Last 30 days*, *Custom range* or *All time*, then which one — Q1, Q2, Q3, Q4 · H1, H2 · this year or last year · your own From–To dates.
+- **Look back at earlier years.** The ◀ FY 2026–27 ▶ switcher steps back through every year you have records for, so last year's Q4 is one tap away on 1 April.
+- **Set when your year starts.** Settings › Company details › *Financial year starts in* (April unless you change it). Quarters, halves and labels follow it: a January year reads "FY 2026" with Q1 = Jan–Mar.
+- **Fair comparisons.** The up / down figure on each tile compares like with like: a quarter still running against the same point of the last quarter; a finished quarter against the whole of the one before.
+- **It rolls over by itself.** At midnight on the last day of the year, Finance moves to the new year — no setting to change, even with the page left open.
+
+## Why
+
+A client added records and "nothing changed" on Revenue, Received or Profit. The records were saved: the Overview defaulted to *Last 30 days* and counts a record by the date written on it, so an invoice entered today but dated in July sat outside the window. Businesses think in financial years, quarters and halves; the page now does too.
+
+## How it works
+
+Frontend only, plus one company setting.
+
+| Piece | Where |
+|---|---|
+| Company setting `fy_start_month` (1–12, unset = April) | `models/tenant.py` `TenantUpdateInput`, saved by `PATCH /tenant` (`routers/tenant_settings.py`); Settings › Company details (`components/CompanyDetails.js`) |
+| Period values | `fy` (the current year — relative, so it rolls over), `fy:YYYY`, `q1..q4:YYYY`, `h1|h2:YYYY` (a year-stamped pick keeps meaning that period), `30d`, `all`, `custom:FROM:TO`. Values saved by older versions (`q3`, `half`, `90d` …) still open. |
+| The window for a value | `periodWindow(value, fyStartMonth, now)` in `pages/finance/ledgerMath.js`: start, end (today for a running window; the window's own end for a finished one), the comparison window, the label ("Q2 FY 2026–27"), the date range |
+| The figures | `financeMetrics` sums each tile over the window; asset and stock value for a finished window are what they stood at when it ended |
+| The picker | `pages/finance/PeriodPicker.jsx`: kind, then which one; a year switcher back to the oldest record (`periodChoices`, `oldestRecord`); periods that haven't started are shown but can't be picked; a custom range can't pass today |
+| Rollover | nothing names a year; `Ledger.js` `useToday()` notices the date changing (every minute and on returning to the tab); a choice lasts the visit (`sessionStorage`), every new visit opens on the current year |
+
+Invoice numbering keeps the April–March GST year regardless of the setting.
+
+## Tests
+
+- `backend/tests/test_finance_period_dates.py` — runs the real period code under Node on fixed dates: the change at midnight on 31 March (and last year's Q4 complete and pickable on 1 April), January and July years, a leap-year February, old saved choices, a custom range capped at today, each period counting only its own records.
+- `backend/tests/test_finance_periods_follow_the_financial_year.py` — the setting's range and save, the picker's kinds and year switcher, the page wiring.
+- Checked in the browser on the demo workspace (desktop and phone): every kind, Q1–Q4, H1–H2, last year's quarters through the switcher, a custom range, the Settings field relabelling the periods.

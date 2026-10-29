@@ -20,14 +20,14 @@
 //   * Adding works on a phone (the Add control was desktop-only) and the phone
 //     capture card's "Add expense" opens the dialog (it clicked a selector
 //     nothing carried — FN-08).
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastAiConsentOr } from "../lib/aiConsent";
 import {
-  ArrowRight, Buildings, CalendarBlank, Camera, ChartPieSlice, CurrencyInr, FilePdf,
+  ArrowRight, Buildings, Camera, ChartPieSlice, CurrencyInr, FilePdf,
   Package, Plus, Receipt, Tray, UploadSimple,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,8 @@ import { AssetsTab, ExpensesTab, InventoryTab, RevenueTab } from "./finance/Fina
 import { RecordPaymentDialog, SetRateDialog, UseStockDialog } from "./finance/MoneyActions";
 import { FinanceMoreMenu, useFinanceDelete } from "./finance/FinanceDelete";
 import { CARD, LoadError } from "./finance/financeKit";
-import { LIST_LIMIT, PERIODS, periodOf } from "./finance/ledgerMath";
+import { LIST_LIMIT, PERIODS, oldestRecord, periodOf } from "./finance/ledgerMath";
+import { PeriodPicker } from "./finance/PeriodPicker";
 
 const TABS = [
   { key: "overview", tkey: "finance.t_overview", icon: ChartPieSlice },
@@ -58,6 +59,20 @@ const TABS = [
   { key: "inbox", tkey: "finance.t_inbox", icon: Tray },
 ];
 const PERIOD_KEY = "finance.period";
+
+/* 2026-10-29 (founder: the year has to roll over by itself) — the date, as a
+   value that changes when the day does, so a page left open over midnight on
+   31 March opens the new financial year without a reload. */
+function useToday() {
+  const [day, setDay] = useState(() => new Date().toDateString());
+  useEffect(() => {
+    const check = () => setDay((d) => (d === new Date().toDateString() ? d : new Date().toDateString()));
+    const t = setInterval(check, 60000);
+    document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", check); };
+  }, []);
+  return day;
+}
 
 function SectionTabs({ tab, setTab, pendingCount, isMobile, tabs = TABS }) {
   const { t } = useTranslation();
@@ -297,11 +312,13 @@ export default function Ledger() {
     return next;
   });
   const [period, setPeriodState] = useState(() => {
-    try { return periodOf(localStorage.getItem(PERIOD_KEY)).value; } catch { return PERIODS[0].value; }
+    // 2026-10-29 — a choice lasts this visit (sessionStorage); every new visit
+    // opens on the current financial year, so a stale pick never greets anyone.
+    try { return periodOf(sessionStorage.getItem(PERIOD_KEY)).value; } catch { return PERIODS[0].value; }
   });
   const setPeriod = (value) => {
     setPeriodState(value);
-    try { localStorage.setItem(PERIOD_KEY, value); } catch { /* storage unavailable — the choice lasts this visit */ }
+    try { sessionStorage.setItem(PERIOD_KEY, value); } catch { /* storage unavailable — the choice lasts until a reload */ }
   };
   const [adding, setAdding] = useState(null);
   // Audit F-02 / F-04: the invoice or bill being paid, the stock being used.
@@ -326,6 +343,12 @@ export default function Ledger() {
   const pendingCount = capPendingQ.data?.count || 0;
 
   const summary = summaryQ.data;
+  const today = useToday();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const now = useMemo(() => Date.now(), [today]);
+  // How far back the period picker goes: the oldest dated record on the page.
+  const earliest = useMemo(() => oldestRecord(revenueQ.data?.invoices || [], revenueQ.data?.payments || [],
+    expensesQ.data || [], assetsQ.data || []), [revenueQ.data, expensesQ.data, assetsQ.data]);
   const cur = summary?.currency || tenant?.currency || "INR";
   const overviewReady = !summaryQ.isLoading && !revenueQ.isLoading && !expensesQ.isLoading && !assetsQ.isLoading && !inventoryQ.isLoading;
 
@@ -372,8 +395,7 @@ export default function Ledger() {
           )}
           <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto" data-testid="ledger-controls">
             {tab === "overview" && (
-              <GlassSelect testid="finance-period" ariaLabel="Period" value={period} onChange={setPeriod} align="end" icon={CalendarBlank}
-                options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} triggerClassName="h-11 w-auto min-w-[11rem] text-sm" />
+              <PeriodPicker value={period} onChange={setPeriod} fyStartMonth={tenant?.fy_start_month} earliest={earliest} now={now} />
             )}
             {canLedger && <AddRecordControl tab={tab} onPick={setAdding} />}
             {canLedger && <FinanceMoreMenu cur={cur} />}
@@ -395,7 +417,8 @@ export default function Ledger() {
           <OverviewSkeleton />
         ) : (
           <OverviewTab summary={summary} revenue={revenueQ.data} expenses={expensesQ.data} assets={assetsQ.data}
-            inventory={inventoryQ.data} period={period} cur={cur} onViewExpenses={() => setTab("expenses")} />
+            inventory={inventoryQ.data} period={period} fyStartMonth={tenant?.fy_start_month} now={now} cur={cur}
+            onViewExpenses={() => setTab("expenses")} />
         )
       )}
       {tab === "revenue" && (

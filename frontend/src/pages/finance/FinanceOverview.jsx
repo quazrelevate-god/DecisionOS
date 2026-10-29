@@ -18,19 +18,19 @@ import { NeedsRateNote } from "./MoneyActions";
 import { CARD, DeltaChip, EmptyNote, SMALL_PILL, Sparkline, TONE_CHIP, compactMoney, fmt } from "./financeKit";
 import { LIST_LIMIT, categorySlices, financeMetrics, latestEntryAt, receivableFacts } from "./ledgerMath";
 
-export function OverviewTab({ summary, revenue, expenses, assets, inventory, period, cur, onViewExpenses }) {
+export function OverviewTab({ summary, revenue, expenses, assets, inventory, period, fyStartMonth, now, cur, onViewExpenses }) {
   const { t } = useTranslation();
   const f = useMemo(() => fmt(cur), [cur]);
   const short = useMemo(() => compactMoney(cur), [cur]);
   const m = useMemo(
-    () => financeMetrics({ summary, revenue, expenses, assets, inventory, period }),
-    [summary, revenue, expenses, assets, inventory, period],
+    () => financeMetrics({ summary, revenue, expenses, assets, inventory, period, fyStartMonth, now: now ?? Date.now() }),
+    [summary, revenue, expenses, assets, inventory, period, fyStartMonth, now],
   );
   const facts = useMemo(() => receivableFacts(revenue, summary), [revenue, summary]);
   const changedAt = useMemo(() => latestEntryAt(revenue, expenses), [revenue, expenses]);
   const slices = useMemo(() => categorySlices(m.byCategory, m.allCategories), [m]);
   const p = m.period;
-  const trendSpan = p.days ? p.label.toLowerCase() : "the last 12 months";
+  const trendSpan = p.windowed ? p.range : "the last 12 months";
   const totals = summary?.totals || {};
   // J2-06 — revenue minus what it costs to RUN the place; stock and equipment
   // are money out, not money gone, and are counted on their own tiles.
@@ -79,7 +79,7 @@ export function OverviewTab({ summary, revenue, expenses, assets, inventory, per
       )}
       {/* Audit 2026-10-08 — foreign invoices with no exchange rate are not in these figures. */}
       <NeedsRateNote rows={totals.needs_rate} testid="overview-needs-rate" />
-      {m.truncated && p.days && (
+      {m.truncated && p.windowed && (
         <p className="text-xs text-slate-500">
           Period figures count the newest {LIST_LIMIT.toLocaleString()} records of each kind; anything older than that isn't in them.
         </p>

@@ -296,6 +296,8 @@ async def update_tenant(inp: TenantUpdateInput, user: dict = Depends(require_per
         updates["default_gst_rate"] = float(inp.default_gst_rate)
     if inp.currency is not None:
         updates["currency"] = inp.currency.strip().upper()
+    if inp.fy_start_month is not None:
+        updates["fy_start_month"] = int(inp.fy_start_month)
     if inp.products is not None:
         updates["products"] = [p.model_dump() for p in inp.products if (p.name or "").strip()]
     if not updates:

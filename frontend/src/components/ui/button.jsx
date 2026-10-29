@@ -23,7 +23,7 @@ const buttonVariants = cva(
       // Focus: 2px indigo ring, never shadow alone (§6).
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-nm-sm hover:bg-brand-700 active:bg-brand-800",
+          "bg-primary text-primary-foreground shadow-nm-sm hover:bg-[hsl(var(--primary-action-hover))] active:bg-[hsl(var(--primary-action-active))]",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-danger-700",
         outline:

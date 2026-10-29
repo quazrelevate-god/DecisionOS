@@ -98,7 +98,7 @@ export function RequestsPanel({ tab: tabProp, onTabChange, highlightId, embedded
     </div>
   );
   const grid = (list) => (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {list.map((r) => <RequestCard key={r.id} r={r} highlight={r.id === highlightId} />)}
     </div>
   );
@@ -138,7 +138,7 @@ export function RequestsPanel({ tab: tabProp, onTabChange, highlightId, embedded
       )}
 
       {q.isLoading && !q.data ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" aria-hidden="true">
           {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-52 rounded-tile" />)}
         </div>
       ) : q.isError && !q.data ? (

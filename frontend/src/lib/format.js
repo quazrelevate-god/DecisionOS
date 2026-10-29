@@ -74,6 +74,25 @@ export function timeAgo(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
+/* 2026-10-29 — how long ago, in words at every distance ("5 hrs ago", "a week
+   ago", "3 months ago"): the My Work deck's "Assigned …" and the request
+   card's foot. timeAgo turns into a date after a week; these never do. */
+export function agoWords(iso) {
+  const then = new Date(iso).getTime();
+  if (!iso || Number.isNaN(then)) return "";
+  const min = Math.max(0, Math.floor((Date.now() - then) / 60000));
+  if (min < 2) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return h === 1 ? "an hour ago" : `${h} hrs ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return d === 1 ? "1 day ago" : `${d} days ago`;
+  const w = Math.floor(d / 7);
+  if (d < 31) return w === 1 ? "a week ago" : `${w} weeks ago`;
+  const mo = Math.floor(d / 30);
+  return mo <= 1 ? "a month ago" : `${mo} months ago`;
+}
+
 export function fullTime(iso) {
   if (!iso) return "";
   const dt = new Date(iso);

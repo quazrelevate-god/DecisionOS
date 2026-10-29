@@ -45,7 +45,7 @@
  */
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { ChatCircle, PaperPlaneTilt, Waveform, X } from "@phosphor-icons/react";
+import { ChatCircle, PaperPlaneTilt, Pause, Play, Waveform, X } from "@phosphor-icons/react";
 import { DexWave } from "../mobile/DexWave";
 import { VoiceRipple } from "./VoiceRipple";
 import { cn } from "@/lib/utils";
@@ -108,6 +108,13 @@ async function tick(style) {
  */
 export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false,
                             recording = false, onStop, onCancel, levelsRef = null,
+                            /* 2026-10-29 (founder) — PAUSE WHILE SPEAKING. A
+                               small round control at the end the handle is
+                               NOT parked at, inside the same well: the take
+                               holds, the wave settles, and the same button
+                               (now a play) carries on. Not drawn without
+                               `onPause` (a recorder that cannot pause). */
+                            paused = false, onPause, onResume,
                             /* "light" — the control sits on the page's own pale
                                ground, which is everywhere it ships today.
                                "ink"   — it sits on the black sheet. The well
@@ -490,6 +497,9 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
      this is what happens. Only mid-drag — `dx` passes through the centre for
      a frame as a capture opens, before the handle is parked. */
   const homing = capturing && dragging;
+  /* Only while the microphone is actually live — not while the words are on
+     their way to be transcribed. */
+  const canPauseHere = capturing && recording && !!onPause;
   const cancelling = homing && Math.abs(dx) <= homeZone();
   const Glyph = cancelling ? X : capturing ? PaperPlaneTilt
     : heading === "ask" ? ChatCircle : heading === "decide" ? Waveform : null;
@@ -615,18 +625,54 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
           /* …and it thins as the handle is drawn home, so the take visibly
              goes with it: at the centre, where letting go cancels, it is all
              but gone. Off `pct`, so it comes back if the finger turns round. */
+          <>
           <div className={cn("pointer-events-none absolute inset-0 flex items-center",
-            parkLeft ? "pl-28 pr-6" : "pl-6 pr-28")} aria-hidden="true"
+            parkLeft
+              ? (canPauseHere ? "pl-28 pr-[4.75rem]" : "pl-28 pr-6")
+              : (canPauseHere ? "pl-[4.75rem] pr-28" : "pl-6 pr-28"))} aria-hidden="true"
             style={homing ? { opacity: Math.max(0.12, pct) } : undefined}>
             <DexWave
-              state={recording ? "listening" : "thinking"}
+              state={paused ? "idle" : recording ? "listening" : "thinking"}
               levelsRef={levelsRef}
               levels={levelsRef?.current}
-              live={recording}
+              live={recording && !paused}
               tone={onInk ? "onDark" : "ink"}
-              className="h-full w-full"
+              className={cn("h-full w-full transition-opacity duration-300", paused && "opacity-40")}
             />
+            {paused && (
+              <span data-testid="dex-slider-paused"
+                className={cn("absolute inset-0 flex select-none items-center justify-center text-[13px] font-semibold uppercase tracking-[0.16em]",
+                  onInk ? "text-white/70" : "text-foreground/60")}>
+                Paused
+              </span>
+            )}
           </div>
+          {canPauseHere && (
+            /* The pause. 3.5rem, which is the platform's 44pt once the phone's
+               0.8 lands; glass on the well rather than a second black disc, so
+               it reads as a quiet aside to the send and never as its rival. */
+            <button
+              type="button"
+              data-testid="dex-slider-pause"
+              aria-label={paused ? t("desk.slider.resume", "Carry on recording") : t("desk.slider.pause", "Pause recording")}
+              aria-pressed={paused}
+              onClick={() => (paused ? onResume?.() : onPause?.())}
+              className={cn(
+                "absolute top-1/2 grid h-14 w-14 -translate-y-1/2 place-items-center rounded-full transition-[background-color,opacity,transform] duration-200 active:scale-95",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline",
+                parkLeft ? "right-3" : "left-3",
+                onInk
+                  ? "bg-white/[0.09] text-white/85 ring-1 ring-inset ring-white/15 hover:bg-white/15"
+                  : "bg-white/60 text-slate-700 ring-1 ring-inset ring-slate-900/10 hover:bg-white/80",
+                homing && "opacity-0"
+              )}
+            >
+              {paused
+                ? <Play size={18} weight="fill" aria-hidden="true" />
+                : <Pause size={18} weight="fill" aria-hidden="true" />}
+            </button>
+          )}
+          </>
         ) : (
           <>
             {/* IN THE DOCK THE WORD IS IN THE MIDDLE. (2026-10-12, client.)
@@ -735,6 +781,7 @@ export function DexSlider({ onAsk, onDecide, readLevel = null, capturing = false
         {/* What a screen reader hears while the handle moves. */}
         <span className="sr-only" aria-live="polite">
           {cancelling ? t("desk.slider.atCancel", "Release to cancel the recording.")
+            : capturing && paused ? t("desk.slider.pausedNow", "Paused. Press play to carry on, or press the handle to send what you said.")
             : capturing ? (recording
             ? t("desk.slider.listening", "Listening. Press to stop and send, or slide back to the centre to cancel.")
             : t("desk.slider.reading", "Dex is reading what you said."))

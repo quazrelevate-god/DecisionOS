@@ -62,6 +62,14 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSecs, setRecordSecs] = useState(0);
+  /* 2026-10-29 (founder) — A PAUSE WHILE SPEAKING. The take stays open (the
+     recorder is paused, not stopped), the clock and the meter hold still, and
+     resuming carries on into the same recording, so a person can stop to think
+     or let someone walk past without starting again. `pausedRef` is what the
+     meter's interval reads, because a suspended AudioContext keeps handing
+     back its last buffer and the wave would freeze at whatever was being said. */
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
   // 0..1 per bar, oldest first — a scrolling window of loudness.
   const [levels, setLevels] = useState(() => new Array(BARS).fill(0));
   // { noteId, status, transcript, language, decision, tasks[] } | null
@@ -157,7 +165,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
       clearInterval(timerRef.current);
       clearTimeout(pollRef.current);
       stopMeter();
-      if (mediaRef.current?.state === "recording") mediaRef.current.stop();
+      if (mediaRef.current && mediaRef.current.state !== "inactive") mediaRef.current.stop();
     };
   }, [stopMeter]);
 
@@ -323,14 +331,16 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
      is still being granted is remembered and applied the moment it arrives,
      instead of being lost. */
   const startRecording = useCallback(async () => {
-    if (startingRef.current || mediaRef.current?.state === "recording") return false;
+    if (startingRef.current || (mediaRef.current && mediaRef.current.state !== "inactive")) return false;
     // Play audit W5 / App Store 5.1.2(i) — AI consent and where the audio goes, first (lib/micNotice).
     if (!(await askBeforeMic({ ai: true }))) return false;
-    if (startingRef.current || mediaRef.current?.state === "recording") return false;
+    if (startingRef.current || (mediaRef.current && mediaRef.current.state !== "inactive")) return false;
     startingRef.current = true;
     cancelStartRef.current = false;
     discardStartRef.current = false;
     // Optimistic: the UI must answer the tap, not the hardware.
+    pausedRef.current = false;
+    setPaused(false);
     setRecording(true);
     setRecordSecs(0);
     levelsRef.current = new Array(BARS).fill(0);
@@ -430,6 +440,12 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
           source.connect(analyser);
           const data = new Uint8Array(analyser.fftSize);
           const interval = setInterval(() => {
+            if (pausedRef.current) {
+              const still = levelsRef.current.slice(1);
+              still.push(0);
+              levelsRef.current = still;
+              return;
+            }
             analyser.getByteTimeDomainData(data);
             let sum = 0;
             for (let i = 0; i < data.length; i++) {
@@ -502,10 +518,36 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
          closes it. onstop and its error paths already own clearing it. */
       setSending(true);
     }
+    pausedRef.current = false;
+    setPaused(false);
     setRecording(false);
     clearInterval(timerRef.current);
     stopMeter();
   }, [stopMeter]);
+
+  /* PAUSE / RESUME. Only a recorder that can (MediaRecorder.pause is in every
+     engine this app ships to, but an old WebView may lack it — `canPause` says,
+     and the control is not drawn without it). A stop while paused still sends
+     everything said before the pause: stopRecording ends any recorder that is
+     not "inactive". */
+  const pauseRecording = useCallback(() => {
+    const mr = mediaRef.current;
+    if (!mr || mr.state !== "recording" || typeof mr.pause !== "function") return;
+    try { mr.pause(); } catch { return; }
+    pausedRef.current = true;
+    setPaused(true);
+    clearInterval(timerRef.current);
+  }, []);
+  const resumeRecording = useCallback(() => {
+    const mr = mediaRef.current;
+    if (!mr || mr.state !== "paused") return;
+    try { mr.resume(); } catch { return; }
+    pausedRef.current = false;
+    setPaused(false);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setRecordSecs((s) => s + 1), 1000);
+  }, []);
+  const canPause = typeof window !== "undefined" && typeof window.MediaRecorder?.prototype?.pause === "function";
 
   /* 2026-10-09 (founder) — CANCEL: the recording ends and NOTHING happens with
      it. "Once I swipe … I don't have an option to cancel what I am talking" —
@@ -522,6 +564,8 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
       mr.discarded = true;
       try { mr.stop(); } catch { /* already stopped */ }
     }
+    pausedRef.current = false;
+    setPaused(false);
     setRecording(false);
     setRecordSecs(0);
     clearInterval(timerRef.current);
@@ -569,6 +613,7 @@ export function useDexCapture({ onCaptured, onRecordingChange, watch = false, on
     sending, recording, recordSecs, levels, levelsRef,
     understanding, clearUnderstanding, reset, follow,
     sendText, startRecording, stopRecording, cancelRecording, uploadFile,
+    paused, pauseRecording, resumeRecording, canPause,
     attachments, removeAttachment,
     fileRef,
   };

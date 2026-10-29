@@ -36,14 +36,14 @@ export function toastDexOutcome(message, { onReview, onRetry, canRetry } = {}) {
     return;
   }
   if (o.kind === "ready") {
-    toast(o.headline, {
+    toast.message(o.headline, {
       description: o.title || undefined,
       action: o.decisionId && onReview ? { label: "Review", onClick: () => onReview(o.decisionId) } : undefined,
     });
     return;
   }
   if (o.kind === "nothing") {
-    toast(OUTCOME_COPY.nothing, { description: o.answer || undefined });
+    toast.message(OUTCOME_COPY.nothing, { description: o.answer || undefined });
     return;
   }
   if (o.kind === "failed") {
@@ -55,5 +55,5 @@ export function toastDexOutcome(message, { onReview, onRetry, canRetry } = {}) {
     });
     return;
   }
-  toast(OUTCOME_COPY.slow);
+  toast.message(OUTCOME_COPY.slow);
 }

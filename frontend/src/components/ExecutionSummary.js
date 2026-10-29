@@ -64,7 +64,7 @@ export default function ExecutionSummary({ data, onReview, onClose }) {
           <div className="mt-5 flex gap-2">
             {hasApprovals && (
               <button onClick={onReview} data-testid="es-review-btn"
-                className="flex-1 flex items-center justify-center gap-2 bg-brand-600 text-white px-4 py-2.5 text-sm font-medium border border-border transition-all">
+                className="flex-1 flex items-center justify-center gap-2 bg-[hsl(var(--primary-action))] text-white px-4 py-2.5 text-sm font-medium border border-border transition-all">
                 Review &amp; approve <ArrowRight size={15} weight="bold" />
               </button>
             )}

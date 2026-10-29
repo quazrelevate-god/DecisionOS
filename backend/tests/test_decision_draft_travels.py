@@ -218,7 +218,10 @@ def test_the_message_reads_the_state_that_was_asked_for_not_the_one_it_flipped_t
            / "components" / "DecisionDialog.js").read_text(encoding="utf-8")
     assert "mutationFn: (next) =>" in src and "onSuccess: (_res, next) =>" in src
     assert 'toast.success(next ? "Saved as a draft" : "No longer a draft")' in src
-    assert "draftM.mutate(!isDraft)" in src
+    # 2026-10-05 the button stopped toggling: it is offered only on a decision
+    # that is not a draft yet, so every click asks for `true` by name.
+    assert "draftM.mutate(true)" in src
+    assert "draftM.mutate()" not in src, "a click that does not say which state it wants"
 
 
 def test_the_capture_popup_waits_for_the_server_before_it_says_it_saved():
@@ -231,7 +234,7 @@ def test_the_capture_popup_waits_for_the_server_before_it_says_it_saved():
     well = (fe / "pages" / "desk" / "DeskDexWell.jsx").read_text(encoding="utf-8")
     assert "const saveDraft = async (id) =>" in well
     assert "await onLater?.(id);" in well, "the answer first"
-    i_err, i_ok = well.index("Couldn't save it as a draft"), well.index('toast("Saved as a draft"')
+    i_err, i_ok = well.index("Couldn't save it as a draft"), well.index('toast.message("Saved as a draft"')
     assert i_err < i_ok, "the failure returns before anything claims success"
     desk = (fe / "pages" / "Desk.js").read_text(encoding="utf-8")
     assert "onLater={(id) => saveAsDraft(id).then(" in desk, "the Desk hands the promise back"

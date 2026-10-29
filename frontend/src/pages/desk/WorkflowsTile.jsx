@@ -24,7 +24,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, FlowArrow } from "@phosphor-icons/react";
 import { BigNumeral } from "../../components/neuglass";
 import { IconChip } from "../../components/neuglass/IconChip";
-import { CHIP } from "../../components/neuglass/glass";
+import { CHIP, INK_PILL } from "../../components/neuglass/glass";
 import { cn } from "../../lib/utils";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
@@ -47,8 +47,10 @@ const ACTION_PILL =
   + "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline";
 
 /* FIX-3 — the tile's one action, so it wears the ink: HIG (buttons › Style)
-   gives the prominent style to the most likely action, and it is the only one. */
-const PILL_INK = "bg-[hsl(var(--ng-action-bg,var(--ng-ink)))] text-[hsl(var(--ng-action-fg,0_0%_100%))]";
+   gives the prominent style to the most likely action, and it is the only one.
+   2026-10-29 (founder) — the app's black gradient pill, INK_PILL, rather than
+   a flat fill of its own: the same button every other primary move wears. */
+const PILL_INK = INK_PILL;
 
 /* FIX-3 — where the button goes: the board, opened on the card the tile names
    (Workflows.js reads ?wf= and ?wf_type=: it switches to that board, opens the

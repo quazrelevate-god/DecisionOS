@@ -1,6 +1,6 @@
 {
-  "count": 434,
-  "sha": "251cc983c4f54e6fce06832deb17334ae4458c546a8350742293dd1246ec1aef",
+  "count": 435,
+  "sha": "91e0eb87018fa5e45832c16cdcafd3b158f289a126e51f98dc01fa8367b1bb71",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -320,6 +320,7 @@
     "POST /api/decisions/{decision_id}/approver",
     "POST /api/decisions/{decision_id}/comment",
     "POST /api/decisions/{decision_id}/draft",
+    "POST /api/decisions/{decision_id}/proposal/tasks",
     "POST /api/decisions/{decision_id}/reject",
     "POST /api/decisions/{decision_id}/tasks",
     "POST /api/desk/nudge/{item_id}",

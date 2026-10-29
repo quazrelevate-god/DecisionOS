@@ -36,6 +36,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { openGuide } from "../lib/guide";
 import { INK_PILL } from "../components/neuglass/glass";
 import { ScrollTabRow } from "../components/neuglass/ScrollTabRow";
+import { DockCard } from "../components/settings/DockCard";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "AUD"];
 const inp = "w-full nm-field px-3 py-2 text-sm";
@@ -1104,6 +1105,8 @@ export default function Settings() {
   // mobile branch is re-applied on top of it rather than merged into it.
   const { user } = useAuth();
   const isOwner = hasPerm(user, "team_manage");
+  // 2026-10-29 — the dock is the phone's; the desktop has its sidebar.
+  const phone = useIsMobile();
   // U7-11.1 (2026-08-17): persist active tab in URL. Was useState-only,
   // so reload / back-forward / deep-link all landed on Business. Owner
   // ask: fix the missing / optimizable bits -- deep-linking Settings
@@ -1157,6 +1160,7 @@ export default function Settings() {
             here from the phone's More panel, but only the owner saw it). */}
         <div className="space-y-6" data-testid="settings-panel-member">
           <Section id="settings-s-profile" label="Your profile"><ProfileCard /></Section>
+          {phone && <Section id="settings-s-dock" label="Your dock"><DockCard /></Section>}
           <Section id="settings-s-notifications" label="Notification history"><NotificationHistory embedded /></Section>
           <Section id="settings-s-access" label="Your access"><YourAccessCard /></Section>
           <Section id="settings-s-language" label="Language"><LanguageCard /></Section>
@@ -1228,6 +1232,7 @@ export default function Settings() {
         {tab === "account" && (
           <>
             <Section id="settings-s-profile" label="Your profile"><ProfileCard /></Section>
+            {phone && <Section id="settings-s-dock" label="Your dock"><DockCard /></Section>}
             <Section id="settings-s-notifications" label="Notification history"><NotificationHistory embedded /></Section>
             {user?.role !== "owner" && <Section id="settings-s-access" label="Your access"><YourAccessCard /></Section>}
             <Section id="settings-s-language" label="Language"><LanguageCard /></Section>

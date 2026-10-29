@@ -134,7 +134,8 @@ def test_the_screens_are_told_the_scope():
     assert "export function canSeePipeline(user, key)" in p
     assert "om.pipelines.filter((p) => canSeePipeline(user, p.key))" in fe("pages/Workflows.js")
     assert "canSeePipeline(user, type)" in fe("components/workflow/WorkflowLink.js")
-    assert fe("pages/MyWork.js").count("<WorkflowLink type={t.workflow_summary.type}") == 2
+    # The card face, the desktop drawer and (2026-10-29) the phone task view.
+    assert fe("pages/MyWork.js").count("<WorkflowLink type={t.workflow_summary.type}") == 3
 
 
 def test_a_new_team_says_what_it_started_with():

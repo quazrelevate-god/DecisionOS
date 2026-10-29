@@ -151,7 +151,7 @@ function QuickCapture({ pendingCount, isMobile, canLedger, tab, onIngested, onOp
            nothing is saved until File it. It waits in the Inbox's Pending
            until it is filed or discarded. */
         const found = ["contacts", "invoices", "payments", "tasks"].some((k) => (data.records?.[k] || []).length);
-        if (found) toast("Read it — check the details below, then tap File it to save it.");
+        if (found) toast.message("Read it — check the details below, then tap File it to save it.");
         else toast.error(canLedger
           ? "Nothing could be read from this file. Discard it, or add it by hand."
           : "Nothing could be read from this file. Discard it and try a clearer photo.");

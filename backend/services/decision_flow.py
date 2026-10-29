@@ -19,7 +19,7 @@ from typing import Optional
 from fastapi import HTTPException
 
 import core as _core
-from core import db, logger, now_iso
+from core import db, logger, new_id, now_iso
 from core.permissions import user_perms
 from services.ai import brain_context
 from services.tenancy import tenant_filter
@@ -377,10 +377,38 @@ async def _save_proposal(user: dict, d: dict, label: str) -> dict:
     return await db.decisions.find_one(tenant_filter(d["id"], tid), {"_id": 0})
 
 
+def _clean_tags(tags) -> list:
+    """Up to six short labels, trimmed, without repeats (case aside)."""
+    out, seen = [], set()
+    for t in tags or []:
+        clean = " ".join(str(t).split())[:24]
+        if clean and clean.lower() not in seen:
+            seen.add(clean.lower())
+            out.append(clean)
+    return out[:6]
+
+
+def _waits_in_circle(tasks: list, key: str, wanted: list) -> bool:
+    """Would `key` waiting on `wanted` close a loop (A waits on B waits on A)?"""
+    deps = {t.get("key"): list(t.get("depends_on") or []) for t in tasks}
+    deps[key] = list(wanted)
+    stack, seen = list(wanted), set()
+    while stack:
+        k = stack.pop()
+        if k == key:
+            return True
+        if k in seen:
+            continue
+        seen.add(k)
+        stack.extend(deps.get(k) or [])
+    return False
+
+
 async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=None, use_existing=None,
                              assignee_id=None, due_date=None,
                              priority=None, evidence_required=None, approval_required=None,
-                             approval_stage=None, approver_id=None) -> dict:
+                             approval_stage=None, approver_id=None,
+                             description=None, tags=None, depends_on=None) -> dict:
     """assignee_id: who does it (held to the same rule as giving anyone a task);
     due_date: "YYYY-MM-DD", or "" for no due date.
     ASK-50 — priority, evidence_required, approval_required / approval_stage and
@@ -408,6 +436,33 @@ async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=No
             was = task.get("title")
             task["title"] = clean
             changes.append(f'renamed from "{was}"')
+    # 2026-10-29 — the founder's Decide review: the details, the labels, and
+    # what it waits for inside this same decision.
+    if description is not None:
+        clean = str(description).strip()
+        if clean != (task.get("description") or ""):
+            task["description"] = clean
+            changes.append("details changed" if clean else "details cleared")
+    if tags is not None:
+        clean = _clean_tags(tags)
+        if clean != (task.get("tags") or []):
+            task["tags"] = clean
+            changes.append(f"tagged {', '.join(clean)}" if clean else "tags cleared")
+    if depends_on is not None:
+        others = {t.get("key"): t for t in d["proposal"].get("tasks") or [] if t.get("key") != key}
+        wanted = []
+        for k in depends_on:
+            if k not in others:
+                raise HTTPException(status_code=400, detail="That task is no longer in this decision.")
+            if k not in wanted:
+                wanted.append(k)
+        if _waits_in_circle(d["proposal"].get("tasks") or [], key, wanted):
+            raise HTTPException(status_code=400, detail=(
+                "Those tasks would wait on each other, and neither could ever start. Pick one to go first."))
+        if wanted != (task.get("depends_on") or []):
+            task["depends_on"] = wanted
+            names = [others[k].get("title") or "a task" for k in wanted]
+            changes.append(f"waits for {', '.join(names)}" if names else "waits for nothing")
     # Audit C-14: the reviewer's call on work that is already there.
     if use_existing is not None and task.get("existing") and bool(use_existing) != bool(task.get("use_existing")):
         task["use_existing"] = bool(use_existing)
@@ -502,6 +557,10 @@ async def remove_proposal_item(user: dict, decision_id: str, kind: str, key: str
     if not item:
         raise HTTPException(status_code=404, detail="That item is no longer in this decision.")
     d["proposal"][kind] = [x for x in items if x.get("key") != key]
+    if kind == "tasks":  # 2026-10-29 — nothing goes on waiting for a task that is gone
+        for t in d["proposal"].get("tasks") or []:
+            if key in (t.get("depends_on") or []):
+                t["depends_on"] = [k for k in t["depends_on"] if k != key]
     if kind == "workflows":  # tasks that were to join it stay plain tasks
         for t in d["proposal"].get("tasks") or []:
             if t.get("workflow_key") == key:
@@ -509,6 +568,22 @@ async def remove_proposal_item(user: dict, decision_id: str, kind: str, key: str
                 t.pop("workflow_title", None)
     name = item.get("title") or item.get("text") or _KIND_WORD[kind]
     return await _save_proposal(user, d, f"Removed before approval: {_KIND_WORD[kind]} “{name}”")
+
+
+async def add_proposal_task(user: dict, decision_id: str, title: str) -> dict:
+    """2026-10-29 (founder) — "Add another task" in the Decide review: a task
+    Dex did not hear, added to the proposal before approving. Nobody does it
+    and it has no date until the reviewer says — the review flags both."""
+    d = await _editable(user, decision_id)
+    clean = " ".join(str(title).split())
+    if not clean:
+        raise HTTPException(status_code=400, detail="Give the task a name.")
+    tasks = d["proposal"].setdefault("tasks", [])
+    if len(tasks) >= 30:
+        raise HTTPException(status_code=400, detail="That's as many tasks as one decision can hold.")
+    tasks.append({"key": new_id(), "title": clean, "priority": "medium",
+                  "assignee_id": None, "assignee_role": None, "due_date": None, "added_by_hand": True})
+    return await _save_proposal(user, d, f"Added before approval: task “{clean}”")
 
 
 async def task_assigned_line(tid: str, t: dict, roles: list) -> str:

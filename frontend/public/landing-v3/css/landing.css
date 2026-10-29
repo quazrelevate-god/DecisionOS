@@ -318,3 +318,6 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .still .desk-head { position: static; transform: none; padding: 14vh 0 4vh; } .still .desk-caps { position: static; width: auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 4vh 6vw; }
 .still .who-head { position: static; padding: 12vh 6vw 4vh; } .still .who-track { position: static; flex-wrap: wrap; padding: 0 6vw 10vh; }
 .still .draft { transform: none; } .still .seq img:last-child { opacity: 1; } .still #rail-fill { transform: scaleX(.4); }
+
+/* 2026-10-29 — prices are not public yet: the slot says so. */
+.price.price-soon { font-size: clamp(28px, 2.8vw, 38px); font-weight: 600; letter-spacing: -.02em; }

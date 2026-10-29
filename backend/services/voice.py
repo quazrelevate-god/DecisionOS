@@ -538,6 +538,8 @@ async def _create_decision_tasks(tenant_id, decision, items, reused=None):
     same lock before work starts, that New Task writes."""
     from services.proposal_task_settings import creation_fields
     task_ids = []
+    made = {}   # 2026-10-29 — proposal key -> the task it became, for depends_on
+    used = {}   # …and the existing tasks it used instead (waited for, never changed)
     for t in items or []:
         # Audit C-14: the reviewer kept "Use that task" -- update it, no twin.
         if t.get("use_existing"):
@@ -545,6 +547,8 @@ async def _create_decision_tasks(tenant_id, decision, items, reused=None):
             if ex:
                 if reused is not None:
                     reused.append(ex)
+                if t.get("key"):
+                    used[t["key"]] = ex   # a task after it may wait for it
                 continue
         tid = new_id()
         default_approver = None
@@ -564,8 +568,25 @@ async def _create_decision_tasks(tenant_id, decision, items, reused=None):
             # in by _link_tasks_to_workflows once the workflows exist.
             "workflow_id": t.get("workflow_id"), "stage_key": t.get("stage_key"),
             "updated_at": now_iso(), "last_action": "Created",
+            **({"tags": list(t["tags"])} if t.get("tags") else {}),
         })
         task_ids.append(tid)
+        if t.get("key"):
+            made[t["key"]] = tid
+        # 2026-10-29 — each new task gets Dex's checklist (services.auto_plan);
+        # one still locked until approved gets it when it is approved.
+        if not settings.get("approval_required") or settings.get("approval_stage") == "close":
+            from services import auto_plan
+            auto_plan.schedule(db, tenant_id, tid)
+    # 2026-10-29 — what each waits for inside this decision, now that every one
+    # has an id. A task that waits starts blocked, and routers.tasks opens it
+    # when the last task before it closes (_release_dependents).
+    for t in items or []:
+        after = [made.get(k) or used.get(k) for k in (t.get("depends_on") or []) if k in made or k in used]
+        if not after or t.get("key") not in made:
+            continue
+        await db.tasks.update_one({"id": made[t["key"]], "tenant_id": tenant_id}, {"$set": {
+            "depends_on": after, "status": "blocked", "last_action": "Waiting for the task before it"}})
     return task_ids
 
 

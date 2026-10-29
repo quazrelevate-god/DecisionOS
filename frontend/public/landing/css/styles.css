@@ -1316,6 +1316,8 @@ button{ font-family:inherit; cursor:pointer; }
 .pc-name{ font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.72); margin-bottom:10px; }
 .pc-price{ font-size:clamp(30px,3.4vw,40px); font-weight:800; color:#fff; letter-spacing:-.03em; margin-bottom:6px; }
 .pc-price span{ font-size:14px; font-weight:500; color:rgba(255,255,255,.6); letter-spacing:0; }
+/* 2026-10-29 — prices are not public yet: the slot says so, in the same place and weight. */
+.pc-price-soon{ font-size:clamp(24px,2.6vw,30px); letter-spacing:-.02em; color:rgba(255,255,255,.92); }
 .pc-for{ font-size:13px; color:rgba(255,255,255,.7); margin-bottom:20px; }
 .pc-list{ display:grid; gap:10px; }
 .pc-list li{ font-size:13.5px; color:rgba(255,255,255,.88); padding-left:22px; position:relative; line-height:1.5; }

@@ -99,7 +99,7 @@ export function useAnswerRecorder(onResult) {
           const text = (data?.text || "").trim();
           const language_code = (data?.language_code || "").trim();
           if (text) onResult({ text, language_code });
-          else toast("Didn't catch that — try again or type your answer");
+          else toast.message("Didn't catch that — try again or type your answer");
         } catch (e) {
           toast.error(formatApiError(e.response?.data?.detail) || "Couldn't transcribe — type your answer instead");   // B31
         } finally {

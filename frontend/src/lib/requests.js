@@ -34,6 +34,20 @@ export const REQUEST_TYPES = [
 
 export const requestType = (key) => REQUEST_TYPES.find((t) => t.key === key) || REQUEST_TYPES[REQUEST_TYPES.length - 1];
 
+/* 2026-10-22/29 — each kind's quiet colour: a thin stroke and a tinted icon on
+   the New Request form, the type chip on the card. Written out in full so
+   Tailwind keeps the classes. */
+export const REQUEST_TONES = {
+  purchase:      { ring: "ring-amber-300",   ink: "text-amber-700",   wash: "bg-amber-50",   chip: "bg-amber-50 text-amber-800 ring-amber-100" },
+  reimbursement: { ring: "ring-sky-300",     ink: "text-sky-700",     wash: "bg-sky-50",     chip: "bg-sky-50 text-sky-800 ring-sky-100" },
+  advance:       { ring: "ring-emerald-300", ink: "text-emerald-700", wash: "bg-emerald-50", chip: "bg-emerald-50 text-emerald-800 ring-emerald-100" },
+  travel:        { ring: "ring-indigo-300",  ink: "text-indigo-700",  wash: "bg-indigo-50",  chip: "bg-indigo-50 text-indigo-700 ring-indigo-100" },
+  equipment:     { ring: "ring-violet-300",  ink: "text-violet-700",  wash: "bg-violet-50",  chip: "bg-violet-50 text-violet-700 ring-violet-100" },
+  repair:        { ring: "ring-orange-300",  ink: "text-orange-700",  wash: "bg-orange-50",  chip: "bg-orange-50 text-orange-800 ring-orange-100" },
+  general:       { ring: "ring-slate-300",   ink: "text-slate-700",   wash: "bg-slate-100",  chip: "bg-slate-100 text-slate-700 ring-slate-200" },
+};
+export const requestTone = (key) => REQUEST_TONES[key] || REQUEST_TONES.general;
+
 /* The chip recipe the leave and task cards use (ASK-25): waiting is amber, a
    question back is violet, a yes is green, done is the quiet teal of something
    finished and paid, a no is rose, withdrawn is grey because it is over. */

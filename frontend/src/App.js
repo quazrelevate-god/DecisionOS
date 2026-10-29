@@ -2,6 +2,7 @@ import { useEffect, lazy, Suspense } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
+import { AffirmationLayer, installAffirmations } from "./components/mobile/Affirmation";
 import { AuthProvider, useAuth, rememberArrival } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
 import { LockKey, MapTrifold, ArrowClockwise } from "@phosphor-icons/react";
@@ -86,6 +87,9 @@ import PushRationale from "./components/PushRationale";
 import MicNoticeHost from "./components/MicNoticeHost";
 // B04: the screen for "we cannot reach the server", which is not "signed out".
 import { CantReachUs } from "./components/auth/CantReachUs";
+
+// On a phone a plain success is a full-screen tick, not a toast (Affirmation.jsx).
+installAffirmations();
 
 /* A screen that is not the page you asked for: no access, no such page.
    2026-10-03 — Access Denied was the last screen still in the retired
@@ -453,6 +457,7 @@ function App() {
           </RoutedBoundary>
         </BrowserRouter>
         <Toaster position="top-right" />
+        <AffirmationLayer />
       </AuthProvider>
     </div>
   );

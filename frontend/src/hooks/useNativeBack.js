@@ -99,7 +99,7 @@ export function useNativeBack() {
     let cancelled = false;
     startNativeBack({
       goHome: () => navigate(home, { replace: true }),
-      say: (message) => toast(message, { id: "native-back-exit", duration: 2000 }),
+      say: (message) => toast.message(message, { id: "native-back-exit", duration: 2000 }),
     }).then((off) => {
       if (cancelled) off?.();
       else stop = off;

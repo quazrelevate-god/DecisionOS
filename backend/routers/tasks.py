@@ -66,6 +66,7 @@ from models.tasks import (
     RespondInput,
 )
 from services.ai import brain_context
+from services import auto_plan  # 2026-10-29: Dex drafts the checklist on creation
 from services.tenancy import tenant_filter  # FIX-001-C
 from services.tasks import (
     APPROVAL_STAGES,
@@ -315,6 +316,7 @@ async def _resolve_task_handoff(user, t, task_id, action, text, step_text, inp):
         "raised_step_text": step_text, "raised_note": text,
         "source": "escalation" if action == "escalate" else "handoff", "created_at": now_iso(),
     })
+    auto_plan.schedule(db, tenant_id, followup_task_id)
     if to_id:
         notify_ids = [to_id]
     else:
@@ -708,6 +710,10 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
                                     f"New work assigned: '{inp.title}'", "task", tid,
                                     ntype="assigned", title=inp.title, sender=user["name"])
     await _log_task_event(user, tid, "task_created", f"Created task '{inp.title}'", "Created the task")
+    # 2026-10-29 — Dex drafts its checklist straight away, so the card can name
+    # the next action. A task locked until approved gets it when it is approved.
+    if not lock_now:
+        auto_plan.schedule(db, user["tenant_id"], tid)
     return await enrich_task(await db.tasks.find_one({"id": tid}, {"_id": 0}))
 
 
@@ -1100,6 +1106,10 @@ async def _spawn_next_occurrence(user: dict, t: dict) -> Optional[str]:
         "last_action": "Next time round",
     })
     await db.tasks.insert_one(row)
+    # A routine repeats the same work: the checklist comes round with it,
+    # unticked (auto_plan.copy_from), and Dex drafts one only if it had none.
+    if not await auto_plan.copy_from(db, t["tenant_id"], nid, t) and not lock_now:
+        auto_plan.schedule(db, t["tenant_id"], nid)
     if not lock_now:
         from services.notifications import push_notification
         people = [i for i in assignee_ids_of(row) if i != user["id"]]
@@ -1262,8 +1272,15 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         said = "Approved — task closed"
         notify_msg = f"Approved and closed: '{t['title']}'"
     else:
-        # Pre-execution approval: unlock the task so the assignee can start working on it.
-        set_doc = {"status": "todo" if t.get("status") == "blocked" else t.get("status")}
+        # Pre-execution approval: unlock the task so the assignee can start working on it —
+        # unless it also waits for a task that is still open (2026-10-29): that is a
+        # second block, and _release_dependents lifts it when the last one closes.
+        open_before = 0
+        if t.get("depends_on"):
+            open_before = await db.tasks.count_documents({
+                "tenant_id": user["tenant_id"], "id": {"$in": t["depends_on"]},
+                "status": {"$nin": ["done", "cancelled"]}})
+        set_doc = {"status": "todo" if t.get("status") == "blocked" and not open_before else t.get("status")}
         said = "Approved — work can start"
         notify_msg = f"Approved: you can start '{t['title']}'"
     _closed_at = now_iso()
@@ -1279,6 +1296,9 @@ async def approve_task(task_id: str, user: dict = Depends(get_current_user)):
         await push_notification(user["tenant_id"], to_notify, 1, notify_msg, "task", task_id,
                                 ntype="approved", title=t["title"], sender=user["name"])
     await _log_task_event(user, task_id, "task_approved", f"Approved '{t['title']}'", said)
+    if not closing:
+        # The work can start now, so its checklist can be drafted (auto_plan).
+        auto_plan.schedule(db, user["tenant_id"], task_id)
     if closing:
         await _log_task_event(user, task_id, "task_done", f"Completed task '{t['title']}'", "Closed on approval")
         if t.get("decision_id"):

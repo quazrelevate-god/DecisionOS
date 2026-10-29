@@ -37,10 +37,11 @@ import { Check, File as FileGlyph, Paperclip, WarningCircle, X } from "@phosphor
 import { Close as DialogPrimitiveClose } from "@radix-ui/react-dialog";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../../components/ui/dialog";
 import { DecisionPanel } from "../../components/DecisionDialog";
+import { DexReview } from "./DexReview";
 import { GLASS_ICON_BTN, GLASS_PILL, GLASS_SHEET, INK_PILL } from "../../components/neuglass/glass";
-import { decisionCounts, readyLine, stageLabel, OUTCOME_COPY } from "../../lib/dexOutcome";
+import { decisionCounts, readyLine, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { cn } from "../../lib/utils";
-import { DexForgeFit } from "../onboarding/DexForge";
+import { DexBuilderFit } from "../onboarding/DexBuilder";
 import { AiNotice } from "../../components/ReportButton";
 import { Loader } from "../../components/common";
 
@@ -55,6 +56,8 @@ const STEP_COPY = {
   ask: { n: 1, title: "What you said", hint: "Read it through, change anything Dex heard wrong, then send it." },
   reading: { n: 2, title: "Dex is reading it", hint: "Working out the decision, the tasks and who does them." },
   made: { n: 3, title: "What Dex made", hint: "Everything this decision creates, before anything is created." },
+  // The phone's review (DexReview) names its own three screens over this.
+  madePhone: { n: 3, title: "Review & approve", hint: "Nothing is created until you approve it." },
   nothing: { n: 3, title: OUTCOME_COPY.nothing, hint: "Dex read it and found nothing to decide." },
   failed: { n: 3, title: "That didn't go through", hint: "Nothing was created." },
   slow: { n: 3, title: "Still working on it", hint: "Dex is taking longer than usual." },
@@ -127,6 +130,63 @@ function FileChip({ file, onRemove, disabled }) {
   );
 }
 
+/* 2026-10-29 (founder) — STEP 2 IS A CHECKLIST of what Dex does with what was
+   said, the way the reference reads: done, doing, still to come.
+   HOW TRUE IT IS. The first line ticks on the server's word — the words are in
+   and structuring has begun (the note's own statuses, ASK-34). The next three
+   are the parts of that one structuring call; it reports no finer grain, so
+   they step on a gentle clock while it runs and the LAST line holds, turning,
+   until the server says done — at which point this step is replaced by the
+   review. Nothing is ticked that has not at least begun. */
+const READ_STEPS = [
+  "Understanding your request",
+  "Identifying the decision",
+  "Breaking it into tasks",
+  "Matching the people",
+  "Preparing the summary",
+];
+
+function ReadingChecklist({ stages, reduced }) {
+  const structuring = stages.includes("structuring");
+  const [sub, setSub] = useState(0);
+  useEffect(() => {
+    if (!structuring) { setSub(0); return undefined; }
+    const id = setInterval(() => setSub((n) => Math.min(READ_STEPS.length - 2, n + 1)), reduced ? 900 : 1900);
+    return () => clearInterval(id);
+  }, [structuring, reduced]);
+  const current = structuring ? 1 + sub : 0;
+  return (
+    <ol aria-label="What Dex is doing" data-testid="dex-popup-stages"
+      className="divide-y divide-slate-900/[0.06] rounded-[1.5rem] bg-white/85 px-4 ring-1 ring-inset ring-white shadow-[0_12px_30px_-18px_hsl(0_0%_10%/0.32)]">
+      {READ_STEPS.map((label, i) => {
+        const state = i < current ? "done" : i === current ? "now" : "next";
+        return (
+          <li key={label} data-state={state} className="flex min-h-[3rem] items-center gap-3.5 py-2 lg:min-h-[3.5rem] lg:py-2.5">
+            {state === "done" ? (
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white">
+                <Check size={13} weight="bold" aria-hidden="true" />
+              </span>
+            ) : state === "now" ? (
+              <span aria-hidden="true" className="relative grid h-7 w-7 shrink-0 place-items-center">
+                <span className="absolute inset-0 rounded-full ring-2 ring-slate-900/10" />
+                <span className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-slate-900 motion-reduce:animate-none" />
+                <span className="h-2 w-2 rounded-full bg-[hsl(var(--ng-gold))]" />
+              </span>
+            ) : (
+              <span aria-hidden="true" className="h-7 w-7 shrink-0 rounded-full ring-2 ring-inset ring-slate-900/10" />
+            )}
+            <span className={cn("min-w-0 flex-1 text-[15px]",
+              state === "next" ? "text-slate-400" : state === "now" ? "font-semibold text-slate-900" : "text-slate-700")}>
+              {label}
+            </span>
+            {state === "done" && <span className="text-[13px] font-medium text-emerald-700">Done</span>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 /** Step 3's counts: the 5.1 line, and a tile for each thing the decision makes.
  *  Decisions and tasks always (the client named them); the rest as they apply. */
 function MadeCounts({ d, userId }) {
@@ -189,7 +249,10 @@ export function DexCapturePopup({
   decisionId = null, userId, onSaveDraft,
   outcome = null, onRetry,
 }) {
-  const copy = STEP_COPY[step] || STEP_COPY.said;
+  /* The phone's review walks three screens and names each in this header. */
+  const [madeTitle, setMadeTitle] = useState(null);
+  const baseCopy = STEP_COPY[step === "made" && phone ? "madePhone" : step] || STEP_COPY.said;
+  const copy = step === "made" && phone && madeTitle ? { ...baseCopy, ...madeTitle } : baseCopy;
   const box = useKeyboardSafeBox(open && phone);
   const fieldRef = useRef(null);
   const closeRef = useRef(null);
@@ -366,40 +429,27 @@ export function DexCapturePopup({
     );
   } else if (step === "reading") {
     body = (
-      <div className="flex min-h-0 flex-1 gap-6 px-5 py-4 lg:px-7 lg:py-6" aria-live="polite" data-testid="dex-popup-reading">
-        {/* Desktop: what was said and the stages it has passed, beside the
-            forge. The phone: the forge alone (ASK-47 — "just use that dex
-            forge building animating element in the center"). Under reduced
-            motion the forge is not drawn and the stage stands on its own. */}
-        {(!phone || reduced) && (
-          <div className={cn("flex min-h-0 min-w-0 flex-col", phone ? "flex-1 justify-center" : "lg:w-[46%]")}>
-            {!phone && sentText && (
-              <blockquote className="ng-scroll-quiet max-h-[12.5rem] overflow-y-auto whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700" data-testid="dex-popup-sent">
-                &ldquo;{sentText}&rdquo;
-              </blockquote>
-            )}
-            <ol className={cn("space-y-2.5", !phone && "mt-5")} aria-label="What Dex is doing">
-              {shown.map((s, i) => {
-                const current = i === shown.length - 1;
-                return (
-                  <li key={s} className={cn("flex items-center gap-2.5 text-sm", current ? "font-medium text-slate-900" : "text-slate-500")}>
-                    {current ? (
-                      <span aria-hidden="true" className="relative grid h-4 w-4 shrink-0 place-items-center">
-                        <span className="absolute inset-0 animate-ping rounded-full bg-slate-900/20 motion-reduce:animate-none" />
-                        <span className="h-2 w-2 rounded-full bg-slate-900" />
-                      </span>
-                    ) : (
-                      <Check size={14} weight="bold" aria-hidden="true" className="shrink-0" />
-                    )}
-                    {stageLabel(s)}
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
+      <div className={cn("flex min-h-0 flex-1 px-5 py-4 lg:gap-6 lg:px-7 lg:py-6", phone ? "flex-col gap-4 overflow-y-auto" : "gap-6")}
+        aria-live="polite" data-testid="dex-popup-reading">
+        {/* The phone: the forge on top, the checklist under it (2026-10-29,
+            the founder's reference). Desktop: what was said and the checklist
+            beside the forge. Under reduced motion the forge is not drawn and
+            the checklist stands on its own. */}
+        {/* 2026-10-29 (founder) — the forge is the head of a figure now,
+            building the workflow on a board it holds (DexBuilder). */}
+        {phone && (
+          <DexBuilderFit testid="desk-dex-forge" label="Dex is building what you decided" className="min-h-[12rem] w-full flex-1" />
         )}
-        {!reduced && (
-          <DexForgeFit testid="desk-dex-forge" label="Dex is building what you decided" className="min-h-0 min-w-0 flex-1" />
+        <div className={cn("flex min-w-0 flex-col", phone ? "shrink-0" : "min-h-0 lg:w-[46%]")}>
+          {!phone && sentText && (
+            <blockquote className="ng-scroll-quiet mb-5 max-h-[12.5rem] overflow-y-auto whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700" data-testid="dex-popup-sent">
+              &ldquo;{sentText}&rdquo;
+            </blockquote>
+          )}
+          <ReadingChecklist stages={shown} reduced={reduced} />
+        </div>
+        {!phone && (
+          <DexBuilderFit testid="desk-dex-forge" label="Dex is building what you decided" className="min-h-0 min-w-0 flex-1" />
         )}
       </div>
     );
@@ -413,7 +463,10 @@ export function DexCapturePopup({
     /* Step 3 IS the review: the whole of DecisionPanel, whose body scrolls and
        whose actions are pinned under it. Its own body and foot are the
        flex children of this column, so nothing here wraps them. */
-    body = decisionId ? (
+    body = decisionId && phone ? (
+      /* 2026-10-29 (founder) — the phone's review is its own three screens. */
+      <DexReview decisionId={decisionId} open={open} onClose={onClose} onSaveDraft={onSaveDraft} onTitle={setMadeTitle} />
+    ) : decisionId ? (
       <DecisionPanel
         decisionId={decisionId}
         open={open}

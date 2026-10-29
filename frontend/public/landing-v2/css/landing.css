@@ -582,3 +582,6 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .score { grid-template-columns: 96px 1fr; column-gap: 14px; }
   .dial { width: 96px; height: 96px; }
 }
+
+/* 2026-10-29 — prices are not public yet: the slot says so. */
+.price.price-soon { font-size: clamp(28px, 2.8vw, 38px); font-weight: 600; letter-spacing: -.02em; }

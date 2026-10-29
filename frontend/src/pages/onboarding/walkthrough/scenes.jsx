@@ -556,15 +556,18 @@ export function buildScenes(j, device) {
               return <line key={t.key} x1={cx} y1={cy} x2={cx + R * Math.cos(a) * k} y2={cy + R * Math.sin(a) * k} stroke="hsl(230 20% 30% / .18)" />;
             })}
           </svg>
-          <span className={`absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full font-display font-semibold ${INK} ${phone ? "h-20 w-20 text-2xl" : "h-28 w-28 text-4xl"}`}
-            style={{ left: cx, top: cy, ...rise(p, 0, 0.12, 0) }}>{initials(j.company)}</span>
+          <div className="absolute" style={{ left: cx, top: cy, transform: "translate(-50%, -50%)" }}>
+            <span className={`grid place-items-center rounded-full font-display font-semibold ${INK} ${phone ? "h-20 w-20 text-2xl" : "h-28 w-28 text-4xl"}`}
+              style={rise(p, 0, 0.12, 0)}>{initials(j.company)}</span>
+          </div>
           {teams.map((t, i) => {
             const a = -Math.PI / 2 + (i * 2 * Math.PI) / teams.length;
             return (
-              <div key={t.key} className="absolute flex w-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center"
-                style={{ left: cx + R * Math.cos(a), top: cy + R * Math.sin(a), ...rise(p, 0.15 + i * 0.05, 0.3 + i * 0.05, 10) }}>
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-slate-800 shadow-[0_10px_24px_-12px_hsl(230_30%_18%/.5)]"><UsersThree size={20} weight="duotone" /></span>
-                <span className={`mt-1 line-clamp-2 font-medium leading-tight text-slate-700 ${phone ? "text-[10px]" : "text-[12px]"}`}>{t.label}</span>
+              <div key={t.key} className="absolute w-28" style={{ left: cx + R * Math.cos(a), top: cy + R * Math.sin(a), transform: "translate(-50%, -22px)" }}>
+                <div className="flex flex-col items-center text-center" style={rise(p, 0.15 + i * 0.05, 0.3 + i * 0.05, 10)}>
+                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-slate-800 shadow-[0_10px_24px_-12px_hsl(230_30%_18%/.5)]"><UsersThree size={20} weight="duotone" /></span>
+                  <span className={`mt-1.5 line-clamp-2 rounded-lg bg-white/95 px-2 py-0.5 font-medium leading-tight text-slate-700 shadow-[0_4px_12px_-8px_hsl(230_30%_18%/.5)] ${phone ? "text-[10px]" : "text-[12px]"}`}>{t.label}</span>
+                </div>
               </div>
             );
           })}
@@ -696,12 +699,14 @@ export function buildScenes(j, device) {
             const a = -Math.PI / 2 + (i * 2 * Math.PI) / LOOP.length;
             const on = i < lit || p > 0.8;
             return (
-              <div key={x.name} className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${phone ? "w-[6.5rem]" : "w-40"}`}
-                style={{ left: cx + R * Math.cos(a), top: cy + R * Math.sin(a) }}>
+              <div key={x.name} className={`absolute flex flex-col items-center text-center ${phone ? "w-[6.5rem]" : "w-40"}`}
+                style={{ left: cx + R * Math.cos(a), top: cy + R * Math.sin(a), transform: `translate(-50%, ${phone ? -18 : -22}px)` }}>
                 <span className={`grid place-items-center rounded-full text-[13px] font-semibold transition-colors ${phone ? "h-9 w-9" : "h-11 w-11"} ${on ? INK : "bg-white text-slate-500 ring-1 ring-slate-300"}`}
                   style={{ boxShadow: i === lit && p < 0.8 ? `0 0 0 6px ${GOLD}55` : undefined }}>{i + 1}</span>
-                <p className={`mt-1.5 font-semibold ${on ? "text-slate-900" : "text-slate-500"} ${phone ? "text-[12px]" : "text-[14px]"}`}>{x.name}</p>
-                <p className={`text-slate-500 ${phone ? "text-[10.5px]" : "text-[12px]"}`}>{x.sub}</p>
+                <div className="mt-1.5 rounded-xl bg-white/95 px-2.5 py-1.5 shadow-[0_6px_16px_-10px_hsl(230_30%_18%/.5)]">
+                  <p className={`font-semibold leading-tight ${on ? "text-slate-900" : "text-slate-500"} ${phone ? "text-[12px]" : "text-[14px]"}`}>{x.name}</p>
+                  <p className={`leading-tight text-slate-500 ${phone ? "text-[10.5px]" : "text-[12px]"}`}>{x.sub}</p>
+                </div>
               </div>
             );
           })}

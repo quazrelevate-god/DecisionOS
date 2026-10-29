@@ -135,10 +135,14 @@ export function OrgMap({ company, departments, pipelines = [], flowReady, counts
             const st = flow.by[t.key];
             const on = sel === t.key;
             return (
-              <motion.button key={t.key} type="button" data-testid="build-dept-pill"
+              /* The node's centre ON the ring: a plain wrapper does the placing
+                 (half the icon up: 24px, 28px from sm), because framer's own
+                 transform on the button would replace any translate class. */
+              <div key={t.key} className="absolute w-[5.25rem] -translate-x-1/2 -translate-y-6 sm:w-28 sm:-translate-y-7"
+                style={{ left: `${p.x}%`, top: `${p.y}%` }}>
+              <motion.button type="button" data-testid="build-dept-pill"
                 onClick={() => setSel(on ? null : t.key)} aria-pressed={on}
-                className="absolute flex w-[5.25rem] -translate-x-1/2 -translate-y-1/2 flex-col items-center sm:w-28"
-                style={{ left: `${p.x}%`, top: `${p.y}%` }}
+                className="flex w-full flex-col items-center"
                 initial={reduce ? false : { opacity: 0, scale: 0.6 }} animate={{ opacity: lit(t.key) ? 1 : 0.45, scale: 1 }}
                 transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : 0.08 + i * 0.05 }}>
                 <span className={cn(
@@ -153,10 +157,11 @@ export function OrgMap({ company, departments, pipelines = [], flowReady, counts
                       title={`${st.steps.length} steps`}>{st.steps.length}</span>
                   )}
                 </span>
-                <span className={cn("mt-1.5 line-clamp-2 text-center text-[11px] font-medium leading-tight sm:text-[12px]", on ? "text-slate-900" : "text-slate-700")}>
+                <span className={cn("mt-1.5 line-clamp-2 rounded-lg bg-white/95 px-2 py-0.5 text-center text-[11px] font-medium leading-tight shadow-[0_4px_12px_-8px_hsl(230_30%_18%/.5)] sm:text-[12px]", on ? "text-slate-900" : "text-slate-700")}>
                   {t.label}
                 </span>
               </motion.button>
+              </div>
             );
           })}
         </div>

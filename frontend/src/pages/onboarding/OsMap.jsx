@@ -82,6 +82,7 @@ export function OrgMap({ company, departments, pipelines = [], flowReady, counts
   return (
     <section className="ob-os rounded-[2rem] p-5 sm:p-7" data-testid="build-org-map" aria-label="Your teams and how work passes between them">
       <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-8">
+        <div>
         <div className="relative mx-auto aspect-square w-full max-w-[30rem]">
           <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
             <defs>
@@ -93,24 +94,28 @@ export function OrgMap({ company, departments, pipelines = [], flowReady, counts
               </marker>
             </defs>
             <circle cx="50" cy="50" r={ring} fill="none" stroke="hsl(230 20% 30% / .10)" strokeWidth=".3" strokeDasharray="1 1.6" />
-            {teams.map((t, i) => (
-              <motion.line key={`spoke-${t.key}`} x1="50" y1="50" x2={pos[t.key].x} y2={pos[t.key].y}
-                stroke={sel === t.key ? "hsl(var(--ng-gold))" : "hsl(230 25% 25% / .16)"}
-                strokeWidth={sel === t.key ? ".6" : ".35"}
-                initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1, opacity: lit(t.key) ? 1 : 0.35 }}
-                transition={{ duration: 0.6, ease: EASE, delay: reduce ? 0 : 0.1 + i * 0.05 }} />
-            ))}
-            {/* Hand-offs bow toward the centre so two-way pairs do not overlap. */}
+            {/* 2026-10-29 (founder: "the arrows are not aligned to the circle")
+                — HAND-OFFS RUN ALONG THE RING. Each one is an arc of the
+                circle the teams sit on, from the team that finishes a step to
+                the team that takes the next, the short way round. Clockwise
+                hand-offs ride just outside the ring and anticlockwise ones
+                just inside, so a two-way pair reads as two lanes, not one. */}
             {flow.edges.map((e, i) => {
-              const A = pos[e.a]; const B = pos[e.b];
-              const mx = (A.x + B.x) / 2; const my = (A.y + B.y) / 2;
-              const cx = mx + (50 - mx) * 0.55 + (B.y - A.y) * 0.08;
-              const cy = my + (50 - my) * 0.55 - (B.x - A.x) * 0.08;
-              const shrink = (P, Q, d) => { const dx = Q.x - P.x; const dy = Q.y - P.y; const l = Math.hypot(dx, dy) || 1; return { x: P.x + (dx / l) * d, y: P.y + (dy / l) * d }; };
-              const s = shrink(A, { x: cx, y: cy }, 7.5); const f = shrink(B, { x: cx, y: cy }, 7.5);
+              const ia = teams.findIndex((t) => t.key === e.a);
+              const ib = teams.findIndex((t) => t.key === e.b);
+              const ang = (k) => -Math.PI / 2 + (k * 2 * Math.PI) / Math.max(n, 1);
+              let d = ang(ib) - ang(ia);
+              while (d > Math.PI) d -= 2 * Math.PI;
+              while (d <= -Math.PI) d += 2 * Math.PI;
+              const dir = Math.abs(Math.abs(d) - Math.PI) < 1e-6 ? (ia < ib ? 1 : -1) : Math.sign(d);
+              const R = ring + dir * 2.6;
+              const trim = 8.5 / ring;
+              const a0 = ang(ia) + dir * trim;
+              const a1 = ang(ia) + dir * (Math.abs(d) - trim);
+              const P = (t) => `${(50 + R * Math.cos(t)).toFixed(2)} ${(50 + R * Math.sin(t)).toFixed(2)}`;
               const on = sel && (sel === e.a || sel === e.b);
               return (
-                <motion.path key={`${e.a}>${e.b}`} d={`M${s.x} ${s.y} Q${cx} ${cy} ${f.x} ${f.y}`} fill="none"
+                <motion.path key={`${e.a}>${e.b}`} d={`M${P(a0)} A${R} ${R} 0 0 ${dir > 0 ? 1 : 0} ${P(a1)}`} fill="none"
                   stroke={on ? "hsl(var(--ng-gold))" : "hsl(230 25% 25% / .38)"}
                   strokeWidth={on ? ".7" : ".45"} markerEnd={on ? "url(#ob-arrow-gold)" : "url(#ob-arrow)"}
                   className={!reduce ? "ob-handoff" : undefined}
@@ -154,6 +159,24 @@ export function OrgMap({ company, departments, pipelines = [], flowReady, counts
               </motion.button>
             );
           })}
+        </div>
+
+        {/* How to read it, in the map's own marks. */}
+        <ul className="mx-auto mt-3 flex max-w-[30rem] flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] text-slate-500" data-testid="build-map-legend">
+          <li className="flex items-center gap-1.5">
+            <span className="grid h-4 w-4 place-items-center rounded-md border border-white bg-white text-slate-700 shadow-sm"><UsersFour size={10} weight="bold" aria-hidden="true" /></span>
+            A team
+          </li>
+          <li className="flex items-center gap-1.5">
+            <span aria-hidden="true" className="h-0 w-5 border-t-[1.5px] border-dashed border-slate-500" />
+            <ArrowRight size={10} weight="bold" className="-ml-1.5 text-slate-500" aria-hidden="true" />
+            Hands work to
+          </li>
+          <li className="flex items-center gap-1.5">
+            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-[hsl(var(--ng-gold))] px-1 text-[9px] font-bold text-slate-900">3</span>
+            Steps it owns
+          </li>
+        </ul>
         </div>
 
         <div className="min-w-0" aria-live="polite">
@@ -207,26 +230,25 @@ function TeamPanel({ team, st, pipelines, flowReady, label }) {
       ) : (
         <>
           <p className="mt-1 text-sm text-slate-600">
-            Owns {st.steps.length} {st.steps.length === 1 ? "step" : "steps"} · {st.work} pieces of work
+            Does {st.steps.length} {st.steps.length === 1 ? "step" : "steps"} across {mine.length} {mine.length === 1 ? "workflow" : "workflows"} — the dark ones below.
           </p>
           <div className="mt-4 space-y-4">
             {mine.map((p) => (
               <div key={p.key}>
                 <p className="text-[12px] font-semibold text-slate-800">{p.label}</p>
-                {/* Where this team stands in the route: its own steps filled. */}
-                <div className="mt-2 flex items-center" aria-hidden="true">
+                {/* The whole route by name, in order; this team's steps are the
+                    dark ones, so "where do we come in" reads without a key. */}
+                <ol className="mt-2 flex flex-wrap items-center gap-1">
                   {(p.stages || []).map((s, i, arr) => (
-                    <div key={s.key} className="flex flex-1 items-center last:flex-none">
-                      <span className={cn("shrink-0 rounded-full",
-                        s.role === team.key ? "h-3.5 w-3.5 bg-[hsl(230_15%_12%)] ring-[3px] ring-[hsl(var(--ng-gold)/.4)]" : "h-2 w-2 bg-slate-400/50")}
-                        title={s.label} />
-                      {i < arr.length - 1 && <span className="mx-1 h-px flex-1 bg-slate-400/40" />}
-                    </div>
+                    <li key={s.key} className="flex items-center gap-1">
+                      <span className={cn("rounded-full px-2.5 py-1 text-[12px] leading-none",
+                        s.role === team.key ? "bg-[hsl(230_15%_12%)] font-medium text-white" : "bg-white/70 text-slate-500 ring-1 ring-inset ring-slate-900/[0.06]")}>
+                        {s.label}
+                      </span>
+                      {i < arr.length - 1 && <ArrowRight size={10} weight="bold" className="text-slate-400" aria-hidden="true" />}
+                    </li>
                   ))}
-                </div>
-                <p className="mt-1.5 text-[12px] leading-snug text-slate-600">
-                  {(p.stages || []).filter((s) => s.role === team.key).map((s) => s.label).join(" · ")}
-                </p>
+                </ol>
               </div>
             ))}
           </div>
@@ -257,51 +279,55 @@ const kindIcon = (k) => (KIND_ICON.find(([re]) => re.test(k)) || [null, Circle])
 
 export function Routines({ tasks, isNew }) {
   const reduce = useReducedMotion();
-  const lanes = useMemo(() => {
-    const m = new Map();
-    for (const t of tasks || []) {
-      const title = (typeof t === "string" ? t : t?.title) || "";
-      if (!title) continue;
-      const k = (typeof t === "object" && t?.category) || "Other";
-      if (!m.has(k)) m.set(k, []);
-      m.get(k).push({ title, raw: t });
-    }
-    return [...m].sort((a, b) => b[1].length - a[1].length);
-  }, [tasks]);
-  if (!lanes.length) return null;
+  const rows = useMemo(() => (tasks || [])
+    .map((t) => ({ title: (typeof t === "string" ? t : t?.title) || "", kind: (typeof t === "object" && t?.category) || "", raw: t }))
+    .filter((r) => r.title), [tasks]);
+  const [all, setAll] = useState(false);
+  if (!rows.length) return null;
+  const shown = all ? rows : rows.slice(0, 5);
+  /* 2026-10-29 (founder: "easy to understand… using actual UI components")
+     — the routines as they will arrive: rows in My Work, in the app's own
+     task look, so the founder sees the product before they are in it. */
   return (
     <section className="ob-os rounded-[2rem] p-5 sm:p-7" data-testid="build-routines">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Kept on rails</p>
-      <h3 className="mt-1 font-display text-2xl leading-tight text-slate-900">The routines Dex will run for you</h3>
-      <div className="mt-5 space-y-4">
-        {lanes.map(([kind, list], li) => {
-          const Icon = kindIcon(kind);
-          return (
-            <div key={kind} className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4">
-              <p className="flex items-center gap-2 pt-1 text-[12px] font-semibold text-slate-700">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-[hsl(230_15%_12%)] text-white">
-                  <Icon size={14} weight="bold" aria-hidden="true" />
-                </span>
-                {kind}
-              </p>
-              {/* The track: a line the stops sit on. */}
-              <div className="relative">
-                <span aria-hidden="true" className="absolute inset-x-0 top-[1.15rem] hidden h-px bg-[linear-gradient(90deg,hsl(var(--ng-gold)/.6),hsl(230_20%_30%/.15))] sm:block" />
-                <ul className="relative flex flex-wrap gap-2">
-                  {list.map((t, i) => (
-                    <motion.li key={`${t.title}-${i}`} data-testid="build-task-pill"
-                      initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.4, ease: EASE, delay: reduce ? 0 : 0.15 + li * 0.06 + i * 0.03 }}
-                      className={cn("max-w-full rounded-2xl border bg-white/85 px-3 py-2 text-[13px] leading-snug text-slate-800 shadow-[0_6px_16px_-10px_hsl(230_30%_18%/.45)] backdrop-blur-md",
-                        isNew?.(t.raw) ? "border-[hsl(var(--ng-gold))] ring-2 ring-[hsl(var(--ng-gold)/.3)]" : "border-white/80")}>
-                      {t.title}
-                    </motion.li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          );
-        })}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] lg:gap-8">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Kept on rails</p>
+          <h3 className="mt-1 font-display text-2xl leading-tight text-slate-900">{rows.length} routines, on repeat</h3>
+          <p className="mt-2 text-sm text-slate-600">Dex hands these out on schedule. Your team sees them in My Work, like this.</p>
+        </div>
+        <div className="overflow-hidden rounded-[1.5rem] border border-white/80 bg-white/90 shadow-[0_18px_40px_-24px_hsl(230_30%_18%/.55)]" aria-label="Preview of My Work">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-900/[0.06] px-4 py-3">
+            <p className="text-sm font-semibold text-slate-900">My Work</p>
+            <span className="rounded-full bg-slate-900/[0.05] px-2.5 py-1 text-[11px] font-medium text-slate-600">Recurring</span>
+          </div>
+          <ul>
+            {shown.map((r, i) => {
+              const Icon = kindIcon(r.kind);
+              return (
+                <motion.li key={`${r.title}-${i}`} data-testid="build-task-pill"
+                  initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: EASE, delay: reduce ? 0 : 0.1 + i * 0.04 }}
+                  className={cn("flex items-center gap-3 border-b border-slate-900/[0.05] px-4 py-3 last:border-b-0",
+                    isNew?.(r.raw) && "bg-[hsl(var(--ng-gold)/.12)]")}>
+                  <span aria-hidden="true" className="h-5 w-5 shrink-0 rounded-full border-[1.5px] border-slate-300" />
+                  <span className="min-w-0 flex-1 text-[14px] leading-snug text-slate-800">{r.title}</span>
+                  {r.kind && r.kind !== "Other" && (
+                    <span className="hidden shrink-0 items-center gap-1 rounded-full bg-slate-900/[0.05] px-2 py-1 text-[11px] text-slate-600 sm:flex">
+                      <Icon size={11} weight="bold" aria-hidden="true" /> {r.kind}
+                    </span>
+                  )}
+                </motion.li>
+              );
+            })}
+          </ul>
+          {rows.length > 5 && (
+            <button type="button" onClick={() => setAll((v) => !v)} data-testid="build-routines-more"
+              className="w-full border-t border-slate-900/[0.06] px-4 py-2.5 text-left text-[13px] font-medium text-slate-600 hover:bg-slate-900/[0.02]">
+              {all ? "Show fewer" : `Show all ${rows.length}`}
+            </button>
+          )}
+        </div>
       </div>
     </section>
   );

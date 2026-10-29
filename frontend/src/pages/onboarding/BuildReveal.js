@@ -211,7 +211,10 @@ function WorkFlowSection({ flow, state, teams, ruleNames, onRetry, still, startA
       className="ob-os rounded-[2rem] p-5 sm:p-7"
       data-testid="build-workflow">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">How work moves</p>
-      <p className="mb-5 mt-1 text-sm text-muted-foreground">Step by step, the team that owns each one. Tap a step to see its work.</p>
+      <p className="mb-5 mt-1 text-sm text-muted-foreground">
+        Pick a workflow. Work starts at step 1 and moves on; each step names the team that does it, and a gold
+        step waits for your sign-off. Tap a step to see its work.
+      </p>
       {state === "ready" && pipelines.length ? (
         <PipelineFlow pipelines={pipelines} teams={teams} still={still} testid="build-pipeline-flow" />
       ) : state === "failed" ? (

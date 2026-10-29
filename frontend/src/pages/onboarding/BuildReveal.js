@@ -16,6 +16,7 @@ import { PipelineFlow, withRules } from "../../components/workflow/PipelineFlow"
 import { OsAssembly } from "./OsAssembly";
 import { OrgMap, Routines } from "./OsMap";
 import { FirstWeek } from "./walkthrough/FirstWeek";
+import { buildJourney } from "./walkthrough/journey";
 import { WaitStory } from "./WaitStory";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
@@ -329,7 +330,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   const [refineText, setRefineText] = useState("");
   const [refining, setRefining] = useState(false);
   const [showRefine, setShowRefine] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
+  const [exploreTab, setExploreTab] = useState("workflows");
   const ranRef = useRef(false);
 
   /* ── KM-66 choreography state ───────────────────────────────────────────
@@ -784,6 +785,17 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
     { n: (bp.operational_tasks || []).length, label: "Routines" },
   ].filter((c, i) => i === 0 || c.n > 0) : [];
   const isNew = (v) => newKeys.has(norm(v));
+  const kpis = bp ? buildJourney({ company: payload.company_name, founder: payload.name, bp, pipelines: reviewPipelines }).counts : [];
+  const exploreTabs = [
+    sessionId && { key: "workflows", label: "Workflows", n: reviewPipelines.length || null },
+    { key: "teams", label: "Teams", n: (bp?.departments || []).length },
+    (bp?.approval_rules || []).length > 0 && { key: "signoffs", label: "Sign-offs", n: bp.approval_rules.length },
+    (bp?.operational_tasks || []).length > 0 && { key: "routines", label: "Routines", n: bp.operational_tasks.length },
+  ].filter(Boolean);
+  // A founder who skipped the interview has no workflows tab: open on the first there is.
+  const activeTab = exploreTabs.some((tb) => tb.key === exploreTab) ? exploreTab : exploreTabs[0]?.key;
+  // Counts that wait on the workflows say so while Dex is laying them out.
+  const flowPending = !!sessionId && flowState !== "ready" && flowState !== "failed";
   const isPreview = stage === "preview" && bp;
 
   return (
@@ -911,7 +923,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{ delay: CHOREO.h1, duration: 0.52, ease: [0.16, 1, 0.3, 1] }}
                 className="mb-4 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
-                Here&apos;s how {payload.company_name} will run on DecisionOS.
+                Here&apos;s what Dex built for {payload.company_name}.
               </Rise>
               {welcome && (
                 <Rise still={still} tag="p" data-testid="build-welcome-line"
@@ -922,49 +934,76 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               )}
             </div>
 
-            {/* ── BAND 2 · THEIR FIRST WEEK, PLAYED (2026-10-29, founder: "I
-                can't understand everything at once… show the entire journey
-                as a walkthrough inside the actual UI, a simpler mockup with
-                the new company's data, annotated, zoomed in, uncluttered").
-                The map, the routes, the sign-offs and the routines are still
-                here for anyone who wants every detail — one press away, under
-                the tour rather than in place of it. */}
-            {!sessionId || flowState === "ready" || flowState === "failed" ? (
-              <FirstWeek company={payload.company_name} founder={payload.name} bp={bp}
-                pipelines={reviewPipelines} device={isPhone ? "phone" : "desktop"} />
-            ) : (
-              <WaitStory title="Setting up your first week" expectMs={20000} testid="first-week-wait"
-                lines={["Laying out how work moves", "Giving each step its team", "Putting your sign-offs in place", "Getting the tour ready"]} />
-            )}
-            <div>
-              <button type="button" onClick={() => setShowDetails((v) => !v)} data-testid="build-details-toggle"
-                aria-expanded={showDetails}
-                className="mx-auto flex h-11 items-center gap-2 rounded-pill bg-white/70 px-5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-white shadow-[0_8px_20px_-14px_hsl(230_30%_18%/.5)]">
-                {showDetails ? "Hide the details" : "See every detail Dex set up"}
-              </button>
-              {showDetails && (
-                <div className="mt-5 space-y-5 lg:space-y-7" data-testid="build-details">
-              <OrgMap company={payload.company_name} departments={bp?.departments}
-                pipelines={reviewPipelines} flowReady={flowState === "ready"} counts={glance} isNew={isNew} />
-              {sessionId && (
+            {/* ── BAND 2 · WHAT DEX BUILT, SUMMARISED (2026-10-29, founder:
+                "show all the KPIs — how many tasks, how many workflows — an
+                interactive detailed view of the workflows and the flow, all
+                the existing things in a summarised view, and along with that
+                the walkthrough, in a desktop and a phone window").
+                The counts first; then the explorer, one tab per kind of thing
+                Dex made; then the tour of where it all lives in the app. */}
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 sm:gap-3" data-testid="build-kpis">
+              {kpis.map((c, i) => (
+                <motion.div key={c.key} data-testid={`build-kpi-${c.key}`}
+                  initial={still ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: still ? 0 : 0.2 + i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                  className="ob-os rounded-[1.4rem] px-3 py-4 text-center">
+                  {flowPending && ["workflows", "steps", "tasks"].includes(c.key)
+                    ? <p className="ng-glow-text font-display text-3xl font-semibold leading-none sm:text-4xl">…</p>
+                    : <p className="font-display text-3xl font-semibold leading-none tabular-nums text-slate-900 sm:text-4xl">{c.n}</p>}
+                  <p className="mt-1.5 text-[11px] font-medium text-slate-500 sm:text-xs">{c.label}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            <section aria-label="What Dex built" data-testid="build-explorer">
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-3 px-1">
+                <h2 className="font-display text-2xl leading-tight text-slate-900">What Dex built</h2>
+                <div className="flex gap-1 overflow-x-auto rounded-full bg-white/60 p-1 ring-1 ring-inset ring-white [scrollbar-width:none]" role="tablist">
+                  {exploreTabs.map((tb) => (
+                    <button key={tb.key} type="button" role="tab" aria-selected={activeTab === tb.key}
+                      onClick={() => setExploreTab(tb.key)} data-testid={`build-explore-${tb.key}`}
+                      className={`h-9 shrink-0 rounded-full px-4 text-[13px] font-medium transition-colors ${activeTab === tb.key ? "bg-[hsl(230_15%_12%)] text-white" : "text-slate-600 hover:text-slate-900"}`}>
+                      {tb.label}{tb.n != null && <span className="ml-1.5 tabular-nums opacity-60">{tb.n}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {activeTab === "workflows" && sessionId && (
                 <WorkFlowSection flow={flow} state={flowState} teams={bp?.departments} still={still}
                   ruleNames={(bp?.approval_rules || []).map((r) => r.name)}
                   onRetry={() => setFlowTry((n) => n + 1)}
-                  startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections} />
+                  startAt={0} />
               )}
-
+              {activeTab === "teams" && (
+                <OrgMap company={payload.company_name} departments={bp?.departments}
+                  pipelines={reviewPipelines} flowReady={flowState === "ready"} counts={glance} isNew={isNew} />
+              )}
               {/* Audit A-11 — the approval rules, before the founder enters. */}
-              <ApprovalRules rules={bp?.approval_rules} still={still}
-                startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections}
-                onRemove={stage === "preview" ? (i) => {
-                  const next = { ...bp, approval_rules: (bp.approval_rules || []).filter((_, x) => x !== i) };
-                  setBp(next);
-                  onBlueprint?.(next);
-                } : undefined} />
-              <Routines tasks={bp?.operational_tasks} isNew={isNew} />
-                </div>
+              {activeTab === "signoffs" && (
+                <ApprovalRules rules={bp?.approval_rules} still={still}
+                  startAt={0}
+                  onRemove={stage === "preview" ? (i) => {
+                    const next = { ...bp, approval_rules: (bp.approval_rules || []).filter((_, x) => x !== i) };
+                    setBp(next);
+                    onBlueprint?.(next);
+                  } : undefined} />
               )}
-            </div>
+              {activeTab === "routines" && <Routines tasks={bp?.operational_tasks} isNew={isNew} />}
+            </section>
+
+            {/* ── BAND 3 · THEIR FIRST WEEK, PLAYED: where all of it lives in
+                the app, on the device they signed up on (with a switch). */}
+            <section aria-label="See it in DecisionOS" data-testid="build-tour">
+              <h2 className="mb-1 px-1 font-display text-2xl leading-tight text-slate-900">See it in DecisionOS</h2>
+              <p className="mb-5 px-1 text-sm text-muted-foreground">A minute with your own company, inside the app. Drag the slider to any moment.</p>
+              {!sessionId || flowState === "ready" || flowState === "failed" ? (
+                <FirstWeek company={payload.company_name} founder={payload.name} bp={bp}
+                  pipelines={reviewPipelines} device={isPhone ? "phone" : "desktop"} />
+              ) : (
+                <WaitStory title="Setting up your first week" expectMs={20000} testid="first-week-wait"
+                  lines={["Laying out how work moves", "Giving each step its team", "Putting your sign-offs in place", "Getting the tour ready"]} />
+              )}
+            </section>
 
             {/* Deliberately dead: WE-02 retired workflow_templates and the
                 blueprint stopped returning workflows. Kept because it is the

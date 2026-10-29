@@ -46,17 +46,24 @@ def test_the_answer_carries_what_it_built_and_the_page_draws_it():
     assert "app-sky__art--aside" not in page, "the photograph is gone from signup"
 
 
-def test_the_last_screen_is_their_first_week_played():
-    """The founder (2026-10-29): "I can't understand everything all at once…
-    show the entire journey as a walkthrough inside the actual UI, populated
-    with the new company's data." The review opens on the tour; every detail
-    stays one press away beneath it."""
+def test_the_last_screen_sums_up_then_plays_their_first_week():
+    """The founder (2026-10-29): "show all the KPIs — how many tasks, how many
+    workflows — an interactive view of the workflows and the flow, a summarised
+    view, and along with that the walkthrough, in a desktop and a phone window,
+    switchable… templatised, so it shows quickly for every new company"."""
     br = (FE / "pages" / "onboarding" / "BuildReveal.js").read_text(encoding="utf-8")
-    assert "<FirstWeek" in br and 'data-testid="build-details-toggle"' in br
-    assert br.index("<FirstWeek") < br.index("<OrgMap"), "the tour comes first, the details under it"
+    for marker in ('data-testid="build-kpis"', 'data-testid="build-explorer"', 'data-testid="build-tour"', "<FirstWeek"):
+        assert marker in br, marker
+    assert br.index('data-testid="build-kpis"') < br.index('data-testid="build-explorer"') < br.index('data-testid="build-tour"')
     wt = FE / "pages" / "onboarding" / "walkthrough"
     journey = (wt / "journey.js").read_text(encoding="utf-8")
-    assert "bp?.approval_rules" in journey and "pipelines" in journey, "built from the company's own draft"
+    assert "bp?.approval_rules" in journey and '"Tasks set up"' in journey, "counts from the company's own draft"
+    scenes = (wt / "scenes.jsx").read_text(encoding="utf-8")
+    assert "flowScene" in scenes and "j.flows.slice(0, 3)" in scenes, "a chapter per workflow"
+    for chapter in ('key: "glance"', 'key: "ask"', 'key: "addons"', 'key: "cycle"'):
+        assert chapter in scenes, chapter
+    assert '!j.rules.length && "signoff"' in scenes, "chapters with nothing to show are skipped"
+    fw = (wt / "FirstWeek.jsx").read_text(encoding="utf-8")
+    assert 'first-week-device-${k}' in fw, "desktop / phone switch"
     player = (wt / "Player.jsx").read_text(encoding="utf-8")
-    assert 'type="range"' in player, "a slider scrubs it"
-    assert "--ui-scale" in player, "notes land on target through the app's page zoom"
+    assert 'type="range"' in player and "--ui-scale" in player

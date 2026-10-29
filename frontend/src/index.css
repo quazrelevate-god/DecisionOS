@@ -1311,6 +1311,18 @@ body {
     .ui-scale [data-dialog-scale-root]:has(> [data-state="closed"]) {
         animation: dos-dialog-hold 210ms linear;
     }
+    /* 2026-10-30 · …AND SO DOES ITS SCRIM. The founder's phone froze grey on
+       Decide's "What you said": the card closed and reopened inside the
+       wrapper's 210ms hold, so the held wrapper was reused where it stood
+       while the scrim — which had unmounted on the spot — was mounted again
+       at the END of <body>. Both sit at z-50, so the later one painted over
+       the card and took every tap (read off the device: scrim open, after
+       the panel, pointer-events auto). Held for the same 210ms, a scrim that
+       is reopened in time is the same node, in the same place, under its
+       card. Specificity beats the overlay's max-lg:…:animate-none. */
+    .ui-scale [data-dialog-overlay][data-state="closed"] {
+        animation: dos-dialog-hold 210ms linear;
+    }
 }
 .ui-scale [data-dialog-scale-root] > * {
     /* Put the page scale back on the panel so it is drawn at 0.8 like everything

@@ -82,6 +82,32 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- DEX ON THE HOME SCREEN (2026-10-29): the widget, and the
+             see-through layer its taps open over the launcher. Its own task,
+             out of Recents, gone the moment the person leaves it. -->
+        <activity
+            android:name=".DexQuickActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:theme="@style/AppTheme.DexQuick"
+            android:taskAffinity="com.decisionos.app.quick"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+
+        <receiver
+            android:name=".DexWidgetProvider"
+            android:label="@string/widget_label"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dex_widget_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

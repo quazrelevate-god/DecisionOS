@@ -36,8 +36,10 @@ const Eyebrow = ({ children }) => (
 /* 2026-10-08 — `saved`: what this step answered last time (the founder came
    Back from the interview). It used to open blank, so the industry and the
    website they had just given were asked for again. */
-export function WebsiteIntel({ companyName, onDone, onBack, saved }) {
+/* `onBusy` — the scan is running, for the page's "Your OS" picture. */
+export function WebsiteIntel({ companyName, onDone, onBack, saved, onBusy }) {
   const [stage, setStage] = useState("ask"); // ask | scanning | confirm | manual
+  useEffect(() => { onBusy?.(stage === "scanning"); }, [stage]); // eslint-disable-line react-hooks/exhaustive-deps
   const [url, setUrl] = useState(saved?.website_url || "");
   const [scanLine, setScanLine] = useState(0);
   const [intel, setIntel] = useState(null);

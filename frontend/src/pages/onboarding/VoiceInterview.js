@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Microphone, Sparkle, Stop, PaperPlaneRight, SpeakerHigh, SpeakerSlash, Waveform, CaretDown, CaretLeft, Check, Translate,
+  Pause, Play,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
 import { DexWave } from "../../components/mobile/DexWave";
 import { fetchTTS, useAnswerRecorder, useSynthLevels, SPOKEN_LANGS, langLabel } from "./voice";
-// ASK-36 5 — the app's one loading animation.
-import { Loader } from "../../components/common";
+import { WaitStory } from "./WaitStory";
 import { AiNotice } from "../../components/ReportButton";
 import { useSignupBack } from "./signupBack";
 
@@ -76,12 +76,12 @@ const LanguagePick = ({ onPick, onSkip, onBack }) => (
     <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
       Which language should Dex speak?
     </h1>
-    <p className="mb-2 text-sm text-muted-foreground">Dex will ask every question — voice and text — in the language you pick. You can answer by speaking or typing.</p>
     {/* Audit A-15 (2026-10-09, founder) — the language is for speaking
         comfortably during this interview only. Everyone lands in the app in
-        English (routers/auth.register stores language "en"). */}
-    <p className="mb-7 text-xs text-muted-foreground" data-testid="lang-pick-app-note">
-      This is only for the interview. DecisionOS itself opens in English.
+        English (routers/auth.register stores language "en").
+        2026-10-29 (founder) — "less text heavy": one line, not two. */}
+    <p className="mb-7 text-sm text-muted-foreground" data-testid="lang-pick-app-note">
+      Speak or type your answers. The app itself opens in English.
     </p>
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
       {SPOKEN_LANGS.map((l, i) => (
@@ -155,12 +155,30 @@ function useTypewriter(text, durationMs) {
   return shown;
 }
 
+/* THE INTERVIEW'S THREE WAITS (2026-10-29, the pilot client: "the user is
+   waiting so long with no prompt"). A spoken answer is written down, then Dex
+   chooses the next question, then its voice is fetched — three requests in a
+   row, which used to show as a small spinner on a button while the old
+   question sat there as if nothing had happened. Each now takes the question's
+   place with what is going on. */
+const WAITS = {
+  writing: { title: "Writing down what you said", expectMs: 6000,
+    lines: ["Listening back to your answer", "Turning your voice into words", "Almost there"] },
+  thinking: { title: "Dex is thinking", expectMs: 10000,
+    lines: ["Reading your answer", "Adding it to your OS", "Finding what's still missing", "Choosing the next question", "Getting the voice ready"] },
+  starting: { title: "Dex is getting ready", expectMs: 9000,
+    lines: ["Reading what you've shared", "Planning your interview", "Warming up the voice"] },
+};
+
 /* Audit A-10 (2026-10-08) — `resumeSession`: an interview already under way
    (the draft kept its id). Reloading at question 3 used to open the language
    picker and start again at question 1; the answers were on the server and
    nothing asked for them. `onSession` tells the page the id the moment a new
    interview starts, so the draft holds it before the first answer. */
-export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSession, onSession }) {
+/* `onBuilt` — the pieces of the OS each answer gave (the server's `built`),
+   for the page's "Your OS" picture. `onBusy` — whether Dex is working right
+   now, so that picture can show it too. */
+export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSession, onSession, onBuilt, onBusy }) {
   const [session, setSession] = useState(null);
   const [question, setQuestion] = useState("");
   const [why, setWhy] = useState("");
@@ -296,6 +314,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
       const { data } = await api.post("/signup/interview/answer", {
         session_id: session, answer: a, language_code: langRef.current,
       });
+      if (Array.isArray(data.built) && data.built.length) onBuilt?.(data.built);
       if (data.done) { onComplete(session, langRef.current); return; }
       setAnswer(""); answerRef.current = "";
       await presentQuestion(data);
@@ -336,7 +355,9 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
   // hook after a conditional return runs in a different order on the render
   // where that branch is taken.
   const starting = phase === "starting";
-  const orbState = recorder.recording ? "listening" : speaking ? "speaking" : (thinking || starting) ? "thinking" : "idle";
+  const waiting = recorder.transcribing ? "writing" : thinking ? "thinking" : starting ? "starting" : null;
+  useEffect(() => { onBusy?.(!!waiting); }, [waiting]); // eslint-disable-line react-hooks/exhaustive-deps
+  const orbState = recorder.recording && recorder.paused ? "idle" : recorder.recording ? "listening" : speaking ? "speaking" : (thinking || starting) ? "thinking" : "idle";
   // KM-66 — a REF now, read by DexWave on its own frame. See voice.js.
   const levelsRef = useSynthLevels(orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "idle");
   // Paced off the clip that is playing right now — see useTypewriter.
@@ -356,14 +377,14 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
         <div className="flex min-w-0 items-center gap-3">
           <div className="ng-pressed grid h-12 w-12 shrink-0 place-items-center rounded-full">
             {orbState === "thinking"
-              ? <Loader size={22} />
+              ? <Sparkle size={20} weight="fill" className="animate-pulse text-[hsl(var(--ng-gold))]" />
               : orbState === "speaking" ? <Waveform size={22} weight="bold" />
               : <Microphone size={20} weight="bold" className={orbState === "listening" ? "text-[hsl(var(--ng-gold))]" : ""} />}
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold leading-none">Dex · your COO interview</p>
             <p className="mt-1 text-xs text-muted-foreground" data-testid="interview-progress">
-              {starting ? "warming up…" : `Question ${index} · up to ${max} · ${orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : "ready"}`}
+              {starting ? "warming up…" : `Question ${index} · up to ${max} · ${recorder.paused ? "paused" : orbState === "listening" ? "listening" : orbState === "speaking" ? "speaking" : orbState === "thinking" ? "thinking" : "ready"}`}
             </p>
           </div>
         </div>
@@ -380,11 +401,10 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
       {/* Question — shown as a big caption you can read while it's spoken */}
       <div className="min-h-[150px]">
         <AnimatePresence mode="wait">
-          {starting ? (
-            <motion.div key="warm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="space-y-3">
-              <div className="ng-pressed h-8 w-4/5 animate-pulse rounded-pill" />
-              <div className="ng-pressed h-8 w-3/5 animate-pulse rounded-pill" />
+          {waiting ? (
+            <motion.div key={`wait-${waiting}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
+              <WaitStory {...WAITS[waiting]} className="min-h-[150px]" testid="interview-wait" />
             </motion.div>
           ) : (
             <motion.div key={question} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
@@ -446,7 +466,7 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
             e.preventDefault();
             send();
           }}
-          placeholder={recorder.recording ? "Listening… tap Stop when done — your answer sends itself" : "Tap the mic and speak, or type your answer…"}
+          placeholder={recorder.paused ? "Paused — tap Resume to carry on" : recorder.recording ? "Listening… tap Stop when done — your answer sends itself" : "Tap Speak, or type your answer…"}
           className="w-full resize-none bg-transparent text-base placeholder:text-foreground/30 focus:outline-none"
         />
         <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/50 pt-3">
@@ -470,13 +490,21 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
                 ? "bg-ng-ink text-[hsl(var(--ng-gold))] shadow-[inset_0_2px_5px_hsl(230_30%_8%/.55),inset_0_-1px_0_hsl(0_0%_100%/.10),0_1px_0_hsl(0_0%_100%/.45)]"
                 : "ng-pop"
             }`}>
-            {recorder.transcribing ? <Loader size={18} />
-              : recorder.recording ? <Stop size={16} weight="fill" />
+            {recorder.recording ? <Stop size={16} weight="fill" />
               /* Dex's mark, not a microphone: the FAB, the AI-priority control
                  and the wordmark all use the sparkle, and this is Dex asking. */
               : <Sparkle size={16} weight="fill" />}
-            {recorder.transcribing ? "Sending…" : recorder.recording ? "Stop — sends answer" : "Speak"}
+            {recorder.transcribing ? "Writing…" : recorder.recording ? "Stop — sends answer" : "Speak"}
           </button>
+          {recorder.recording && recorder.canPause && (
+            <button type="button" data-testid="interview-pause-button"
+              onClick={recorder.paused ? recorder.resume : recorder.pause}
+              aria-label={recorder.paused ? "Resume speaking" : "Pause"}
+              className="ng-pop flex h-11 shrink-0 items-center gap-1.5 rounded-pill px-4 text-xs font-medium">
+              {recorder.paused ? <Play size={15} weight="fill" /> : <Pause size={15} weight="fill" />}
+              {recorder.paused ? "Resume" : "Pause"}
+            </button>
+          )}
 
           {/* KM-62 — THE WAVE LIVES HERE NOW, between the two controls.
               Founder: "relocate the animating element alone to the center of
@@ -501,8 +529,8 @@ export function VoiceInterview({ profile, onComplete, onSkip, onBack, resumeSess
 
           <button onClick={() => send()} disabled={!answer.trim() || thinking || starting} data-testid="interview-send-button"
             className="ng-pop flex h-11 items-center gap-2 rounded-pill bg-ng-ink px-6 text-xs font-medium text-white disabled:opacity-40">
-            {thinking ? <Loader size={18} /> : <PaperPlaneRight size={16} weight="bold" />}
-            {thinking ? "Thinking…" : "Answer"}
+            <PaperPlaneRight size={16} weight="bold" />
+            Answer
           </button>
         </div>
       </div>

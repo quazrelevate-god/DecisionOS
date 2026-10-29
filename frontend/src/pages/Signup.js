@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -18,6 +18,8 @@ import { VoiceInterview } from "./onboarding/VoiceInterview";
 import { BuildReveal } from "./onboarding/BuildReveal";
 import { SignupConsent } from "./onboarding/SignupConsent";
 import { SIGNUP_BACK } from "./onboarding/signupBack";
+import { OsAssembly } from "./onboarding/OsAssembly";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { TERMS_VERSION, getSignupConsent, giveSignupConsent, clearSignupConsent } from "../lib/legal";
 
 const PHASES = [
@@ -106,6 +108,28 @@ export default function Signup() {
   const hasHeldDraft = useRef(Boolean(currentDraft())).current;
   const [world, setWorld] = useState(null); // { industry, business_model, description, website_summary, products }
   const [sessionId, setSessionId] = useState(null);
+  /* YOUR OS, TAKING SHAPE (onboarding/OsAssembly). What the interview's
+     answers added, kept for this tab so a reload mid-interview still shows
+     what was built; and whether Dex is working this moment. */
+  const [built, setBuilt] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("dos:signup-built") || "[]"); } catch { return []; }
+  });
+  const [osBusy, setOsBusy] = useState(false);
+  const isPhone = useIsMobile();
+  const addBuilt = (pieces) => setBuilt((prev) => {
+    const seen = new Set(prev.map((p) => `${p.kind}:${p.label.toLowerCase()}`));
+    const next = [...prev];
+    pieces.forEach((p, i) => {
+      const k = `${p.kind}:${String(p.label).toLowerCase()}`;
+      if (!seen.has(k)) { seen.add(k); next.push({ id: `b-${Date.now()}-${i}`, kind: p.kind, label: p.label }); }
+    });
+    try { sessionStorage.setItem("dos:signup-built", JSON.stringify(next)); } catch { /* private mode */ }
+    return next;
+  });
+  const resetBuilt = () => {
+    setBuilt([]);
+    try { sessionStorage.removeItem("dos:signup-built"); } catch { /* private mode */ }
+  };
   const [languageCode, setLanguageCode] = useState("en-IN");
   /* Play audit C2 + C4 — the AI steps and the Terms are agreed to before the
      first phase that sends anything to an AI provider (onboarding/SignupConsent). */
@@ -318,6 +342,25 @@ export default function Signup() {
      which is invisible. .app-sky carries `position: relative; isolation:
      isolate` for exactly this reason; dropping that class in KM-20 dropped
      the stacking context with it, and the glow rendered as a white page. */
+  /* The pieces "Your OS" shows: who and how many from Basics, the trade
+     from the website, then everything the interview's answers added. */
+  const osItems = useMemo(() => {
+    const list = [];
+    const firstName = (form.name || identity?.name || "").trim().split(/\s+/)[0] || "";
+    if (firstName.length >= 2) list.push({ id: "you", kind: "you", label: firstName });
+    if (form.team_size) list.push({ id: "team", kind: "team", label: `${form.team_size} people` });
+    if (world?.industry) list.push({ id: "industry", kind: "industry", label: world.industry });
+    if (world?.business_model) list.push({ id: "model", kind: "model", label: world.business_model });
+    if (world?.website_url) {
+      try {
+        const u = /^https?:/i.test(world.website_url) ? world.website_url : `https://${world.website_url}`;
+        list.push({ id: "web", kind: "web", label: new URL(u).hostname.replace(/^www\./, "") });
+      } catch { /* not a URL: leave it out */ }
+    }
+    return [...list, ...built];
+  }, [form.name, form.team_size, identity, world, built]);
+  const showOs = draftReady && phase !== "build";
+
   return (
     /* KM-42 — `signup-stage` is the scoping hook for the desktop treatment,
        and it earns its keep: .ng-well is used on Ledger, Operating Score and
@@ -329,7 +372,12 @@ export default function Signup() {
       {/* The artwork. On a phone it is a glow held above the pane; on desktop
           (>= 1024) it goes full-bleed and becomes the page itself. See
           "KM-21" / "KM-42" in index.css. */}
-      <div className="app-sky__art app-sky__art--aside" aria-hidden="true" />
+      {/* 2026-10-29 — a drawn blueprint, not a photograph (index.css,
+          "ONBOARDING, REDRAWN"). */}
+      <div className="ob-backdrop" aria-hidden="true">
+        <span className="ob-orb ob-orb--a" />
+        <span className="ob-orb ob-orb--b" />
+      </div>
 
       {/* Top bar — floating glass rather than a ruled band. */}
       {/* KM-50 — ON A PHONE THIS IS JUST THE WORDMARK, CENTRED. Founder: "the
@@ -434,7 +482,18 @@ export default function Signup() {
       </header>
 
       {/* Stage */}
-      <main className="flex flex-1 items-center px-4 py-8 lg:px-8 lg:py-12">
+      <main className="flex flex-1 items-center px-4 py-6 lg:px-8 lg:py-12">
+        {/* YOUR OS, TAKING SHAPE beside every phase up to the build, which
+            draws its own. Desktop: the question on the left, the OS on the
+            right. Phone: a strip of it above the question. */}
+        <div className={showOs
+          ? "mx-auto grid w-full max-w-6xl gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-center lg:gap-10"
+          : "w-full"}>
+        {showOs && (
+          <OsAssembly className="lg:order-2" hub={form.company_name} items={osItems} working={osBusy}
+            variant={isPhone ? "strip" : "orbit"} />
+        )}
+        <div className="min-w-0 lg:order-1">
         {/* 2026-09-29 — THE WHOLE STAGE WAITS, RATHER THAN THE FIRST PHASE
             INSIDE IT. `draftReady` used to gate only the basics branch, so
             while the saved signup was being fetched this rendered
@@ -504,7 +563,7 @@ export default function Signup() {
                 onBack={backToBasics} />
             )}
             {consented && phase === "website" && (
-              <WebsiteIntel companyName={form.company_name.trim()} onBack={backToBasics} saved={world}
+              <WebsiteIntel companyName={form.company_name.trim()} onBack={backToBasics} saved={world} onBusy={setOsBusy}
                 onDone={(w) => { setWorld(w); goTo("interview", { world: w }); }} />
             )}
             {consented && phase === "interview" && (
@@ -515,7 +574,10 @@ export default function Signup() {
                   // Saved the moment it starts, so a reload resumes it (audit A-10).
                   setSessionId(sid); setLanguageCode(lang || "en-IN");
                   saveStep("progress", { phase: "interview", session_id: sid, language_code: lang || "en-IN" });
+                  resetBuilt();   // a new interview builds from nothing
                 }}
+                onBuilt={addBuilt}
+                onBusy={setOsBusy}
                 /* KM-62 — Back at the interview's first question returns here
                    rather than being inert. Not offered from the reveal screen:
                    VoiceInterview posts /interview/start on mount, so stepping
@@ -533,7 +595,7 @@ export default function Signup() {
             {consented && phase === "build" && (
               <BuildReveal
                 sessionId={sessionId} languageCode={languageCode} payload={buildPayload}
-                register={register} onEnter={enterApp}
+                register={register} onEnter={enterApp} seedItems={osItems}
                 savedBlueprint={savedBlueprint}
                 onBlueprint={(bp) => { setSavedBlueprint(bp); saveStep("os_blueprint", bp); }}
                 /* The mobile's proof lapsed while they sat on this screen (it
@@ -554,6 +616,8 @@ export default function Signup() {
           </motion.div>
         </AnimatePresence>
         )}
+        </div>
+        </div>
       </main>
 
       {/* KM-42 — the footer line gets a ground. Measured on the full-bleed

@@ -585,15 +585,17 @@ async def interview_answer(inp: InterviewAnswerInput, request: Request):
     except Exception as e:
         logger.error(f"interview answer failed: {e}")
         data = {"enough": len(qa) >= MIN_QUESTIONS}
+    built = data.get("built") or []
     if data.get("enough") and len(qa) >= MIN_QUESTIONS:
         await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": None, "language_code": lang, "status": "done"}})
-        return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang}
+        return {"done": True, "index": len(qa), "max": MAX_QUESTIONS, "language_code": lang, "built": built}
     question = (data.get("question") or "").strip() or "What part of the business slips through the cracks most often when things get busy?"
     await db.signup_sessions.update_one({"id": s["id"]}, {"$set": {"qa": qa, "pending_q": question,
                                                                   "pending_why": (data.get("why") or "").strip(),
                                                                   "language_code": lang}})
+    # `built` — what this answer added to their OS, for the screen to draw.
     return {"done": False, "question": question, "why": (data.get("why") or "").strip(),
-            "index": len(qa) + 1, "max": MAX_QUESTIONS, "language_code": lang}
+            "index": len(qa) + 1, "max": MAX_QUESTIONS, "language_code": lang, "built": built}
 
 
 @router.post("/interview/blueprint")

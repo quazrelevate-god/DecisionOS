@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The knob wears the app icon's ground, ringed so it reads on the dark
+     glass; a rounded square, to sit with the widget's rectangle. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/ic_launcher_background" />
+    <corners android:radius="12dp" />
+    <stroke android:width="1.5dp" android:color="#66FFFFFF" />
+</shape>

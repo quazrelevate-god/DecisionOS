@@ -102,7 +102,14 @@ async def next_interview_question(
         f"(hard cap {MAX_QUESTIONS} total). Minimum {MIN_QUESTIONS} answers before you're allowed to end.\n"
         "Walk through the operational-coverage checklist. If ANY item is still fuzzy, ask the single most valuable "
         "next question that closes the biggest gap — built on what they just said, matched to their team-size band "
-        "and industry. If the picture is genuinely clear enough to design their OS, set enough=true."
+        "and industry. If the picture is genuinely clear enough to design their OS, set enough=true.\n"
+        # 2026-10-29 (founder) — "they should be able to visualize that
+        # something is building in parallel while they answer every question."
+        # The same call names what the last answer gave us, so the screen can
+        # build it as they go; no second request, no extra wait.
+        "Also return \"built\": up to 3 concrete pieces of their operating system that their LAST answer "
+        "gave you, each {\"kind\": one of department|workflow|approval|task|rule|metric, "
+        "\"label\": at most 5 words, in English}. Only what they actually said; [] if nothing concrete."
     )
     chat = claude_chat(
         task="onboarding.interview", session_id=f"interview-{new_id()}",
@@ -112,7 +119,27 @@ async def next_interview_question(
         "question": (data.get("question") or "").strip(),
         "why": (data.get("why") or "").strip(),
         "enough": bool(data.get("enough")),
+        "built": _built_pieces(data.get("built")),
     }
+
+
+_BUILT_KINDS = {"department", "workflow", "approval", "task", "rule", "metric"}
+
+
+def _built_pieces(raw: Any) -> List[Dict[str, str]]:
+    """What one answer added to the founder's OS, as the interview screen draws
+    it: at most three {kind, label}, label short, unknown kinds dropped."""
+    out: List[Dict[str, str]] = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip().lower()
+        label = " ".join(str(item.get("label") or "").split())[:48]
+        if kind in _BUILT_KINDS and label:
+            out.append({"kind": kind, "label": label})
+        if len(out) == 3:
+            break
+    return out
 
 
 async def generate_blueprint(

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, ArrowLeft } from "@phosphor-icons/react";
+import { ArrowRight, ArrowLeft, DeviceMobile, UserCircle, Buildings, EnvelopeSimple, Lifebuoy, UsersThree } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
 import { normIndianMobile, displayIndianMobile } from "../../lib/phone";
@@ -60,7 +60,7 @@ const STEPS = [
        thing being asked for. */
     key: "phone", eyebrow: "Your mobile", type: "tel", placeholder: "+91 98765 43210",
     q: () => "Let's start with your mobile number.",
-    sub: () => "This is how you sign in — we'll text a code to confirm it's yours.",
+    sub: () => "It's how you sign in. We'll text a code.",
     validate: (v) => (normIndianMobile(v) ? "" : "Enter a 10-digit Indian mobile number"),
     confirmByCode: true,
     skipWhenSignedIn: true,
@@ -68,7 +68,7 @@ const STEPS = [
   {
     key: "name", eyebrow: "About you", type: "text", placeholder: "Your full name",
     q: () => "And your name?",
-    sub: () => "You'll be the owner of this company on DecisionOS.",
+    sub: () => "You'll own this workspace.",
     validate: (v) => (v.trim().length >= 2 ? "" : "We'd love to know your name"),
     onlyWhenNew: true,
   },
@@ -78,7 +78,7 @@ const STEPS = [
     // one thing we are sure of — rather than by anything typed on this screen.
     q: (f, who) => (who ? `Hello ${first(who)} — what's your new company called?`
       : "What's your company called?"),
-    sub: () => "The name your customers know you by.",
+    sub: () => "As your customers know it.",
     validate: (v) => (v.trim().length >= 2 ? "" : "Tell us your company name"),
   },
   /* 2026-09-20 (Yokesh) — NOBODY SETS A PASSWORD TO GET IN HERE. "We don't need
@@ -90,7 +90,7 @@ const STEPS = [
   {
     key: "email", eyebrow: "Support", type: "email", placeholder: "you@company.com",
     q: (f) => `Nice to meet you, ${first(f.name)}. Your work email?`,
-    sub: () => "For receipts and support. You'll sign in with your mobile.",
+    sub: () => "For receipts. You sign in with your mobile.",
     validate: (v) => (/^\S+@\S+\.\S+$/.test(v.trim()) ? "" : "That email doesn't look right"),
     checkEmail: true,
     onlyWhenNew: true,
@@ -105,7 +105,7 @@ const STEPS = [
   {
     key: "support_email", eyebrow: "Support", type: "email", placeholder: "you@company.com",
     q: (f) => `Where should support reach you about ${f.company_name.trim()}?`,
-    sub: () => "For receipts and support about this company. You can skip it and add it in Settings.",
+    sub: () => "For receipts and support. Optional.",
     validate: (v) => (!v.trim() || /^\S+@\S+\.\S+$/.test(v.trim()) ? "" : "That email doesn't look right"),
     optional: true,
     onlyWhenKnown: true,
@@ -113,10 +113,31 @@ const STEPS = [
   {
     key: "team_size", eyebrow: "Your team", type: "chips",
     q: (f) => `How many people work at ${f.company_name.trim()}?`,
-    sub: () => "We shape your operating system around your size.",
+    sub: () => "Your OS is sized to fit.",
     validate: (v) => (v ? "" : "Pick one"),
   },
 ];
+
+/* 2026-10-29 (founder) — "more visually illustrated": each question wears a
+   picture of what it asks for, in place of the step number. */
+const STEP_ART = {
+  phone: DeviceMobile, name: UserCircle, company_name: Buildings,
+  email: EnvelopeSimple, support_email: Lifebuoy, team_size: UsersThree,
+};
+
+function StepArt({ stepKey }) {
+  const Icon = STEP_ART[stepKey] || Buildings;
+  return (
+    <motion.span aria-hidden="true"
+      initial={{ scale: 0.6, rotate: -8, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="relative mb-5 grid h-16 w-16 place-items-center rounded-[1.25rem] bg-[linear-gradient(160deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white shadow-[0_16px_30px_-14px_hsl(230_30%_10%/.65),inset_0_1px_0_hsl(0_0%_100%/.18)]">
+      <Icon size={30} weight="duotone" />
+      <motion.span className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-[hsl(var(--ng-gold))]"
+        animate={{ scale: [1, 1.25, 1] }} transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }} />
+    </motion.span>
+  );
+}
 
 const variants = {
   enter: { opacity: 0, y: 28 },
@@ -442,11 +463,10 @@ export function BasicsFlow({ form, setForm, onDone, initialStep = "", onStepSave
       <AnimatePresence mode="wait">
         <motion.div key={step.key} variants={variants} initial="enter" animate="center" exit="exit"
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
+          {!existing && <StepArt stepKey={step.key} />}
           <p className="mb-3 flex items-center gap-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            <span className="ng-pressed grid h-6 min-w-[1.75rem] place-items-center rounded-pill px-2 text-[11px] tabular-nums">
-              {String(idx + 1).padStart(2, "0")}
-            </span>
             {existing ? "Your companies" : step.eyebrow}
+            {!existing && <span className="tabular-nums text-foreground/40">{idx + 1} / {steps.length}</span>}
           </p>
           <h1 className="mb-2 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
             {existing ? (existing.workspaces.length

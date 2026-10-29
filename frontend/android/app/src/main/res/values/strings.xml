@@ -4,4 +4,9 @@
     <string name="title_activity_main">DecisionOS</string>
     <string name="package_name">com.decisionos.app</string>
     <string name="custom_url_scheme">com.decisionos.app</string>
+    <string name="widget_label">Dex</string>
+    <string name="widget_description">Ask Dex or decide, straight from the home screen</string>
+    <string name="widget_ask">Ask</string>
+    <string name="widget_decide">Decide</string>
+    <string name="widget_knob">Speak to Dex</string>
 </resources>

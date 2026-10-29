@@ -15,22 +15,22 @@ import {
 } from "@phosphor-icons/react";
 import { span, lerp, SCREEN } from "./Player";
 
-const INK = "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white";
-const GLASS = "bg-white/80 ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35)]";
-const CARD = "rounded-[1.4rem] bg-white/85 ring-1 ring-inset ring-white shadow-[0_12px_30px_-18px_hsl(0_0%_10%/0.32)]";
-const GOLD = "hsl(44 88% 60%)";
+export const INK = "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white";
+export const GLASS = "bg-white/80 ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_6px_16px_-8px_hsl(216_30%_25%/0.35)]";
+export const CARD = "rounded-[1.4rem] bg-white/85 ring-1 ring-inset ring-white shadow-[0_12px_30px_-18px_hsl(0_0%_10%/0.32)]";
+export const GOLD = "hsl(44 88% 60%)";
 
-const typed = (text, p, a, b) => text.slice(0, Math.round(text.length * span(p, a, b, (x) => x)));
-const rise = (p, a, b, d = 14) => {
+export const typed = (text, p, a, b) => text.slice(0, Math.round(text.length * span(p, a, b, (x) => x)));
+export const rise = (p, a, b, d = 14) => {
   const k = span(p, a, b);
   return { opacity: k, transform: `translateY(${(1 - k) * d}px)` };
 };
-const initials = (s) => String(s || "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "OS";
-const short = (s, n) => (String(s).length > n ? `${String(s).slice(0, n - 1).trimEnd()}…` : String(s));
+export const initials = (s) => String(s || "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "OS";
+export const short = (s, n) => (String(s).length > n ? `${String(s).slice(0, n - 1).trimEnd()}…` : String(s));
 
 /* ── The shells ─────────────────────────────────────────────────────────── */
 
-function Sky({ children }) {
+export function Sky({ children }) {
   return (
     <div className="absolute inset-0 overflow-hidden bg-[hsl(225_8%_92%)]">
       <div className="absolute -left-40 -top-40 h-[520px] w-[520px] rounded-full bg-[hsl(40_60%_85%/.6)] blur-3xl" />
@@ -103,7 +103,7 @@ function Dock({ active, knob = 0 }) {
 }
 
 /* The full-screen tick the phone shows after an action (Affirmation). */
-function Tick({ k, text }) {
+export function Tick({ k, text }) {
   if (k <= 0) return null;
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-[radial-gradient(120%_70%_at_50%_46%,hsl(0_0%_100%/.86),hsl(210_30%_96%/.7))] backdrop-blur-md" style={{ opacity: Math.min(1, k * 2) }}>
@@ -130,7 +130,7 @@ function DeskRow({ title, meta, hue, style, mock }) {
   );
 }
 
-function StepRow({ n, at, size = 30 }) {
+export function StepRow({ n, at, size = 30 }) {
   return (
     <div className="flex items-center">
       {Array.from({ length: n }).map((_, i) => (
@@ -146,7 +146,7 @@ function StepRow({ n, at, size = 30 }) {
   );
 }
 
-function TaskDeckCard({ j, p, w, done }) {
+export function TaskDeckCard({ j, p, w, done }) {
   const steps = j.memberTasks.slice(0, 5);
   const at = Math.min(steps.length, Math.floor(span(p, 0.3, 0.75, (x) => x) * steps.length));
   const next = steps[Math.min(at, steps.length - 1)];
@@ -545,7 +545,7 @@ export function buildScenes(j, device) {
     title: `${j.company}, as Dex built it`,
     render: (p) => {
       const teams = j.teams.slice(0, 8);
-      const cx = W / 2; const cy = phone ? 300 : 290; const R = phone ? 118 : 190;
+      const cx = W / 2; const cy = phone ? 300 : H * 0.38; const R = phone ? 118 : 210;
       return (
         <Sky>
           <svg className="absolute inset-0" width={W} height={H} aria-hidden="true">
@@ -571,7 +571,8 @@ export function buildScenes(j, device) {
               </div>
             );
           })}
-          <div className={`absolute grid gap-2 ${phone ? "inset-x-4 top-[500px] grid-cols-3" : "left-[150px] top-[560px] w-[900px] grid-cols-6"}`} data-mock="counts">
+          <div className={`absolute grid gap-2 ${phone ? "inset-x-4 top-[500px] grid-cols-3" : "w-[960px] grid-cols-6"}`} data-mock="counts"
+            style={phone ? undefined : { left: (W - 960) / 2, top: H - 210 }}>
             {j.counts.map((c, i) => (
               <div key={c.key} className={`rounded-2xl p-3 text-center ${GLASS}`} style={rise(p, 0.45 + i * 0.04, 0.58 + i * 0.04)}>
                 <p className="font-display text-[26px] font-semibold leading-none text-slate-900">{Math.round(c.n * span(p, 0.45 + i * 0.04, 0.7 + i * 0.04))}</p>
@@ -679,7 +680,7 @@ export function buildScenes(j, device) {
     key: "cycle", chapter: "The cycle", ms: 7500,
     title: "How every day runs, start to finish",
     render: (p) => {
-      const cx = W / 2; const cy = phone ? 360 : 360; const R = phone ? 132 : 230;
+      const cx = W / 2; const cy = phone ? 360 : H / 2 - 10; const R = phone ? 132 : 250;
       const lit = Math.floor(span(p, 0.08, 0.8, (x) => x) * LOOP.length);
       const t = span(p, 0.08, 0.8, (x) => x) * 2 * Math.PI;
       return (

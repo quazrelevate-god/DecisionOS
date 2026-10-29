@@ -17,7 +17,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowSquareOut, CalendarBlank, CaretDown, CaretRight, CheckCircle, ListChecks,
-  LockKey, Paperclip, Play, Sparkle, ArrowClockwise, Hourglass, ShieldCheck, File as FileIcon,
+  LockKey, Paperclip, Play, Sparkle, ArrowClockwise, Hourglass, ShieldCheck, File as FileIcon, Check as CheckIcon,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
@@ -297,7 +297,9 @@ function nextStep(t) {
    fall back to asking the person for a first step. */
 const drafting = (t) => !t.execution_plan?.steps?.length && Number(t.plan_auto_tries || 0) < 3;
 
-export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen, onPatched, onChange }) {
+/* `onToggleSelect` / `selected` — desktop's bulk selection (the card is the
+   desktop's list card too since 2026-10-29); left out, there is no tick box. */
+export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen, onPatched, onChange, selected = false, onToggleSelect }) {
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const rights = taskEditRights(user, t, members);
@@ -354,9 +356,17 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
 
   return (
     <article data-testid={`deck-card-${t.id}`} data-stage={stage}
-      className="flex flex-col rounded-[1.75rem] bg-[linear-gradient(180deg,#fff,hsl(220_14%_97%))] p-5 text-slate-900 shadow-[0_30px_60px_-30px_hsl(0_0%_0%/0.8)]">
+      className={`flex flex-col rounded-[1.75rem] bg-[linear-gradient(180deg,#fff,hsl(220_14%_97%))] p-5 text-slate-900 shadow-[0_30px_60px_-30px_hsl(0_0%_0%/0.8)] lg:shadow-[0_18px_40px_-26px_hsl(220_30%_20%/0.5)] lg:ring-1 lg:ring-inset ${selected ? "lg:ring-2 lg:ring-ng-ink" : "lg:ring-slate-900/[0.05]"}`}>
       <div className="flex shrink-0 items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col items-start gap-1">
+        {onToggleSelect && (
+          <label className="-ml-1 mt-1.5 grid shrink-0 cursor-pointer place-items-center" title={selected ? "Deselect" : "Select for bulk action"}>
+            <input type="checkbox" checked={selected} onChange={onToggleSelect} data-testid={`bulk-select-${t.id}`}
+              aria-label={`Select task ${t.title}`}
+              className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border-[1.5px] border-slate-300 bg-[#fff] transition-colors checked:border-ng-ink checked:bg-ng-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-ink/40" />
+            <CheckIcon size={12} weight="bold" aria-hidden="true" className="pointer-events-none absolute hidden text-white peer-checked:block" />
+          </label>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
           <span className={`inline-flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-[13px] font-semibold ring-1 ring-inset ${tone.pill}`}
             data-testid={`deck-status-${t.id}`}>
             <kit.StatusRing status={t.status} tone={tone} />
@@ -372,7 +382,7 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
       </div>
 
       <button type="button" onClick={() => onOpen?.()} className="mt-3 shrink-0 text-left" data-testid={`deck-title-${t.id}`}>
-        <h2 className="line-clamp-3 text-[24px] font-bold leading-[1.15] tracking-tight text-slate-900">{t.title}</h2>
+        <h2 className="line-clamp-3 text-[24px] font-bold leading-[1.15] tracking-tight text-slate-900 lg:text-[20px]">{t.title}</h2>
       </button>
       {t.description && (
         <p className="mt-2 line-clamp-3 shrink-0 text-[15px] leading-relaxed text-slate-500">{t.description}</p>

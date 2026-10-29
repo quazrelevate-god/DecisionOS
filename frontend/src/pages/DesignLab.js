@@ -26,6 +26,29 @@ import {
 // can be looked at without creating a tenant to see it.
 import { DexForge } from "./onboarding/DexForge";
 import { DexBuilder } from "./onboarding/DexBuilder";
+import { FirstWeek } from "./onboarding/walkthrough/FirstWeek";
+
+const LAB_TOUR = {
+  company: "Verma Spices",
+  bp: {
+    departments: [
+      { key: "sales", label: "Sales & Dispatch" }, { key: "finance", label: "Finance & Collections" },
+      { key: "packing", label: "Grinding & Packing" }, { key: "buying", label: "Procurement & Sourcing" },
+    ],
+    approval_rules: [{ name: "Spice purchase above ₹1 lakh", description: "Any purchase from farmers above one lakh needs Asha's sign-off before the order is placed." }],
+    operational_tasks: ["Monday warehouse stock check", "Reconcile buyer payments", "Monthly review of wholesale accounts", "Chase payments after 30 days"],
+  },
+  pipelines: [{
+    key: "orders", label: "Wholesale Orders",
+    stages: [
+      { key: "in", label: "Order Received", role: "sales", tasks: [{ title: "Confirm items and quantities with the buyer" }, { title: "Check finished stock against the order" }, { title: "Flag any shortfall to the warehouse" }] },
+      { key: "inv", label: "Invoice Raised", role: "finance", tasks: [{ title: "Raise and send the GST invoice" }] },
+      { key: "ok", label: "Approved", role: "owner", approval: { role: "owner" }, tasks: [{ title: "Sign off orders above the credit limit" }] },
+      { key: "pack", label: "Packing", role: "packing", tasks: [{ title: "Weigh, pack and label each unit" }] },
+      { key: "ship", label: "Dispatched", role: "sales", tasks: [{ title: "Hand over to the transporter and share tracking" }] },
+    ],
+  }],
+};
 // KM-23 — the voice surface in all four of its states. It only ever appears
 // inside the dock while the mic is live, so this is the one place the idle,
 // thinking and speaking states can be looked at without recording something.
@@ -309,6 +332,15 @@ function NeuGlassGallery() {
           DexForge · /signup build
         </p>
         <DexForge />
+      </div>
+
+      {/* 2026-10-29 · FirstWeek — signup's last screen: the new company's
+          first week, played inside a mock of the app (onboarding/walkthrough).
+          A made-up company, so it can be looked at without signing up. */}
+      <div className="app-canvas mb-6 space-y-10 rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }} data-testid="lab-first-week">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-60">FirstWeek · signup's last screen</p>
+        <FirstWeek company={LAB_TOUR.company} founder="Asha Verma" bp={LAB_TOUR.bp} pipelines={LAB_TOUR.pipelines} device="desktop" />
+        <FirstWeek company={LAB_TOUR.company} founder="Asha Verma" bp={LAB_TOUR.bp} pipelines={LAB_TOUR.pipelines} device="phone" />
       </div>
 
       {/* 2026-10-29 · DexBuilder — the forge as a head, building a workflow:

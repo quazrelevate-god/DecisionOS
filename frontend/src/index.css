@@ -4818,3 +4818,20 @@ html.dos-quick .ng-dock-chat {
     animation: ob-link-flow 2.4s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) { .ob-handoff { animation: none; } }
+
+/* The walkthrough's scrubber (onboarding/walkthrough/Player): the track is
+   drawn by the player itself, so the input shows only its gold knob. */
+.ob-scrub::-webkit-slider-runnable-track { background: transparent; height: 100%; }
+.ob-scrub::-moz-range-track { background: transparent; }
+.ob-scrub::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; margin-top: 13px; border-radius: 9999px;
+    background: #fff; border: 3px solid hsl(var(--ng-gold));
+    box-shadow: 0 4px 10px -3px hsl(230 30% 10% / .45);
+}
+.ob-scrub::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 9999px;
+    background: #fff; border: 3px solid hsl(var(--ng-gold));
+}
+.ob-scrub:focus-visible { outline: none; }
+.ob-scrub:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px hsl(var(--ng-gold) / .35); }

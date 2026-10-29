@@ -65,6 +65,7 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // ASK-33 — the well on the left column's floor is Dex's Decide door. It owns
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
+import { FinishedWorkCard } from "./desk/FinishedWorkCard";
 import { TeamNudge } from "./desk/TeamNudge";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
@@ -1756,6 +1757,9 @@ export default function Desk() {
         "max-lg:justify-between"
       )}
     >
+      {/* 2026-10-29 (the pilot client) — what got finished since you last
+          looked, once per launch, each task once (desk/FinishedWorkCard). */}
+      <FinishedWorkCard />
       {(cachedAt || m.failed?.any || (workflowsQ.isError && !workflowsQ.data)) && (
         <StaleStamp at={cachedAt} failed={m.failed?.any || (workflowsQ.isError && !workflowsQ.data)}
           offline={typeof navigator !== "undefined" && navigator.onLine === false}

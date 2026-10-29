@@ -64,6 +64,8 @@ from models.tasks import (
     StepAskInput,
     TaskUpdateNoteInput,
     RespondInput,
+    AutoPlanInput,
+    FinishedSeenInput,
 )
 from services.ai import brain_context
 from services import auto_plan  # 2026-10-29: Dex drafts the checklist on creation
@@ -382,6 +384,54 @@ async def get_task(task_id: str, user: dict = Depends(get_current_user)):
     return await enrich_task(t)
 
 
+@router.post("/tasks/auto-plan")
+async def request_auto_plans(inp: AutoPlanInput, user: dict = Depends(get_current_user)):
+    """2026-10-29 (founder) — the checklists for tasks on screen that still
+    have none, so a card names its real first step (services.auto_plan.request
+    holds the rules: consent, never over a checklist, never on finished or
+    locked work, three tries at most). `wait` answers with the tasks drafted."""
+    ids = [i for i in inp.task_ids if i][:10]
+    asked = await auto_plan.request(db, user, ids, may_read_task, wait=inp.wait)
+    tasks = []
+    if inp.wait and asked:
+        async for row in db.tasks.find({"id": {"$in": asked}, "tenant_id": user["tenant_id"]}, {"_id": 0}):
+            tasks.append(await enrich_task(row))
+    return {"requested": asked, "tasks": tasks}
+
+
+@router.get("/finished-tasks")
+async def finished_tasks_unseen(user: dict = Depends(get_current_user)):
+    """2026-10-29 (the pilot client, through the founder) — the owner is told
+    what got finished. On opening the app the Desk shows every task marked done
+    since they last saw this list, each once: an owner sees the company's, anyone
+    else the work they asked others for. Their own tasks are not news to them.
+    The first time, the last two days."""
+    tid = user["tenant_id"]
+    me = await db.users.find_one({"id": user["id"], "tenant_id": tid}, {"_id": 0, "finished_seen_at": 1}) or {}
+    since = me.get("finished_seen_at") or (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    q = {"tenant_id": tid, "status": "done", "completed_at": {"$gt": since}, "assignee_id": {"$ne": user["id"]}}
+    if user.get("role") != "owner":
+        q["created_by"] = user["id"]
+    rows = await db.tasks.find(q, {"_id": 0, "id": 1, "title": 1, "assignee_id": 1, "assignee_role": 1,
+                                   "completed_at": 1, "priority": 1}).sort("completed_at", -1).to_list(30)
+    who = {u["id"]: u.get("name") for u in await db.users.find(
+        {"tenant_id": tid, "id": {"$in": list({r.get("assignee_id") for r in rows if r.get("assignee_id")})}},
+        {"_id": 0, "id": 1, "name": 1}).to_list(60)}
+    for r in rows:
+        r["assignee_name"] = who.get(r.get("assignee_id"))
+    return {"tasks": rows, "since": since}
+
+
+@router.post("/finished-tasks/seen")
+async def finished_tasks_seen(inp: FinishedSeenInput, user: dict = Depends(get_current_user)):
+    """The list has been shown up to `until`: it is not shown again."""
+    await db.users.update_one(
+        {"id": user["id"], "tenant_id": user["tenant_id"],
+         "$or": [{"finished_seen_at": {"$exists": False}}, {"finished_seen_at": {"$lt": inp.until}}]},
+        {"$set": {"finished_seen_at": inp.until}})
+    return {"ok": True}
+
+
 async def may_read_task(user: dict, t: dict) -> bool:
     """Who may open a task -- and, since 2026-10-03, its attachments
     (routers/files.py), which used to be served to anyone holding the id."""
@@ -513,7 +563,8 @@ async def task_activity(task_id: str, user: dict = Depends(get_current_user)):
             names[u["id"]] = u.get("name")
     items = [{
         "id": r.get("id"), "kind": r.get("kind"), "text": _timeline_text(r),
-        "actor_name": names.get(r.get("actor")), "actor_id": r.get("actor"), "created_at": r.get("created_at"),
+        # A row with no actor and its own name (Dex's checklist) keeps that name.
+        "actor_name": names.get(r.get("actor")) or r.get("actor_name"), "actor_id": r.get("actor"), "created_at": r.get("created_at"),
     } for r in rows]
     for u in t.get("updates") or []:
         items.append({
@@ -1192,6 +1243,25 @@ async def _after_task_done(user: dict, t: dict, task_id: str) -> None:
     # Engine side-effects framework (WE-06) -- this MVP
     # unblocks the cash-flow blind spot without waiting.
     await _maybe_auto_invoice(user["tenant_id"], user["id"], t, task_id)
+    # 2026-10-29 (the pilot client) — the owner hears that it is done.
+    try:
+        await _tell_owners_done(user, t, task_id)
+    except Exception as e:  # noqa: BLE001 — a notice never blocks a close
+        from core import logger as _lg
+        _lg.warning(f"[done-notice] could not tell the owners about {task_id}: {e}")
+
+
+async def _tell_owners_done(user: dict, t: dict, task_id: str) -> None:
+    """Every owner but the one who closed it gets an in-app notice and a push."""
+    from services.notifications import push_notification
+    tid = user["tenant_id"]
+    owners = [u["id"] async for u in db.users.find({"tenant_id": tid, "role": "owner"}, {"_id": 0, "id": 1})]
+    to = [o for o in owners if o != user["id"]]
+    if not to:
+        return
+    title = t.get("title") or "A task"
+    await push_notification(tid, to, 1, f"{user.get('name') or 'Someone'} finished '{title}'", "task", task_id,
+                            ntype="task_done", title=title, sender=user.get("name"))
 
 
 # ---------------------------------------------------------------------------
@@ -1444,7 +1514,11 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
     # cards, Desk and the drawer's locked % bar all read the same number.
     if steps:
         updates["progress"] = plan["progress"]
-    # Keep the task board in sync: starting work moves a todo task into progress; finishing all steps can complete it.
+    # Keep the task board in sync: finishing all steps can complete it.
+    # 2026-10-29 (founder) — and NOTHING ELSE MOVES IT TO DOING. A checklist
+    # being drafted (by Dex or by hand) or a step being ticked used to turn a
+    # To do task into Doing on its own; only the person saying so does now
+    # (Mark as Doing, or the status picker).
     if plan["status"] == "accepted" and steps:
         # Every step ticked completes the task only for someone who may finish
         # it, and only with its proof; otherwise it stays in progress at 100%.
@@ -1456,8 +1530,6 @@ async def save_execution_plan(task_id: str, inp: ExecPlanInput, user: dict = Dep
                 updates["last_action"] = "Sent for approval"
             elif updates.get("approval_status") == "approved":
                 updates.update({"approved_by": user["id"], "approved_at": now_iso()})
-        elif plan["progress"] > 0 and t.get("status") == "todo":
-            updates["status"] = "in_progress"
     # BUG-04 (XCODITS QA, 2026-10-21) — FINISHING BY CHECKLIST IS FINISHING.
     # Ticking the last step closed the task without the two stamps every other
     # close writes (update_task, the sign-off): no completed_at, so a task

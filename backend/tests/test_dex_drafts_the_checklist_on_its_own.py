@@ -176,3 +176,24 @@ def test_a_failed_call_is_retried_a_few_times_then_left(with_test_db):
                 ex.ai_execution_plan = saved
         return go()
     with_test_db(runner)
+
+
+def test_a_checklist_never_moves_a_task_to_doing(with_test_db):
+    # 2026-10-29 (founder): "even though the checklist was made by the LLM, I
+    # want it to be To do. Only if I click the button should it change."
+    def runner(db):
+        async def go():
+            from tests.e2e_harness import e2e_env, seed_tenant_and_users
+            from models.tasks import ExecPlanInput
+            with e2e_env(db):
+                import routers.tasks as rt
+                await seed_tenant_and_users(db)
+                owner = {"id": "u-owner", "tenant_id": "t1", "role": "owner", "name": "Owner"}
+                await db.tasks.insert_one({**_task(), "tenant_id": "t1", "assignee_id": "u-owner", "created_by": "u-owner"})
+                await rt.save_execution_plan("k1", ExecPlanInput(status="accepted", steps=[
+                    {"id": "s1", "text": "Check the PO", "done": True},
+                    {"id": "s2", "text": "Raise the invoice", "done": False}]), user=owner)
+                return await db.tasks.find_one({"id": "k1"}, {"_id": 0, "status": 1, "progress": 1})
+        return go()
+    t = with_test_db(runner)
+    assert t["status"] == "todo" and t["progress"] == 50, "a ticked step moves the bar, not the status"

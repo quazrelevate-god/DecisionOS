@@ -81,6 +81,7 @@ import { proposalCreatesText } from "../lib/decisionProposal";
 import { LeftoverReview } from "./workflow/LeftoverReview";
 import { ReportButton } from "./ReportButton";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { DexReview } from "../pages/desk/DexReview";
 import { isDraft as readDraft, subscribeDrafts, draftOverrides, settleDraft, saveAsDraft, clearDraft } from "../lib/decisionDrafts";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
@@ -1270,11 +1271,54 @@ export function DecisionPanel({
   );
 }
 
+/* 2026-10-29 (founder) — ON A PHONE A DECISION OPENS IN THE NEW REVIEW, from
+   wherever it is opened (the Desk's Decisions column, a notification), not
+   only at the end of a Dex capture: the same three screens (pages/desk/
+   DexReview — Review & approve, Tasks created by Dex, one task), full screen,
+   with its own header. The desktop keeps the two-column panel below. */
+function PhoneDecisionReview({ decisionId, open, onClose }) {
+  const [head, setHead] = useState({ title: "Review & approve", hint: "Nothing is created until you approve it." });
+  return (
+    <>
+      <div className="flex shrink-0 items-start gap-4 border-b border-slate-900/[0.06] px-5 pb-4 pt-5">
+        <div className="min-w-0 flex-1">
+          <DialogTitle className="text-left text-[22px] font-semibold leading-tight tracking-tight text-slate-900" data-testid="decision-phone-title">
+            {head.title}
+          </DialogTitle>
+          <DialogDescription className="mt-1 text-left text-sm text-slate-500">{head.hint}</DialogDescription>
+        </div>
+        <DialogPrimitiveClose data-testid="decision-close" aria-label="Close" className={GLASS_ICON_BTN}>
+          <X size={16} weight="bold" aria-hidden="true" />
+        </DialogPrimitiveClose>
+      </div>
+      <DexReview decisionId={decisionId} open={open} onClose={onClose} onTitle={setHead} />
+    </>
+  );
+}
+
 export function DecisionDialog({ decisionId, open, onClose, variant = "modal" }) {
   const closeRef = useRef(null);
   const dirtyRef = useRef(() => false);
+  const phone = useIsMobile();
   /* A stray tap outside must not throw away work in progress. */
   const guardOutside = (e) => { if (dirtyRef.current()) e.preventDefault(); };
+  if (phone) {
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && onClose && onClose()}>
+        <DialogContent
+          className={`${GLASS_SHEET} flex flex-col gap-0 p-0 outline-none [&>button.absolute]:hidden focus:outline-none focus-visible:outline-none focus-visible:ring-0
+                     left-0 top-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none [padding-top:var(--sa-top)]`}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          data-variant={variant}
+          data-testid="decision-dialog"
+        >
+          <PhoneDecisionReview decisionId={decisionId} open={open} onClose={onClose} />
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose && onClose()}>
       <DialogContent

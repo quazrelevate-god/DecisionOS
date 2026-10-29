@@ -35,6 +35,7 @@ PUSH_TITLES = {
     "stage_entered": "Workflow update",
     "workflow_stuck": "Workflow stuck",
     "reminder": "Reminder",
+    "task_done": "Task done",   # 2026-10-29: the owner hears it is finished
     # Requests (2026-10-21): a no on a request is final, not "changes requested".
     "request_rejected": "Request declined",
     "request_withdrawn": "Request withdrawn",

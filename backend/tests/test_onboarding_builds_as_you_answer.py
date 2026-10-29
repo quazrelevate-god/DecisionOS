@@ -46,24 +46,25 @@ def test_the_answer_carries_what_it_built_and_the_page_draws_it():
     assert "app-sky__art--aside" not in page, "the photograph is gone from signup"
 
 
-def test_the_last_screen_sums_up_then_plays_their_first_week():
-    """The founder (2026-10-29): "show all the KPIs — how many tasks, how many
-    workflows — an interactive view of the workflows and the flow, a summarised
-    view, and along with that the walkthrough, in a desktop and a phone window,
-    switchable… templatised, so it shows quickly for every new company"."""
+def test_the_summary_then_their_first_week_inside_the_app():
+    """The founder (2026-10-30): "show the walkthrough in the actual DecisionOS
+    application, blended with the illustrative elements… templatised… mock
+    data and mock replies so it is quick… the last call to action enters the
+    actual app." The summary keeps the counts and the explorer; Enter keeps the
+    company's script, and the app plays it over the real pages once."""
     br = (FE / "pages" / "onboarding" / "BuildReveal.js").read_text(encoding="utf-8")
-    for marker in ('data-testid="build-kpis"', 'data-testid="build-explorer"', 'data-testid="build-tour"', "<FirstWeek"):
-        assert marker in br, marker
-    assert br.index('data-testid="build-kpis"') < br.index('data-testid="build-explorer"') < br.index('data-testid="build-tour"')
-    wt = FE / "pages" / "onboarding" / "walkthrough"
-    journey = (wt / "journey.js").read_text(encoding="utf-8")
-    assert "bp?.approval_rules" in journey and '"Tasks set up"' in journey, "counts from the company's own draft"
-    scenes = (wt / "scenes.jsx").read_text(encoding="utf-8")
-    assert "flowScene" in scenes and "j.flows.slice(0, 3)" in scenes, "a chapter per workflow"
-    for chapter in ('key: "glance"', 'key: "ask"', 'key: "addons"', 'key: "cycle"'):
-        assert chapter in scenes, chapter
-    assert '!j.rules.length && "signoff"' in scenes, "chapters with nothing to show are skipped"
-    fw = (wt / "FirstWeek.jsx").read_text(encoding="utf-8")
-    assert 'first-week-device-${k}' in fw, "desktop / phone switch"
-    player = (wt / "Player.jsx").read_text(encoding="utf-8")
-    assert 'type="range"' in player and "--ui-scale" in player
+    assert 'data-testid="build-kpis"' in br and 'data-testid="build-explorer"' in br
+    assert br.index("saveFirstTour(buildJourney(") < br.index("onEnter();"), "the script is kept before entering"
+    assert "<FirstWeek" not in br, "the video left the summary"
+    tour = (FE / "components" / "tour" / "FirstWeekTour.jsx").read_text(encoding="utf-8")
+    for key in ('key: "glance"', 'key: "desk"', 'key: "decide"', 'key: "flow"', 'key: "work"', 'key: "routines"',
+                'key: "signoff"', 'key: "ask"', 'key: "more"', 'key: "cycle"'):
+        assert key in tour, key
+    assert "clearToStart(user)" in tour and '"/auth/tour/done"' in tour
+    assert 'cta: "Start using DecisionOS"' in tour and 'finish("/inbox")' in tour
+    layout = (FE / "components" / "Layout.js").read_text(encoding="utf-8")
+    assert "<FirstWeekTour />" in layout and 'data-testid="nav-first-tour"' in layout
+    wt = (FE / "components" / "mobile" / "Walkthrough.jsx").read_text(encoding="utf-8")
+    assert "firstTourPending()" in wt, "the short phone tour stands aside for it"
+    journey = (FE / "pages" / "onboarding" / "walkthrough" / "journey.js").read_text(encoding="utf-8")
+    assert "bp?.approval_rules" in journey and '"Tasks set up"' in journey

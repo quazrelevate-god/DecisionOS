@@ -26,7 +26,8 @@ import {
 // can be looked at without creating a tenant to see it.
 import { DexForge } from "./onboarding/DexForge";
 import { DexBuilder } from "./onboarding/DexBuilder";
-import { FirstWeek } from "./onboarding/walkthrough/FirstWeek";
+import { buildJourney } from "./onboarding/walkthrough/journey";
+import { saveFirstTour } from "../lib/firstTour";
 
 
 const LAB_TOUR = {
@@ -343,12 +344,14 @@ function NeuGlassGallery() {
         <DexForge />
       </div>
 
-      {/* 2026-10-29 · FirstWeek — signup's last screen: the new company's
-          first week, played inside a mock of the app (onboarding/walkthrough).
-          A made-up company, so it can be looked at without signing up. */}
-      <div className="app-canvas mb-6 space-y-10 rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }} data-testid="lab-first-week">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-60">FirstWeek · signup's last screen</p>
-        <FirstWeek company={LAB_TOUR.company} founder="Asha Verma" bp={LAB_TOUR.bp} pipelines={LAB_TOUR.pipelines} device="desktop" />
+      {/* 2026-10-30 · the first-week tour (components/tour/FirstWeekTour), played
+          over the real app with a made-up company, without signing up. */}
+      <div className="app-canvas mb-6 rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }} data-testid="lab-first-week">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-60">First-week tour · plays over the app (sign in first)</p>
+        <button type="button" data-testid="lab-first-week-play" className="mt-3 h-11 rounded-full bg-neutral-900 px-5 text-sm font-semibold text-white"
+          onClick={() => { saveFirstTour(buildJourney({ company: LAB_TOUR.company, founder: "Asha Verma", bp: LAB_TOUR.bp, pipelines: LAB_TOUR.pipelines })); window.location.assign("/inbox"); }}>
+          Play the tour with {LAB_TOUR.company}
+        </button>
       </div>
 
       {/* 2026-10-29 · DexBuilder — the forge as a head, building a workflow:

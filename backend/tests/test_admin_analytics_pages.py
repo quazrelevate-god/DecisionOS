@@ -77,8 +77,11 @@ def test_active_people_by_day_week_and_month(d):
     d.presence_days.docs += [{"tenant_id": "t1", "user_id": "u1", "day": day(0)},
                              {"tenant_id": "t1", "user_id": "u2", "day": day(3)},
                              {"tenant_id": "t2", "user_id": "u3", "day": day(20)}]
-    d.activity.docs.append({"tenant_id": "t2", "actor": "u4", "created_at": iso(hours=-1)})
-    d.activity.docs.append({"tenant_id": "t2", "actor": "system", "created_at": iso(hours=-1)})
+    # Today in India, whatever the hour: "an hour ago" was yesterday just after
+    # midnight IST and the count came out one short (2026-10-30, 00:30 IST).
+    today = f"{day(0)}T00:00:01+05:30"
+    d.activity.docs.append({"tenant_id": "t2", "actor": "u4", "created_at": today})
+    d.activity.docs.append({"tenant_id": "t2", "actor": "system", "created_at": today})
     d.tenant_daily.docs += [{"tenant_id": "t1", "day": day(0), "actions_total": 2, "actions": {"tasks": 2}, "active_people": 1},
                             {"tenant_id": "t2", "day": day(0), "actions_total": 1, "actions": {"finance": 1}, "active_people": 1}]
     e = run(engagement(30))

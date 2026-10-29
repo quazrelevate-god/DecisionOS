@@ -7,7 +7,7 @@ import { useId, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Buildings, CaretDown, CurrencyInr, Package, Plus, Receipt, Sparkle } from "@phosphor-icons/react";
+import { Buildings, CaretDown, CircleNotch, CurrencyInr, Package, Plus, Receipt, Sparkle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import api from "../../lib/api";
 import { lex } from "../../lib/lexicon";
@@ -113,6 +113,91 @@ const formData = (fields, file) => {
   return fd;
 };
 
+/* 2026-10-30 (founder) — THE AI FILLS THE FORM; THE PERSON CONFIRMS. A bill
+   attached here used to go to the AI on Save and be filed with whatever it
+   read: a wrong amount or customer reached the books unchecked. Now choosing
+   the file sends it to POST /ledger/read-bill, which stores and reads it and
+   saves nothing. What the AI found fills the fields that are still empty, each
+   marked "AI" until it is changed; the person checks, corrects and saves, and
+   the stored bill is attached as it is (attachment_path), not read again. */
+function useBillReader(kind, f, setF, blank) {
+  const [file, setFileState] = useState(null);
+  const [bill, setBill] = useState(null);   // {reading} | {attachment, filled, read, note} | {failed, note}
+  const seq = useRef(0);
+  const isBlank = (k, v) => v == null || v === "" || v === blank[k];
+  const setFile = async (sel) => {
+    const n = ++seq.current;
+    setFileState(sel);
+    if (!sel) { setBill(null); return; }
+    setBill({ reading: true });
+    try {
+      const fd = new FormData();
+      fd.append("kind", kind);
+      fd.append("file", sel);
+      const { data } = await api.post("/ledger/read-bill", fd);
+      if (n !== seq.current) return;                 // another file was chosen meanwhile
+      const found = data.fields || {};
+      const filled = Object.keys(found).filter((k) => k in blank && isBlank(k, f[k]));
+      setF((cur) => ({ ...cur, ...Object.fromEntries(filled.filter((k) => isBlank(k, cur[k])).map((k) => [k, String(found[k])])) }));
+      setBill({ attachment: data.attachment, filled, read: data.read, note: data.read_note });
+    } catch (e) {
+      if (n !== seq.current) return;
+      setBill({ failed: true, note: e.response?.data?.detail });
+    }
+  };
+  return {
+    file, setFile, bill,
+    reading: !!bill?.reading,
+    ai: (k) => !!bill?.filled?.includes(k),
+    edited: (k) => setBill((b) => (b?.filled?.includes(k) ? { ...b, filled: b.filled.filter((x) => x !== k) } : b)),
+    // What Save sends: the checked fields and the stored bill; a bill that
+    // couldn't be stored for reading goes with the save, not read.
+    payload: (fields) => {
+      const fd = formData(fields, null);
+      if (bill?.attachment?.storage_path) {
+        fd.append("attachment_path", bill.attachment.storage_path);
+        fd.append("attachment_name", bill.attachment.filename || file?.name || "");
+      } else if (file) {
+        fd.append("file", file);
+        fd.append("ai_read", "false");
+      }
+      return fd;
+    },
+    reset: () => { seq.current += 1; setFileState(null); setBill(null); },
+  };
+}
+
+/** What the AI did with the bill, above the fields. */
+function BillNote({ bill, testid }) {
+  if (!bill) return null;
+  const base = "flex items-start gap-2 rounded-2xl px-3.5 py-2.5 text-[13px] leading-snug ring-1 ring-inset";
+  if (bill.reading) {
+    return (
+      <p className={cn(base, "bg-slate-500/[0.06] text-slate-700 ring-slate-900/[0.05]")} data-testid={testid} aria-live="polite">
+        <CircleNotch size={15} className="mt-0.5 shrink-0 animate-spin" aria-hidden="true" /> AI is reading the bill…
+      </p>
+    );
+  }
+  if (bill.failed || bill.note || !bill.filled?.length) {
+    const text = bill.note
+      || (bill.failed ? "Couldn't read the bill. Fill in the details yourself; it stays attached."
+        : "AI read the bill but found nothing to fill in. Fill in the details yourself.");
+    return <p className={cn(base, "bg-amber-50/90 text-amber-900 ring-amber-100")} data-testid={testid} aria-live="polite">{text}</p>;
+  }
+  return (
+    <p className={cn(base, "bg-sky-50/90 text-sky-900 ring-sky-100")} data-testid={testid} aria-live="polite">
+      <Sparkle size={15} weight="fill" className="mt-0.5 shrink-0 text-orange-500" aria-hidden="true" />
+      <span>AI filled {bill.filled.length} field{bill.filled.length === 1 ? "" : "s"} from the bill. Check the highlighted ones, then save.</span>
+    </p>
+  );
+}
+
+/** A field label with an "AI" tag while the AI's value is still in it. */
+const aiLabel = (text, on) => (on
+  ? <span className="inline-flex items-center gap-1.5">{text}<span className="rounded-md bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800" data-ai-filled="">AI</span></span>
+  : text);
+const AI_FIELD = "ring-2 ring-amber-300/80 bg-amber-50/70";
+
 const EXPENSE_BLANK = { title: "", amount: "", vendor_name: "", vendor_id: "", category: "", date: "", status: "unpaid", notes: "" };
 
 export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }) {
@@ -121,14 +206,15 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
   const L = lex(tenant);
   const uid = useId();
   const [f, setF, draft] = useDraft("expense", EXPENSE_BLANK);
-  const [file, setFile] = useState(null);
+  const reader = useBillReader("expense", f, setF, EXPENSE_BLANK);
+  const { file, setFile } = reader;
   const [busy, setBusy] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k, v) => { setF((s) => ({ ...s, [k]: v })); reader.edited(k); };
   // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
   // are what empty the form.
   const close = () => onOpenChange(false);
-  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
+  const cancel = () => { draft.discard(); reader.reset(); onOpenChange(false); };
 
   const suggest = async () => {
     const text = `${f.title} ${f.vendor_name} ${f.notes}`.trim();
@@ -146,11 +232,12 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
     }
   };
   const save = async () => {
+    if (reader.reading) return toast.message("AI is still reading the bill — a moment.");
     if (!f.title.trim() && !f.amount && !file) return toast.error(t("finance.need_expense"));
     setBusy(true);
     try {
-      const res = await api.post("/expenses/with-file", formData(f, file));
-      toast.success(!file ? t("finance.expense_added") : res?.data?.bill_read === false ? (res.data.bill_note || t("finance.bill_not_read")) : t("finance.added_bill"));
+      await api.post("/expenses/with-file", reader.payload(f));
+      toast.success(file ? t("finance.added_bill") : t("finance.expense_added"));
       cancel();
       onDone();
     } catch (e) {
@@ -167,15 +254,16 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
         <div className="space-y-4 px-6 pb-5">
           {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="expense-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
-          <Field label={t("finance.c_title")} htmlFor={`${uid}-title`}>
-            <input id={`${uid}-title`} data-testid="expense-title" className={FIELD} value={f.title}
+          <BillNote bill={reader.bill} testid="expense-bill-note" />
+          <Field label={aiLabel(t("finance.c_title"), reader.ai("title"))} htmlFor={`${uid}-title`}>
+            <input id={`${uid}-title`} data-testid="expense-title" className={cn(FIELD, reader.ai("title") && AI_FIELD)} value={f.title}
               onChange={(e) => set("title", e.target.value)} placeholder={t("finance.exp_title_ph")} />
           </Field>
           {/* Five rows, not seven: the dialog fits a 900px-tall laptop without
               scrolling, and folds to two columns on a phone. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Field label={t("finance.c_amount")} htmlFor={`${uid}-amount`}>
-              <input id={`${uid}-amount`} data-testid="expense-amount" type="number" inputMode="decimal" className={FIELD}
+            <Field label={aiLabel(t("finance.c_amount"), reader.ai("amount"))} htmlFor={`${uid}-amount`}>
+              <input id={`${uid}-amount`} data-testid="expense-amount" type="number" inputMode="decimal" className={cn(FIELD, reader.ai("amount") && AI_FIELD)}
                 value={f.amount} onChange={(e) => set("amount", e.target.value)} />
             </Field>
             <Field label={t("finance.f_status")} htmlFor={`${uid}-status`}>
@@ -183,17 +271,17 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
                 value={f.status} onChange={(v) => set("status", v)}
                 options={[{ value: "unpaid", label: t("finance.unpaid") }, { value: "paid", label: t("finance.paid") }]} />
             </Field>
-            <Field label={t("finance.c_date")} htmlFor={`${uid}-date`} className="col-span-2 sm:col-span-1">
-              <input id={`${uid}-date`} type="date" className={FIELD} value={f.date} onChange={(e) => set("date", e.target.value)} />
+            <Field label={aiLabel(t("finance.c_date"), reader.ai("date"))} htmlFor={`${uid}-date`} className="col-span-2 sm:col-span-1">
+              <input id={`${uid}-date`} type="date" className={cn(FIELD, reader.ai("date") && AI_FIELD)} value={f.date} onChange={(e) => set("date", e.target.value)} />
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={t("finance.f_vendor", { vendor: L.vendor_singular })} htmlFor={`${uid}-vendor`}>
+            <Field label={aiLabel(t("finance.f_vendor", { vendor: L.vendor_singular }), reader.ai("vendor_name"))} htmlFor={`${uid}-vendor`}>
               <PartyPicker kind="vendor" noun={L.vendor_singular} id={`${uid}-vendor`} testid="expense-vendor"
                 name={f.vendor_name} linkedId={f.vendor_id}
-                onChange={({ name, id }) => setF((s) => ({ ...s, vendor_name: name, vendor_id: id }))} />
+                onChange={({ name, id }) => { setF((s) => ({ ...s, vendor_name: name, vendor_id: id })); reader.edited("vendor_name"); }} />
             </Field>
-            <Field label={t("finance.c_category")} htmlFor={`${uid}-category`}
+            <Field label={aiLabel(t("finance.c_category"), reader.ai("category"))} htmlFor={`${uid}-category`}
               aside={(
                 <button type="button" onClick={suggest} disabled={suggesting} data-testid="expense-suggest-category"
                   className="flex items-center gap-1 rounded-pill px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-white/80 disabled:opacity-50">
@@ -210,8 +298,8 @@ export function AddExpenseDialog({ open, onOpenChange, categories = [], onDone }
             <textarea id={`${uid}-notes`} className={AREA} rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
         </div>
-        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="expense-save" saveLabel={t("finance.save_expense")}
-          busyLabel={file ? t("finance.ai_reading") : t("finance.saving")} />
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy || reader.reading} testid="expense-save" saveLabel={t("finance.save_expense")}
+          busyLabel={reader.reading ? t("finance.ai_reading") : t("finance.saving")} />
       </DialogContent>
     </Dialog>
   );
@@ -225,19 +313,21 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
   const L = lex(tenant);
   const uid = useId();
   const [f, setF, draft] = useDraft("asset", ASSET_BLANK);
-  const [file, setFile] = useState(null);
+  const reader = useBillReader("asset", f, setF, ASSET_BLANK);
+  const { file, setFile } = reader;
   const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k, v) => { setF((s) => ({ ...s, [k]: v })); reader.edited(k); };
   // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
   // are what empty the form.
   const close = () => onOpenChange(false);
-  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
+  const cancel = () => { draft.discard(); reader.reset(); onOpenChange(false); };
   const save = async () => {
+    if (reader.reading) return toast.message("AI is still reading the bill — a moment.");
     if (!f.name.trim() && !file) return toast.error(t("finance.need_asset"));
     setBusy(true);
     try {
-      const res = await api.post("/assets/with-file", formData(f, file));
-      toast.success(!file ? t("finance.asset_added") : res?.data?.bill_read === false ? (res.data.bill_note || t("finance.bill_not_read")) : t("finance.asset_added_bill"));
+      await api.post("/assets/with-file", reader.payload(f));
+      toast.success(file ? t("finance.asset_added_bill") : t("finance.asset_added"));
       cancel();
       onDone();
     } catch (e) {
@@ -253,28 +343,29 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
         <div className="space-y-4 px-6 pb-5">
           {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="asset-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
-          <Field label={t("finance.asset_name")} htmlFor={`${uid}-name`}>
-            <input id={`${uid}-name`} data-testid="asset-name" className={FIELD} value={f.name}
+          <BillNote bill={reader.bill} testid="asset-bill-note" />
+          <Field label={aiLabel(t("finance.asset_name"), reader.ai("name"))} htmlFor={`${uid}-name`}>
+            <input id={`${uid}-name`} data-testid="asset-name" className={cn(FIELD, reader.ai("name") && AI_FIELD)} value={f.name}
               onChange={(e) => set("name", e.target.value)} placeholder={t("finance.asset_name_ph")} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.purchase_amount")} htmlFor={`${uid}-amount`}>
-              <input id={`${uid}-amount`} data-testid="asset-amount" type="number" inputMode="decimal" className={FIELD}
+            <Field label={aiLabel(t("finance.purchase_amount"), reader.ai("purchase_amount"))} htmlFor={`${uid}-amount`}>
+              <input id={`${uid}-amount`} data-testid="asset-amount" type="number" inputMode="decimal" className={cn(FIELD, reader.ai("purchase_amount") && AI_FIELD)}
                 value={f.purchase_amount} onChange={(e) => set("purchase_amount", e.target.value)} />
             </Field>
-            <Field label={t("finance.c_category")} htmlFor={`${uid}-category`}>
+            <Field label={aiLabel(t("finance.c_category"), reader.ai("category"))} htmlFor={`${uid}-category`}>
               <CategoryField kind="asset" id={`${uid}-category`} testid="asset-category"
                 value={f.category} onChange={(v) => set("category", v)} categories={categories} />
             </Field>
           </div>
-          <Field label={L.vendor_singular} htmlFor={`${uid}-vendor`}>
+          <Field label={aiLabel(L.vendor_singular, reader.ai("vendor_name"))} htmlFor={`${uid}-vendor`}>
             <PartyPicker kind="vendor" noun={L.vendor_singular} id={`${uid}-vendor`} testid="asset-vendor"
               name={f.vendor_name} linkedId={f.vendor_id}
-              onChange={({ name, id }) => setF((s) => ({ ...s, vendor_name: name, vendor_id: id }))} />
+              onChange={({ name, id }) => { setF((s) => ({ ...s, vendor_name: name, vendor_id: id })); reader.edited("vendor_name"); }} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.purchase_date")} htmlFor={`${uid}-date`}>
-              <input id={`${uid}-date`} type="date" className={FIELD} value={f.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} />
+            <Field label={aiLabel(t("finance.purchase_date"), reader.ai("purchase_date"))} htmlFor={`${uid}-date`}>
+              <input id={`${uid}-date`} type="date" className={cn(FIELD, reader.ai("purchase_date") && AI_FIELD)} value={f.purchase_date} onChange={(e) => set("purchase_date", e.target.value)} />
             </Field>
             <Field label={t("finance.f_status")} htmlFor={`${uid}-status`}>
               <GlassSelect id={`${uid}-status`} variant="field" triggerClassName={FIELD} testid="asset-status" ariaLabel={t("finance.f_status")}
@@ -287,8 +378,8 @@ export function AddAssetDialog({ open, onOpenChange, categories = [], onDone }) 
             </Field>
           </div>
         </div>
-        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="asset-save" saveLabel={t("finance.save_asset")}
-          busyLabel={file ? t("finance.ai_reading") : t("finance.saving")} />
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy || reader.reading} testid="asset-save" saveLabel={t("finance.save_asset")}
+          busyLabel={reader.reading ? t("finance.ai_reading") : t("finance.saving")} />
       </DialogContent>
     </Dialog>
   );
@@ -302,20 +393,22 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
   const L = lex(tenant);
   const uid = useId();
   const [f, setF, draft] = useDraft("inventory", INVENTORY_BLANK);
-  const [file, setFile] = useState(null);
+  const reader = useBillReader("inventory", f, setF, INVENTORY_BLANK);
+  const { file, setFile } = reader;
   const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k, v) => { setF((s) => ({ ...s, [k]: v })); reader.edited(k); };
   // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
   // are what empty the form.
   const close = () => onOpenChange(false);
-  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
+  const cancel = () => { draft.discard(); reader.reset(); onOpenChange(false); };
   const value = (Number(f.quantity) || 0) * (Number(f.unit_cost) || 0);
   const save = async () => {
+    if (reader.reading) return toast.message("AI is still reading the bill — a moment.");
     if (!f.item.trim() && !file) return toast.error(t("finance.need_item"));
     setBusy(true);
     try {
-      const res = await api.post("/inventory/with-file", formData(f, file));
-      toast.success(!file ? t("finance.inv_added") : res?.data?.bill_read === false ? (res.data.bill_note || t("finance.bill_not_read")) : t("finance.inv_added_bill"));
+      await api.post("/inventory/with-file", reader.payload(f));
+      toast.success(file ? t("finance.inv_added_bill") : t("finance.inv_added"));
       cancel();
       onDone();
     } catch (e) {
@@ -331,33 +424,34 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
         <div className="space-y-4 px-6 pb-5">
           {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="inventory-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
+          <BillNote bill={reader.bill} testid="inventory-bill-note" />
           <div className="grid grid-cols-2 gap-3">
-            <Field label={t("finance.i_item")} htmlFor={`${uid}-item`}>
-              <input id={`${uid}-item`} data-testid="inv-item" className={FIELD} value={f.item} onChange={(e) => set("item", e.target.value)} />
+            <Field label={aiLabel(t("finance.i_item"), reader.ai("item"))} htmlFor={`${uid}-item`}>
+              <input id={`${uid}-item`} data-testid="inv-item" className={cn(FIELD, reader.ai("item") && AI_FIELD)} value={f.item} onChange={(e) => set("item", e.target.value)} />
             </Field>
             <Field label={t("finance.i_sku")} htmlFor={`${uid}-sku`}>
               <input id={`${uid}-sku`} className={FIELD} value={f.sku} onChange={(e) => set("sku", e.target.value)} />
             </Field>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Field label={t("finance.quantity")} htmlFor={`${uid}-qty`}>
-              <input id={`${uid}-qty`} data-testid="inv-qty" type="number" inputMode="decimal" className={FIELD} value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
+            <Field label={aiLabel(t("finance.quantity"), reader.ai("quantity"))} htmlFor={`${uid}-qty`}>
+              <input id={`${uid}-qty`} data-testid="inv-qty" type="number" inputMode="decimal" className={cn(FIELD, reader.ai("quantity") && AI_FIELD)} value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
             </Field>
             <Field label={t("finance.unit")} htmlFor={`${uid}-unit`}>
               <input id={`${uid}-unit`} className={FIELD} value={f.unit} onChange={(e) => set("unit", e.target.value)} />
             </Field>
-            <Field label={t("finance.unit_cost")} htmlFor={`${uid}-cost`}>
-              <input id={`${uid}-cost`} data-testid="inv-cost" type="number" inputMode="decimal" className={FIELD} value={f.unit_cost} onChange={(e) => set("unit_cost", e.target.value)} />
+            <Field label={aiLabel(t("finance.unit_cost"), reader.ai("unit_cost"))} htmlFor={`${uid}-cost`}>
+              <input id={`${uid}-cost`} data-testid="inv-cost" type="number" inputMode="decimal" className={cn(FIELD, reader.ai("unit_cost") && AI_FIELD)} value={f.unit_cost} onChange={(e) => set("unit_cost", e.target.value)} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("finance.c_category")} htmlFor={`${uid}-category`}>
               <input id={`${uid}-category`} className={FIELD} value={f.category} onChange={(e) => set("category", e.target.value)} />
             </Field>
-            <Field label={L.vendor_singular} htmlFor={`${uid}-vendor`}>
+            <Field label={aiLabel(L.vendor_singular, reader.ai("vendor_name"))} htmlFor={`${uid}-vendor`}>
               <PartyPicker kind="vendor" noun={L.vendor_singular} id={`${uid}-vendor`} testid="inv-vendor"
                 name={f.vendor_name} linkedId={f.vendor_id}
-                onChange={({ name, id }) => setF((s) => ({ ...s, vendor_name: name, vendor_id: id }))} />
+                onChange={({ name, id }) => { setF((s) => ({ ...s, vendor_name: name, vendor_id: id })); reader.edited("vendor_name"); }} />
             </Field>
           </div>
           {value > 0 && (
@@ -366,8 +460,8 @@ export function AddInventoryDialog({ open, onOpenChange, cur, onDone }) {
             </p>
           )}
         </div>
-        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="inv-save" saveLabel={t("finance.save_item")}
-          busyLabel={file ? t("finance.ai_reading") : t("finance.saving")} />
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy || reader.reading} testid="inv-save" saveLabel={t("finance.save_item")}
+          busyLabel={reader.reading ? t("finance.ai_reading") : t("finance.saving")} />
       </DialogContent>
     </Dialog>
   );
@@ -380,19 +474,21 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
   const L = lex(tenant);
   const uid = useId();
   const [f, setF, draft] = useDraft("income", INCOME_BLANK);
-  const [file, setFile] = useState(null);
+  const reader = useBillReader("income", f, setF, INCOME_BLANK);
+  const { file, setFile } = reader;
   const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const set = (k, v) => { setF((s) => ({ ...s, [k]: v })); reader.edited(k); };
   // PILOT-1 A — closing keeps what was typed (see KEEP below); Cancel and Save
   // are what empty the form.
   const close = () => onOpenChange(false);
-  const cancel = () => { draft.discard(); setFile(null); onOpenChange(false); };
+  const cancel = () => { draft.discard(); reader.reset(); onOpenChange(false); };
   const save = async () => {
+    if (reader.reading) return toast.message("AI is still reading the invoice — a moment.");
     if (!f.title.trim() && !f.amount && !f.customer_name.trim() && !file) return toast.error("Add a title, customer or amount");
     setBusy(true);
     try {
-      await api.post("/revenue/with-file", formData(f, file));
-      toast.success(file ? "Income recorded from the invoice" : "Income recorded");
+      await api.post("/revenue/with-file", reader.payload(f));
+      toast.success(file ? "Income recorded with the invoice attached" : "Income recorded");
       cancel();
       onDone();
     } catch (e) {
@@ -409,13 +505,14 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
         <div className="space-y-4 px-6 pb-5">
           {draft.restored && <DraftNote onDiscard={() => draft.discard()} label={KEPT_LABEL} testid="income-draft" className="-mt-2" />}
           <FileField file={file} setFile={setFile} />
-          <Field label="What was it for" htmlFor={`${uid}-title`}>
-            <input id={`${uid}-title`} data-testid="income-title" className={FIELD} value={f.title}
+          <BillNote bill={reader.bill} testid="income-bill-note" />
+          <Field label={aiLabel("What was it for", reader.ai("title"))} htmlFor={`${uid}-title`}>
+            <input id={`${uid}-title`} data-testid="income-title" className={cn(FIELD, reader.ai("title") && AI_FIELD)} value={f.title}
               onChange={(e) => set("title", e.target.value)} placeholder="e.g. Design retainer · Order #204" />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Amount" htmlFor={`${uid}-amount`}>
-              <input id={`${uid}-amount`} data-testid="income-amount" type="number" inputMode="decimal" className={FIELD} value={f.amount} onChange={(e) => set("amount", e.target.value)} />
+            <Field label={aiLabel("Amount", reader.ai("amount"))} htmlFor={`${uid}-amount`}>
+              <input id={`${uid}-amount`} data-testid="income-amount" type="number" inputMode="decimal" className={cn(FIELD, reader.ai("amount") && AI_FIELD)} value={f.amount} onChange={(e) => set("amount", e.target.value)} />
             </Field>
             <Field label="Payment status" htmlFor={`${uid}-status`}>
               <GlassSelect id={`${uid}-status`} variant="field" triggerClassName={FIELD} testid="income-status" ariaLabel="Payment status"
@@ -423,27 +520,27 @@ export function AddIncomeDialog({ open, onOpenChange, onDone }) {
                 options={[{ value: "unpaid", label: "Awaiting payment" }, { value: "paid", label: "Received" }]} />
             </Field>
           </div>
-          <Field label={`${L.customer_singular} name`} htmlFor={`${uid}-customer`}>
+          <Field label={aiLabel(`${L.customer_singular} name`, reader.ai("customer_name"))} htmlFor={`${uid}-customer`}>
             <PartyPicker kind="customer" noun={L.customer_singular} id={`${uid}-customer`} testid="income-customer"
               name={f.customer_name} linkedId={f.contact_id}
-              onChange={({ name, id }) => setF((s) => ({ ...s, customer_name: name, contact_id: id }))} />
+              onChange={({ name, id }) => { setF((s) => ({ ...s, customer_name: name, contact_id: id })); reader.edited("customer_name"); }} />
           </Field>
           {/* Phone: a third of the sheet is too narrow for a date field, so the
               invoice number takes a row and the two dates share the next. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Field label="Invoice #" htmlFor={`${uid}-number`} className="col-span-2 sm:col-span-1">
-              <input id={`${uid}-number`} className={FIELD} value={f.number} onChange={(e) => set("number", e.target.value)} />
+            <Field label={aiLabel("Invoice #", reader.ai("number"))} htmlFor={`${uid}-number`} className="col-span-2 sm:col-span-1">
+              <input id={`${uid}-number`} data-testid="income-number" className={cn(FIELD, reader.ai("number") && AI_FIELD)} value={f.number} onChange={(e) => set("number", e.target.value)} />
             </Field>
-            <Field label="Date" htmlFor={`${uid}-date`}>
-              <input id={`${uid}-date`} type="date" className={FIELD} value={f.date} onChange={(e) => set("date", e.target.value)} />
+            <Field label={aiLabel("Date", reader.ai("date"))} htmlFor={`${uid}-date`}>
+              <input id={`${uid}-date`} type="date" className={cn(FIELD, reader.ai("date") && AI_FIELD)} value={f.date} onChange={(e) => set("date", e.target.value)} />
             </Field>
-            <Field label="Due date" htmlFor={`${uid}-due`}>
-              <input id={`${uid}-due`} type="date" className={FIELD} value={f.due_date} onChange={(e) => set("due_date", e.target.value)} />
+            <Field label={aiLabel("Due date", reader.ai("due_date"))} htmlFor={`${uid}-due`}>
+              <input id={`${uid}-due`} type="date" className={cn(FIELD, reader.ai("due_date") && AI_FIELD)} value={f.due_date} onChange={(e) => set("due_date", e.target.value)} />
             </Field>
           </div>
         </div>
-        <SheetFoot onCancel={cancel} onSave={save} busy={busy} testid="income-save" saveLabel="Save income"
-          busyLabel={file ? "AI reading…" : "Saving…"} />
+        <SheetFoot onCancel={cancel} onSave={save} busy={busy || reader.reading} testid="income-save" saveLabel="Save income"
+          busyLabel={reader.reading ? "AI reading…" : "Saving…"} />
       </DialogContent>
     </Dialog>
   );

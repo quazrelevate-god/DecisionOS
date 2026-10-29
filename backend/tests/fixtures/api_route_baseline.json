@@ -1,6 +1,6 @@
 {
-  "count": 438,
-  "sha": "2bbf5d407dc71168f2fa542a6d25f98a984ff1d980a0b1b08ff593d85b892488",
+  "count": 439,
+  "sha": "4fb5f355ac413f9e63a2d8a1c5f622f81567fbb357b211036d369195585a8f33",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -363,6 +363,7 @@
     "POST /api/ledger/ask",
     "POST /api/ledger/categories",
     "POST /api/ledger/parties",
+    "POST /api/ledger/read-bill",
     "POST /api/me/acting-as",
     "POST /api/meetings",
     "POST /api/meetings/text",

@@ -15,6 +15,12 @@ Epic 11 · Sprint 9 · Feature · 2026-10-29
 - **One period for all of Finance.** Pick it on Overview, Revenue or Expenses and all three follow: the lists and the Billed / Received figures show that period. Assets, Inventory and the Inbox — what you own and what's waiting — always show everything.
 - **Money owed is never hidden.** Outstanding and Overdue always count every unpaid invoice, whatever its date; when a period leaves some out, Revenue says so ("1 unpaid invoice (₹40,000) dated outside this period") with *Show all dates*. Bills to pay and payments to match are never filtered.
 
+## Also in this sprint: a bill is read, then confirmed (2026-10-30)
+
+In **Add income / expense / asset / stock**, attaching a bill no longer files whatever the AI reads. The AI reads it as soon as it's attached and **fills in the form** — each value it found is highlighted and tagged **AI** until you change it, and a note says how many fields it filled (or why it couldn't, for example when AI is switched off). Check, correct, then **Save**: the record is exactly what's on the form, with the bill attached. Nothing reaches the books unchecked.
+
+How: `POST /ledger/read-bill` stores and reads the bill and returns the fields — it saves no record. Save sends the checked values with the stored bill's path (`attachment_path`), so it's attached without being read again; only this company's ledger uploads can be named. `ai_read=false` attaches a bill sent with Save without reading it. Older app builds that send the file on Save still have it read as before. Frontend: `useBillReader` and `BillNote` in `pages/finance/FinanceForms.jsx`. Tests: `backend/tests/test_finance_bills_are_read_then_confirmed.py`.
+
 ## Why
 
 A client added records and "nothing changed" on Revenue, Received or Profit. The records were saved: the Overview defaulted to *Last 30 days* and counts a record by the date written on it, so an invoice entered today but dated in July sat outside the window. Businesses think in financial years, quarters and halves; the page now does too.

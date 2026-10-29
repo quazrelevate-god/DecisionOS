@@ -149,4 +149,7 @@ def test_a_bill_upload_says_why_it_was_not_read():
     assert "AI is switched off, so the bill wasn't read" in src
     assert src.count('"bill_note": (_att or {}).get("read_note")') == 4
     forms = (ROOT.parent / "frontend" / "src" / "pages" / "finance" / "FinanceForms.jsx").read_text(encoding="utf-8")
-    assert forms.count("(res.data.bill_note || t(\"finance.bill_not_read\"))") == 3
+    # 2026-10-30 — the bill is read before saving (POST /ledger/read-bill), so
+    # the reason it wasn't read shows above the form, before anything is saved.
+    assert '"read_note": att.get("read_note"),' in src
+    assert "const text = bill.note" in forms and forms.count("<BillNote bill={reader.bill}") == 4

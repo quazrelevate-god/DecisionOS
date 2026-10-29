@@ -909,10 +909,54 @@ ALLOWED_UPLOAD_MIMES = ("image/", "application/pdf")
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
 
 
-async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str, typed: dict) -> tuple:
-    """Save an optional upload and, when present, AI-extract fields from it. Returns (data, attachment)."""
+def _reviewed_attachment(tenant_id: str, path: str, name: str) -> dict:
+    """A bill read by POST /ledger/read-bill and checked by the person: its
+    stored copy, attached as it is (it is not read again). Only this
+    company's ledger uploads can be named."""
+    from services import obj_store
+    prefix = f"{obj_store.APP_NAME}/{tenant_id}/ledger/"
+    key = (path or "").strip()
+    tail = key[len(prefix):] if key.startswith(prefix) else ""
+    if not tail or "/" in tail or ".." in tail or "." not in tail:
+        raise HTTPException(status_code=400, detail="That bill isn't one of this company's uploads. Attach it again.")
+    ext = tail.rsplit(".", 1)[1].lower()
+    mime = "application/pdf" if ext == "pdf" else f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
+    return {"filename": (name or "").strip()[:200] or f"ledger-{tail}", "url": f"/api/files/ledger-{tail}",
+            "mime": mime, "storage_path": key, "read": True, "reviewed": True}
+
+
+async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str, typed: dict,
+                           attachment_path: str = "", attachment_name: str = "", ai_read: bool = True) -> tuple:
+    """Save an optional upload and, when present, AI-extract fields from it. Returns (data, attachment).
+
+    2026-10-30 (founder: the AI fills the form, the person confirms) — the
+    Finance dialogs now read a bill first (POST /ledger/read-bill), show what
+    the AI found, and send the checked values with the stored bill's path:
+    `attachment_path` attaches it without reading it again, and `ai_read=False`
+    attaches a sent file without reading it. A file sent with neither (older
+    app builds) is read and merged as before."""
     data = dict(typed)
     attachment = None
+    # Called as a plain function (tests, other routes), an unset Form() default
+    # arrives as its FieldInfo, not "": anything that isn't text means not given.
+    attachment_path = attachment_path if isinstance(attachment_path, str) else ""
+    attachment_name = attachment_name if isinstance(attachment_name, str) else ""
+    if (file is None or not (file.filename or "")) and attachment_path:
+        attachment = _reviewed_attachment(tenant_id, attachment_path, attachment_name)
+        data["attachment"] = attachment
+        return data, attachment
+    if file is not None and (file.filename or "") and not ai_read:
+        mime = file.content_type or ""
+        if not any(mime.startswith(m) for m in ALLOWED_UPLOAD_MIMES):
+            raise HTTPException(status_code=415, detail="Only image or PDF bills are supported")
+        content = await file.read()
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File is too large (max 15 MB)")
+        saved = await _save_upload_async(tenant_id, content, file.filename, content_type=mime)
+        attachment = {"filename": saved["filename"], "url": saved["url"], "mime": mime,
+                      "storage_path": saved["storage_path"], "read": False, "reviewed": True}
+        data["attachment"] = attachment
+        return data, attachment
     if file is not None and (file.filename or ""):
         mime = file.content_type or ""
         if not any(mime.startswith(m) for m in ALLOWED_UPLOAD_MIMES):
@@ -957,12 +1001,47 @@ async def _read_attachment(file: Optional[UploadFile], kind: str, tenant_id: str
     return data, attachment
 
 
+# 2026-10-30 (founder) — READ FIRST, SAVE WHAT THE PERSON CHECKED. A bill
+# attached in Add income / expense / asset / stock went straight to the AI and
+# whatever it read was saved: a wrong amount or customer reached the books
+# unchecked. Now the dialog sends the bill here first; it is stored, read, and
+# what the AI found comes back to fill the form. Nothing is saved. The person
+# corrects it and saves, sending the stored bill's path (attachment_path), so it
+# is attached without being read again.
+_READ_KEYS = {
+    "expense": ("title", "amount", "vendor_name", "date", "category", "notes"),
+    "asset": ("name", "purchase_amount", "vendor_name", "purchase_date", "category", "notes"),
+    "inventory": ("item", "sku", "quantity", "unit", "unit_cost", "category", "vendor_name", "notes"),
+    "income": ("title", "customer_name", "amount", "number", "date", "due_date", "notes"),
+}
+
+
+@router.post("/ledger/read-bill")
+async def read_bill(kind: str = Form(...), file: UploadFile = File(...), user: dict = Depends(require_ledger)):
+    if kind not in _READ_KEYS:
+        raise HTTPException(status_code=400, detail="kind must be income, expense, asset or inventory")
+    data, att = await _read_attachment(file, kind, user["tenant_id"], {})
+    fields = {k: data[k] for k in _READ_KEYS[kind] if data.get(k) not in (None, "", 0, "0")}
+    if kind in ("expense", "asset") and fields.get("category"):
+        fc = await get_finance_categories(user["tenant_id"])
+        if fields["category"] not in (fc["expense"] if kind == "expense" else fc["asset"]):
+            fields.pop("category")
+    att = att or {}
+    return {
+        "fields": fields,
+        "attachment": {k: att.get(k) for k in ("filename", "mime", "storage_path")},
+        "read": bool(att.get("read")) and bool(fields),
+        "read_note": att.get("read_note"),
+    }
+
+
 @router.post("/expenses/with-file")
 async def add_expense_with_file(
     title: str = Form(""), amount: str = Form(""), vendor_name: str = Form(""),
     category: str = Form(""), date: str = Form(""), status: str = Form("unpaid"),
     notes: str = Form(""), file: Optional[UploadFile] = File(None),
     vendor_id: str = Form(""),   # PILOT-1 E: the CRM supplier picked in the form
+    attachment_path: str = Form(""), attachment_name: str = Form(""), ai_read: str = Form("true"),
     user: dict = Depends(require_ledger),
 ):
     typed = {"title": title.strip(), "amount": _num(amount), "vendor_name": vendor_name.strip(),
@@ -970,7 +1049,8 @@ async def add_expense_with_file(
     party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
     if party:
         typed.update(vendor_id=party["id"], vendor_name=party["name"])
-    data, _att = await _read_attachment(file, "expense", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "expense", user["tenant_id"], typed, attachment_path, attachment_name,
+                                        ai_read=str(ai_read).lower() not in ("false", "0", "no"))
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable bill")
     # J7 — the same threshold as the typed route above; a bill photographed
@@ -1056,6 +1136,7 @@ async def add_asset_with_file(
     category: str = Form(""), purchase_date: str = Form(""), status: str = Form("active"),
     notes: str = Form(""), file: Optional[UploadFile] = File(None),
     vendor_id: str = Form(""),   # PILOT-1 E
+    attachment_path: str = Form(""), attachment_name: str = Form(""), ai_read: str = Form("true"),
     user: dict = Depends(require_ledger),
 ):
     typed = {"name": name.strip(), "purchase_amount": _num(purchase_amount), "vendor_name": vendor_name.strip(),
@@ -1063,7 +1144,8 @@ async def add_asset_with_file(
     party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
     if party:
         typed.update(vendor_id=party["id"], vendor_name=party["name"])
-    data, _att = await _read_attachment(file, "asset", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "asset", user["tenant_id"], typed, attachment_path, attachment_name,
+                                        ai_read=str(ai_read).lower() not in ("false", "0", "no"))
     if not (str(data.get("name") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an asset name or attach a readable bill")
     doc = await create_asset(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
@@ -1109,6 +1191,7 @@ async def add_inventory_with_file(
     unit_cost: str = Form(""), category: str = Form(""), vendor_name: str = Form(""),
     notes: str = Form(""), file: Optional[UploadFile] = File(None),
     vendor_id: str = Form(""),   # PILOT-1 E
+    attachment_path: str = Form(""), attachment_name: str = Form(""), ai_read: str = Form("true"),
     user: dict = Depends(require_ledger),
 ):
     typed = {"item": item.strip(), "sku": sku.strip(), "quantity": _num(quantity), "unit": unit.strip() or "unit",
@@ -1116,7 +1199,8 @@ async def add_inventory_with_file(
     party = await _linked_party(user["tenant_id"], vendor_id, "vendor")
     if party:
         typed.update(vendor_id=party["id"], vendor_name=party["name"])
-    data, _att = await _read_attachment(file, "inventory", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "inventory", user["tenant_id"], typed, attachment_path, attachment_name,
+                                        ai_read=str(ai_read).lower() not in ("false", "0", "no"))
     if not (str(data.get("item") or "").strip()):
         raise HTTPException(status_code=400, detail="Add an item name or attach a readable bill")
     doc = await create_inventory(user["tenant_id"], user["id"], data, source="manual", write_brain=True)
@@ -1340,6 +1424,7 @@ async def add_revenue_with_file(
     status: str = Form("unpaid"), received: str = Form("false"), notes: str = Form(""),
     file: Optional[UploadFile] = File(None),
     contact_id: str = Form(""),   # PILOT-1 E: the CRM customer picked in the form
+    attachment_path: str = Form(""), attachment_name: str = Form(""), ai_read: str = Form("true"),
     user: dict = Depends(require_ledger),
 ):
     typed = {"title": title.strip(), "customer_name": customer_name.strip(), "amount": _num(amount),
@@ -1348,7 +1433,8 @@ async def add_revenue_with_file(
     party = await _linked_party(user["tenant_id"], contact_id, "customer")
     if party:
         typed.update(contact_id=party["id"], customer_name=party["name"])
-    data, _att = await _read_attachment(file, "income", user["tenant_id"], typed)
+    data, _att = await _read_attachment(file, "income", user["tenant_id"], typed, attachment_path, attachment_name,
+                                        ai_read=str(ai_read).lower() not in ("false", "0", "no"))
     data["received"] = str(received).lower() in ("true", "1", "yes", "on")
     if not (str(data.get("title") or "").strip()) and not _num(data.get("amount")) and not (str(data.get("customer_name") or "").strip()):
         raise HTTPException(status_code=400, detail="Add a title/amount or attach a readable invoice")

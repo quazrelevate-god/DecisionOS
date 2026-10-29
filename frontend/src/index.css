@@ -94,9 +94,14 @@
         --text-disabled:    var(--neutral-400);
         --hairline:         var(--neutral-200);
         --hairline-strong:  var(--neutral-300);
-        --primary-action:        var(--brand-600);
-        --primary-action-hover:  var(--brand-700);
-        --primary-action-active: var(--brand-800);
+        /* 2026-10-29 (founder) — "change the blue buttons to our palette":
+           the primary action is the app's ink, as every new screen already
+           draws it (INK_PILL), not the old indigo brand-600. One token, so
+           every bg-primary button, switch and selected pill follows. The
+           brand scale itself stays for the tints that still use it. */
+        --primary-action:        240 4% 9%;
+        --primary-action-hover:  240 4% 20%;
+        --primary-action-active: 240 4% 4%;
         --on-primary:       0 0% 100%;
         --focus-ring:       var(--brand-600);
         --brand-tint:        var(--brand-50);
@@ -1013,15 +1018,33 @@
    on the Desk it covers the sheet exactly instead of standing on it at a
    height of its own. What is left here is only a cap for the case it cannot
    measure, so a long transcript still scrolls inside it. */
+/* 2026-10-29 (founder) — "a little bit more translucent": 92% ink became 72%,
+   and the blur went up with it (22px -> 30px) so the page behind reads as
+   colour and light, never as words competing with Dex's. White on 72% black
+   over the palest page is still well past AA. */
 .ng-dock-chat {
     max-height: calc(85dvh / var(--ui-scale, 1));
-    background: hsl(0 0% 7% / .92);
-    -webkit-backdrop-filter: blur(22px) saturate(1.2);
-    backdrop-filter: blur(22px) saturate(1.2);
+    background: hsl(0 0% 7% / .72);
+    -webkit-backdrop-filter: blur(30px) saturate(1.5);
+    backdrop-filter: blur(30px) saturate(1.5);
     border: 1px solid hsl(40 30% 92% / .28);
     box-shadow: 0 8px 32px rgb(0 0 0 / .35),
                 inset 0 1px 0 hsl(40 40% 96% / .22),
                 0 0 20px -4px hsl(40 35% 92% / .30);
+}
+
+/* The phone's full-screen tick (components/mobile/Affirmation.jsx): the page
+   frosts over in the app's own white glass, brightest where the tick sits. */
+.ng-affirm {
+    background: radial-gradient(120% 70% at 50% 46%, hsl(0 0% 100% / .82), hsl(210 30% 96% / .64));
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+}
+
+/* …and a failure's, the same glass with the faintest warmth of the maroon
+   disc in it, so it reads as "that didn't work" before a word is read. */
+.ng-affirm--error {
+    background: radial-gradient(120% 70% at 50% 46%, hsl(350 60% 98% / .86), hsl(350 25% 95% / .7));
 }
 
 /* Mobile PWA (2026-09-14) — the dock, the Dex button, their pickers, the
@@ -3990,6 +4013,12 @@ html[data-page="dex"] .app-sky {
             inset -8px -8px 18px hsl(0 0% 100% / .14);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
+    }
+    /* Inside the Ask panel the groove is cut into glass, not into the opaque
+       board, so it takes the panel's translucency rather than reading as a
+       solid black strip laid across it. */
+    .ng-dock-chat .ng-slider-well--ink {
+        background: hsl(240 4% 6% / .55);
     }
 
 

@@ -387,13 +387,17 @@ export default function Layout({ children }) {
      already recording. The Desk solved this long ago by having the well
      publish its meter back to the slider; this is the same wire, to the same
      control, now that the control is the dock. */
-  const [dockLive, setDockLive] = useState({ recording: false, capturing: false, levelsRef: null });
+  const [dockLive, setDockLive] = useState({ recording: false, capturing: false, levelsRef: null, paused: false, canPause: false });
   const dockStopRef = useRef(null);
   const dockCancelRef = useRef(null);
+  const dockPauseRef = useRef(null);
+  const dockResumeRef = useRef(null);
   const onDockMeter = useCallback((c) => {
     dockStopRef.current = c.stop;
     dockCancelRef.current = c.cancel;
-    setDockLive({ recording: !!c.recording, capturing: !!c.capturing, levelsRef: c.levelsRef });
+    dockPauseRef.current = c.pause;
+    dockResumeRef.current = c.resume;
+    setDockLive({ recording: !!c.recording, capturing: !!c.capturing, levelsRef: c.levelsRef, paused: !!c.paused, canPause: !!c.pause });
   }, []);
   /* The page reserves room against --dock-h, and the slider bar is taller than
      the one it replaces. Published on <html> so the CSS can switch the token
@@ -1207,6 +1211,13 @@ export default function Layout({ children }) {
           capturing={dockDecide ? dockLive.capturing : !!(dex.recording || askTranscribing)}
           recording={dockDecide ? dockLive.recording : !!dex.recording}
           levelsRef={dockDecide ? dockLive.levelsRef : dex.levelsRef}
+          /* 2026-10-29 (founder) — PAUSE WHILE SPEAKING, for whichever take is
+             live. The take stays open; resuming records into the same one. */
+          paused={dockDecide ? dockLive.paused : !!dex.paused}
+          onPause={(dockDecide ? dockLive.canPause : dex.canPause)
+            ? () => (dockDecide ? dockPauseRef.current?.() : dex.pauseRecording())
+            : undefined}
+          onResume={() => (dockDecide ? dockResumeRef.current?.() : dex.resumeRecording())}
           /* Decide's stop hands over to the capture's own pop-up; Ask's stop is
              also its send (see askSendOnTranscript above), and with nothing
              recording the press sends whatever has been dictated already. */
@@ -1389,7 +1400,7 @@ export default function Layout({ children }) {
              anywhere. --dock-h follows whichever bar is up. */
           className="fixed inset-x-3 z-[10050] mx-auto max-w-md"
           style={{ bottom: "calc(var(--dock-bottom) + var(--dock-h, 4.5rem) + 0.75rem)" }}
-          onClose={() => { setDockDecide(false); setDockLive({ recording: false, capturing: false, levelsRef: null }); }}
+          onClose={() => { setDockDecide(false); setDockLive({ recording: false, capturing: false, levelsRef: null, paused: false, canPause: false }); }}
           onReview={(id) => { setDockDecide(false); navigate(`/inbox?decision=${encodeURIComponent(id)}`); }}
           /* "Save as draft — decide later", which the Desk used to wire and I
              did not: without it the pop-up's third answer was a button that

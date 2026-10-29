@@ -57,6 +57,7 @@ from models.decisions import (
     DecisionApproverInput,
     DecisionCommentInput,
     DecisionProposalTaskInput,
+    DecisionProposalTaskAddInput,
 )
 
 
@@ -197,6 +198,8 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     })
     # FIX-001-C: tenant-scoped write (was update_one({"id": ...}) alone).
     await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]), {"$push": {"task_ids": tid}})
+    from services import auto_plan  # 2026-10-29: Dex drafts the checklist
+    auto_plan.schedule(db, user["tenant_id"], tid)
     who = None
     if assignee_id:
         who = (member or {}).get("name")
@@ -286,7 +289,18 @@ async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionP
                                  assignee_id=inp.assignee_id, due_date=inp.due_date,
                                  priority=inp.priority, evidence_required=inp.evidence_required,
                                  approval_required=inp.approval_required, approval_stage=inp.approval_stage,
-                                 approver_id=inp.approver_id)
+                                 approver_id=inp.approver_id, description=inp.description,
+                                 tags=inp.tags, depends_on=inp.depends_on)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
+@router.post("/decisions/{decision_id}/proposal/tasks")
+async def add_decision_proposal_task(decision_id: str, inp: DecisionProposalTaskAddInput,
+                                     user: dict = Depends(get_current_user)):
+    """2026-10-29 — before approving: add a task Dex did not hear."""
+    from services.decision_flow import add_proposal_task
+    from services.enrich import enrich_decision
+    d = await add_proposal_task(user, decision_id, inp.title)
     return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 

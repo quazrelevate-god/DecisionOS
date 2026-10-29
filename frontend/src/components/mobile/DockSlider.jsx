@@ -34,7 +34,8 @@ import { useTranslation } from "react-i18next";
 import { X, DotsThree } from "@phosphor-icons/react";
 import { AnimatePresence } from "framer-motion";
 import { DexSlider } from "../neuglass/DexSlider";
-import { dockSlots, DockItem } from "./FloatingDock";
+import { DockItem } from "./FloatingDock";
+import { useDockChoice } from "./dockChoice";
 import { Bubble, Outcome } from "./DexChat";
 import { AiNotice } from "../ReportButton";
 import { Loader } from "../common";
@@ -47,6 +48,8 @@ import { deskSheetTop } from "@/lib/deskSheet";
 export function DockSlider({
   user, chat, askOpen, onAsk, onDecide, onCloseAsk, onMore, moreOpen = false,
   capturing = false, recording = false, levelsRef = null, onStop,
+  /* 2026-10-29 — the live take's pause, drawn inside the bar (DexSlider). */
+  paused = false, onPause, onResume,
   onOpenDecision,
   /* 2026-10-09 (founder): `onCancel` — the parked handle dragged back to the
      centre throws the recording away (DexSlider); `askBusy` — a question is
@@ -63,7 +66,9 @@ export function DockSlider({
   const { t } = useTranslation();
   const location = useLocation();
   const navRef = React.useRef(null);
-  const slots = React.useMemo(() => dockSlots(user, t), [user, t]);
+  /* 2026-10-29 (founder) — THE THREE SLOTS ARE THE PERSON'S OWN CHOICE now
+     (Preferences → Your dock); out of the box they are dockSlots', as before. */
+  const { slots } = useDockChoice(user, t);
   /* 2026-10-15 (founder) — without Decide AI (voice_capture, set per team in
      Team & access) the slider is Ask at both ends, and the right end can never
      reach the Decide capture: its handler IS Ask. Live from the permissions, so
@@ -211,6 +216,9 @@ export function DockSlider({
           levelsRef={levelsRef}
           onStop={onStop}
           onCancel={onCancel}
+          paused={paused}
+          onPause={onPause}
+          onResume={onResume}
         />
       ) : askOpen ? (
         <DockAskPanel chat={chat} onClose={onCloseAsk} onOpenDecision={onOpenDecision} transcribing={askTranscribing}>
@@ -223,6 +231,9 @@ export function DockSlider({
             levelsRef={levelsRef}
             onStop={onStop}
             onCancel={onCancel}
+            paused={paused}
+            onPause={onPause}
+            onResume={onResume}
             /* Locked from the send until the answer is in — but never while a
                take is live, or its own stop and cancel would go dead with it. */
             disabled={askBusy && !capturing}
@@ -246,6 +257,9 @@ export function DockSlider({
           levelsRef={levelsRef}
           onStop={onStop}
           onCancel={onCancel}
+          paused={paused}
+          onPause={onPause}
+          onResume={onResume}
         />
       )}
     </nav>
@@ -271,8 +285,16 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
   const navigate = useNavigate();
   /* The nine, in the order the panel has always had them: the destinations
      first, Settings last. */
+  /* 2026-10-29 — and what the person moved OUT of the bar comes in here
+     (Preferences → Your dock): the More menu is everything that is not in the
+     bar, so nothing is in two places and nothing is in none. */
+  const { rest } = useDockChoice(user, t);
   const items = React.useMemo(() => {
-    const tiles = buildTiles({ user, t });
+    const menuPaths = new Set(buildTiles({ user, t }).map((x) => x.to));
+    const tiles = [
+      ...rest.filter((x) => !menuPaths.has(x.to)).map((x) => ({ key: x.id, to: x.to, label: x.label, icon: x.icon })),
+      ...buildTiles({ user, t }).filter((x) => rest.some((r) => r.to === x.to)),
+    ];
     /* Settings (Preferences) is the menu's one utility, last. 2026-10-22,
        founder — it is a pill the same size as the rest. Requests made the
        owner's list odd, and a full-width Preferences under a half-empty row
@@ -281,7 +303,7 @@ function DockMore({ user, onClose }) {   // onClose: picked a destination
        either way the last row has no hole. */
     const wide = tiles.length % 2 === 0;
     return [...tiles, ...buildUtility({ user, t }).map((x) => ({ ...x, wide }))];
-  }, [user, t]);
+  }, [user, t, rest]);
   // The Android back gesture closes the menu rather than leaving the page.
   useBackDismiss(true, (o) => { if (!o) onClose?.(); });
 

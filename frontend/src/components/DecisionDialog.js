@@ -1235,7 +1235,7 @@ export function DecisionPanel({
                         aria-label="Voice input"
                         className={GLASS_ICON_BTN}
                         data-testid="decision-note-mic"
-                        onClick={() => toast("Voice capture is available from the Dex panel", { icon: "🎙" })}
+                        onClick={() => toast.message("Voice capture is available from the Dex panel", { icon: "🎙" })}
                       >
                         <Microphone size={16} weight="regular" aria-hidden="true" />
                       </button>

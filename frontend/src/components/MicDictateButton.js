@@ -35,7 +35,7 @@ export function MicDictateButton({ onText, language = "auto", title = "Dictate",
           const { data } = await api.post("/transcribe", fd, { headers: { "Content-Type": "multipart/form-data" } });
           const text = (data?.text || "").trim();
           if (text) { onText(text); toast.success("Transcribed"); }
-          else toast("Didn't catch that — try again");
+          else toast.message("Didn't catch that — try again");
         } catch (e) {
           toast.error(e.response?.data?.detail || "Transcription failed");
         } finally { setBusy(false); }
@@ -54,7 +54,7 @@ export function MicDictateButton({ onText, language = "auto", title = "Dictate",
       onClick={recording ? stop : start}
       disabled={busy}
       title={recording ? "Stop & transcribe" : title}
-      className={`flex items-center justify-center border border-border transition-all disabled:opacity-60 ${recording ? "bg-brand-600 text-white animate-pulse" : "bg-white hover:bg-accent"} ${className}`}
+      className={`flex items-center justify-center border border-border transition-all disabled:opacity-60 ${recording ? "bg-[hsl(var(--primary-action))] text-white animate-pulse" : "bg-white hover:bg-accent"} ${className}`}
     >
       {busy ? <Loader size={18} /> : recording ? <Stop size={18} weight="fill" /> : <Microphone size={18} weight="bold" />}
     </button>

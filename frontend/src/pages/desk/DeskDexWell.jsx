@@ -405,7 +405,7 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
        Decisions column, but a FAILURE would have nowhere to land (plan 5.2).
        Refused in the founder's words, and released the moment the first ends. */
     if (stillReading()) {
-      toast(OUTCOME_COPY.stillReading);
+      toast.message(OUTCOME_COPY.stillReading);
       /* 2026-09-30 — AND PUT THE FIELD AWAY ON THE REFUSAL TOO. This returned
          before the setTyping(false) below, which was harmless while the
          composer lived inside the well. Now that a phone floats it over a
@@ -499,7 +499,7 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
       toast.error(e?.response?.data?.detail || "Couldn't save it as a draft — it is still waiting on you.");
       return;
     }
-    toast("Saved as a draft", { description: "It's in Decisions on the Desk, marked Draft." });
+    toast.message("Saved as a draft", { description: "It's in Decisions on the Desk, marked Draft." });
     setPopupOpen(false);
     setPhase("idle");
     setOutcome(null);
@@ -521,7 +521,7 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
     /* ASK-33.1 — and one at a time for recording too: the transcript poll
        shares the capture hook's one follow, so a new recording while Dex reads
        the last note would leave that note's ending unreported. */
-    if (stillReading()) { toast(OUTCOME_COPY.stillReading); return; }
+    if (stillReading()) { toast.message(OUTCOME_COPY.stillReading); return; }
     dex.startRecording();
   };
 
@@ -767,8 +767,12 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
       capturing: surface === "overlay" && open,
       stop: () => stopRef.current?.(),
       cancel: () => cancelRef.current?.(),
+      // 2026-10-29 — the pause the dock draws beside a live take.
+      paused: dex.paused,
+      pause: dex.canPause ? dex.pauseRecording : null,
+      resume: dex.resumeRecording,
     });
-  }, [onMeter, readLevel, dex.levelsRef, recording, surface, open]);
+  }, [onMeter, readLevel, dex.levelsRef, recording, surface, open, dex.paused, dex.canPause, dex.pauseRecording, dex.resumeRecording]);
 
   /* The top of the pane: what is going to be sent, what was kept, and — once
      the pop-up has been closed on a capture — where that capture got to. */

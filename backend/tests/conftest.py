@@ -36,6 +36,9 @@ _BACKEND = Path(__file__).resolve().parent.parent
 # would write it to the REAL one, so every test starts on the in-memory store;
 # a test that wants the Mongo store sets it, on its own isolated database.
 os.environ.setdefault("BRAIN_VECTOR_STORE", "memory")
+# 2026-10-29 — no background checklist drafts during tests (services.auto_plan);
+# the auto-plan tests call draft_plan / sweep directly.
+os.environ.setdefault("AUTO_PLAN", "off")
 
 # A test DB name never collides with the dev DB and is easy to spot + sweep.
 TEST_DB_PREFIX = "dos_test_"

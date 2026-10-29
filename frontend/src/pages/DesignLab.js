@@ -25,6 +25,7 @@ import {
 // /signup, behind a real registration, so this gallery is the only place it
 // can be looked at without creating a tenant to see it.
 import { DexForge } from "./onboarding/DexForge";
+import { DexBuilder } from "./onboarding/DexBuilder";
 // KM-23 — the voice surface in all four of its states. It only ever appears
 // inside the dock while the mic is live, so this is the one place the idle,
 // thinking and speaking states can be looked at without recording something.
@@ -308,6 +309,15 @@ function NeuGlassGallery() {
           DexForge · /signup build
         </p>
         <DexForge />
+      </div>
+
+      {/* 2026-10-29 · DexBuilder — the forge as a head, building a workflow:
+          what Dex Decide's "Dex is reading it" step shows. */}
+      <div className="app-canvas mb-6 rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }} data-testid="lab-dex-builder">
+        <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          DexBuilder · Dex Decide, reading
+        </p>
+        <DexBuilder />
       </div>
 
       {/* light zone */}

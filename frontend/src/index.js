@@ -79,7 +79,7 @@ root.render(
 // they were typing is kept anyway (lib/drafts.js).
 serviceWorkerRegistration.register({
   onUpdate: () => {
-    toast("DecisionOS has been updated", {
+    toast.message("DecisionOS has been updated", {
       id: "app-updated",
       description: "Refresh to use the new version. Anything you are typing is kept.",
       duration: Infinity,

@@ -1,6 +1,6 @@
 """Decisions request schemas (Epic 8 Sprint 5 -- consolidated from routers).
 """
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,17 @@ class DecisionProposalTaskInput(BaseModel):
     approval_required: Optional[bool] = None
     approval_stage: Optional[str] = Field(None, max_length=10)  # "start" | "close"
     approver_id: Optional[str] = Field(None, max_length=64)  # "" = the usual approver
+    # 2026-10-29 (founder's Decide review) — what the task is, in more words
+    # than its name; the labels it carries; and the tasks in this same proposal
+    # it waits for (their keys — they have no ids until approval creates them).
+    description: Optional[str] = Field(None, max_length=2000)
+    tags: Optional[List[str]] = Field(None, max_length=12)
+    depends_on: Optional[List[str]] = Field(None, max_length=20)
+
+
+class DecisionProposalTaskAddInput(BaseModel):
+    """2026-10-29 — "Add another task": one Dex did not hear, added before approving."""
+    title: str = Field(..., min_length=1, max_length=200)
 
 
 class DecisionCommentInput(BaseModel):

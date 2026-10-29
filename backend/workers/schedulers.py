@@ -69,6 +69,14 @@ async def _followup_scheduler_loop():
                         await run_followup(tid)
                     except Exception as e:
                         logger.warning(f"[followup-scheduler] tenant {tid} failed: {e}")
+                    # 2026-10-29 — tasks made by a path that did not ask Dex for
+                    # their checklist (a workflow stage, a meeting, a bill) get it
+                    # here, a few per tick (services.auto_plan).
+                    try:
+                        from services import auto_plan
+                        await auto_plan.sweep(db, tid)
+                    except Exception as e:
+                        logger.debug(f"[followup-scheduler] auto-plan sweep {tid}: {e}")
                 logger.info(
                     f"[followup-scheduler] leader swept {len(tenant_ids)} tenant(s); next in {FOLLOWUP_INTERVAL_SECONDS}s"
                 )

@@ -33,7 +33,10 @@ def test_the_band_moves_to_where_the_work_is():
 def test_it_only_chooses_until_the_person_does():
     assert "const bandChosen = useRef(false);" in MW
     assert "const pickBand = (key) => { bandChosen.current = true; setBand(key); };" in MW
-    assert "if (!aiOn || bandChosen.current) return;" in MW
+    # 2026-10-29 — the phone shows the bands to everyone (not only those who may
+    # run the AI ranking), so the guard covers both; it still stops choosing
+    # once the person has.
+    assert "if (!(aiOn || (isMobile && aiPriority)) || bandChosen.current) return;" in MW
 
 
 def test_the_chips_are_what_counts_as_choosing():

@@ -148,7 +148,7 @@ def test_reading_a_bill_does_not_claim_it_was_saved():
     # Raw source: "image/*" in an accept= list reads as a comment opener to _code.
     ledger = (FE / "pages" / "Ledger.js").read_text(encoding="utf-8")
     assert 'toast.success("Extracted — review below")' not in ledger
-    assert 'toast("Read it — check the details below, then tap File it to save it.")' in ledger
+    assert 'toast.message("Read it — check the details below, then tap File it to save it.")' in ledger
     # Adding by hand needs Finance; it is offered only to who has it.
     add = ledger[ledger.index('data-testid="finance-hero-add-m"') - 120: ledger.index('data-testid="finance-hero-add-m"')]
     assert "{canLedger && (" in add

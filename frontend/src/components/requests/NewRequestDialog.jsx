@@ -27,7 +27,7 @@ import api from "../../lib/api";
 import { inr } from "../../lib/format";
 import { useAuth } from "../../context/AuthContext";
 import { useDraft } from "../../hooks/useDraft";
-import { REQUEST_TYPES, requestType, blankItem, itemsTotal } from "../../lib/requests";
+import { REQUEST_TYPES, REQUEST_TONES, requestType, blankItem, itemsTotal } from "../../lib/requests";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog";
 import { GlassDateField } from "../neuglass/GlassDateField";
 import { DraftNote } from "../neuglass/DraftNote";
@@ -37,18 +37,9 @@ const MAX_FILES = 10;
 const ADVANCE_MS = 380;   // long enough to see the kind turn black before the card turns
 const blank = () => ({ type: "purchase", title: "", items: [blankItem()], needed_by: "", reason: "", approver_choice: "manager" });
 
-/* Each kind's colour, kept to a thin stroke and a tinted icon so the card stays
-   white; the chosen one is the app's black pill. Written out in full so Tailwind
-   keeps the classes. */
-const TONES = {
-  purchase:      { ring: "ring-amber-300",   ink: "text-amber-700",   wash: "bg-amber-50" },
-  reimbursement: { ring: "ring-sky-300",     ink: "text-sky-700",     wash: "bg-sky-50" },
-  advance:       { ring: "ring-emerald-300", ink: "text-emerald-700", wash: "bg-emerald-50" },
-  travel:        { ring: "ring-indigo-300",  ink: "text-indigo-700",  wash: "bg-indigo-50" },
-  equipment:     { ring: "ring-violet-300",  ink: "text-violet-700",  wash: "bg-violet-50" },
-  repair:        { ring: "ring-orange-300",  ink: "text-orange-700",  wash: "bg-orange-50" },
-  general:       { ring: "ring-slate-300",   ink: "text-slate-700",   wash: "bg-slate-100" },
-};
+/* Each kind's colour (lib/requests REQUEST_TONES), kept to a thin stroke and a
+   tinted icon so the card stays white; the chosen one is the app's black pill. */
+const TONES = REQUEST_TONES;
 
 // Fields on the white card: a faint well with a hairline, black when focused.
 const INP = "w-full rounded-control bg-slate-50 px-3.5 py-2.5 text-sm text-foreground ring-1 ring-inset ring-slate-900/[0.08] placeholder:text-foreground/40 transition-[box-shadow] focus:ring-ng-ink focus:outline-none focus-visible:outline-none";

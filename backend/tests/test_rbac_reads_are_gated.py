@@ -298,7 +298,9 @@ def test_the_desk_does_not_ask_for_workflows_it_may_not_read():
 def test_a_workflow_name_is_a_door_only_for_those_who_may_enter():
     # (and, since the pipeline scoping, only into a pipeline their team works in)
     assert 'if (hasPerm(user, "workflows") && canSeePipeline(user, type))' in fe("components/workflow/WorkflowLink.js")
-    assert fe("pages/MyWork.js").count("<WorkflowLink") == 2
+    # The card face, the desktop drawer and (2026-10-29) the phone task view —
+    # every one the gated component, never a bare link.
+    assert fe("pages/MyWork.js").count("<WorkflowLink") == 3
     assert "<WorkflowLink" in fe("components/DecisionDialog.js")
 
 

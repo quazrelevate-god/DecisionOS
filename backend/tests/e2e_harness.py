@@ -53,6 +53,7 @@ _DB_MODULES = [
     # 2026-10-06: GET /auth/me claims the tenant-setup backfill here. Unbound,
     # every in-process /me reached the production client from a test.
     "services.ai.ai_setup",
+    "services.auto_plan",  # 2026-10-29: Dex drafts the checklist on creation
 ]
 
 # fire-and-forget writers to neutralise: (module, attr, kind) where kind is

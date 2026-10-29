@@ -54,12 +54,13 @@ import {
   ChartBar, UserPlus, // ASK-27 · % control, add a person
   Hourglass, // ASK-28 TK-07 · Waiting on
   HandCoins, // 2026-10-21 · Requests
+  ArrowLeft, // 2026-10-29 · the phone task view's way back
 } from "@phosphor-icons/react";
 import { AvatarStack, PersonAvatar } from "../components/neuglass/PersonAvatar";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  DRAWER_LABEL, DRAWER_CARD, GLASS_PILL, GLASS_ICON_BTN, INK_PILL, MAROON_PILL,
+  DRAWER_LABEL, DRAWER_CARD, GLASS_PILL, GLASS_ICON_BTN, INK_PILL, INK_PLATE, MAROON_PILL,
   DRAWER_FIELD, DRAWER_TRACK, GLASS_SHEET,
   CHIP as PILL, QUIET_CHIP as QUIET_PILL,
   GLASS_MENU, GLASS_MENU_ITEM, GLASS_MENU_LABEL,
@@ -73,6 +74,8 @@ import { useDraft } from "../hooks/useDraft";
 import { draftScope, hasDraft, hasDraftUnder } from "../lib/drafts";
 import { ReportButton } from "../components/ReportButton";
 import { askBeforeMic } from "../lib/micNotice";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { WorkSplit, TaskSummaryCard, FilterTile, DeckNotice } from "./mywork/WorkDeck";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -723,7 +726,7 @@ function StepRow({
   );
 }
 
-function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] }) {
+function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [], flow = false }) {
   const plan = t.execution_plan;
   const [steps, setSteps] = useState(plan?.steps || []);
   const [editing, setEditing] = useState(!plan || plan.status === "draft");
@@ -840,8 +843,17 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
   if (!plan && !steps.length) {
     /* ASK-28 — the two routes in are back (KM-5's shape: side by side, equal
        weight, "or" between), on the drawer's glass under the guide's name. */
+    /* 2026-10-29 — on the phone a task made minutes ago is still with Dex
+       (services/auto_plan drafts it); say so above the two ways in. */
+    const drafting = flow && !t.plan_auto_at && t.created_at && Date.now() - new Date(t.created_at).getTime() < 3 * 60 * 1000;
     return (
       <div className={`${DRAWER_CARD} p-4`} data-testid={`exec-plan-empty-${t.id}`}>
+        {drafting && (
+          <p className="mb-3 flex items-center gap-2 px-1 text-sm text-slate-600" data-testid={`exec-drafting-${t.id}`}>
+            <Sparkle size={15} weight="fill" aria-hidden="true" className="animate-pulse text-amber-500" />
+            Dex is drafting the steps — they appear here in a moment.
+          </p>
+        )}
         <span className="mb-3 flex items-center gap-2.5 px-1 text-[15px] font-semibold text-slate-800">
           <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" /> AI Execution Guide
         </span>
@@ -868,7 +880,8 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
     <div className={`${DRAWER_CARD} p-4`} data-testid={`exec-plan-${t.id}`}>
       <div className="mb-3 flex items-center justify-between px-1">
         <span className="flex items-center gap-2.5 text-[15px] font-semibold text-slate-800">
-          <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" /> AI Execution Guide
+          <ListChecks size={20} weight="regular" aria-hidden="true" className="text-slate-600" />
+          {flow ? `${total} ${total === 1 ? "step" : "steps"}` : "AI Execution Guide"}
         </span>
         <span className="flex items-center gap-1 text-sm text-slate-500">
           {/* 2026-10-08 — Play's AI-content policy: an AI-drafted checklist can be flagged. */}
@@ -881,6 +894,71 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
         </span>
       </div>
 
+      {flow && !editing ? (
+        /* 2026-10-29, founder — THE CHECKLIST AS A FLOW. Each step is a
+           numbered node on one line; ticking a step fills its node and then
+           the line down to the next one, so the work reads as progress along
+           a path. The node is the tick (same handler and testid as the ring it
+           replaces), the words open the step, ⋮ updates or hands it off. The
+           step to do now is lifted onto a white card and called Up next. */
+        <ol className="px-1" data-testid={`exec-flow-${t.id}`}>
+          {steps.map((s, i) => {
+            const firstOpen = steps.findIndex((x) => !x.done);
+            const current = !s.done && i === firstOpen;
+            const last = i === steps.length - 1;
+            return (
+              <li key={s.id} data-testid={`exec-step-${t.id}-${i}`} data-done={s.done ? "true" : "false"}
+                className="relative flex gap-3">
+                <div className="flex w-9 shrink-0 flex-col items-center">
+                  <button onClick={() => toggle(i)} data-testid={`exec-toggle-${t.id}-${i}`} aria-pressed={s.done}
+                    aria-label={s.done ? `Step ${i + 1} done — mark it not done` : `Mark step ${i + 1} done`}
+                    className={`relative z-[1] mt-2.5 grid h-9 w-9 shrink-0 place-items-center rounded-full text-[14px] font-bold tabular-nums transition-[background-color,box-shadow,color] duration-500 ${
+                      s.done ? "bg-[linear-gradient(180deg,hsl(0_0%_24%),hsl(0_0%_6%))] text-white shadow-[inset_0_1px_0_hsl(0_0%_100%/0.16)]"
+                      : current ? "bg-white text-slate-900 ring-2 ring-neutral-900 shadow-[0_0_0_5px_hsl(44_88%_60%/0.28)]"
+                      : "bg-white text-slate-400 ring-1 ring-inset ring-slate-300"}`}>
+                    {s.done
+                      ? <motion.span initial={reduceMotion ? false : { scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                          transition={{ type: "spring", stiffness: 520, damping: 26 }} className="grid place-items-center">
+                          <Check size={15} weight="bold" aria-hidden="true" />
+                        </motion.span>
+                      : i + 1}
+                  </button>
+                  {!last && (
+                    <span aria-hidden="true" className="relative my-1 w-[2px] flex-1 overflow-hidden rounded-full bg-slate-300/70">
+                      <span className={`absolute inset-0 origin-top bg-neutral-900 ${reduceMotion ? "" : "transition-transform duration-700 ease-out"}`}
+                        style={{ transform: `scaleY(${s.done ? 1 : 0})`, transitionDelay: s.done && !reduceMotion ? "180ms" : "0ms" }} />
+                    </span>
+                  )}
+                </div>
+                <div className={`mb-2.5 min-w-0 flex-1 rounded-2xl ${current ? `bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-900/[0.06] shadow-[0_10px_24px_-18px_hsl(0_0%_0%/0.45)]` : "px-1 py-3"}`}>
+                  <div className="flex items-start gap-1">
+                    <button onClick={() => setViewStep(s)} data-testid={`exec-view-${t.id}-${i}`}
+                      className={`min-w-0 flex-1 text-left text-[15px] font-semibold leading-snug ${s.done ? "text-slate-400 line-through decoration-slate-300" : "text-slate-800"}`}>
+                      {s.text}
+                    </button>
+                    <button onClick={() => setUpdStep(updStep === s.id ? null : s.id)} data-testid={`exec-update-${t.id}-${i}`}
+                      aria-label="Log an update or hand off on this step" title="Update or hand off" aria-expanded={updStep === s.id}
+                      className={`-my-2 -mr-2 grid h-10 w-9 shrink-0 place-items-center rounded-full ${updStep === s.id ? "text-slate-900" : "text-slate-400"}`}>
+                      <DotsThreeVertical size={18} weight="bold" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <span className={`mt-1 flex items-center gap-1.5 text-[12px] font-medium ${s.done ? "text-emerald-700" : current ? "text-amber-700" : "text-slate-400"}`}>
+                    {s.done ? <><CheckCircle size={13} weight="fill" aria-hidden="true" /> Done</>
+                      : current ? <><ArrowRight size={13} weight="bold" aria-hidden="true" /> Up next</>
+                      : <><Clock size={13} weight="bold" aria-hidden="true" /> Pending</>}
+                  </span>
+                  {updStep === s.id && (
+                    <div className="mt-2" data-testid={`exec-update-form-${t.id}-${i}`}>
+                      <UpdateForm taskId={t.id} stepId={s.id} members={members} roleOptions={roleOptions}
+                        onDone={() => { setUpdStep(null); onChange(); }} onCancel={() => setUpdStep(null)} />
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
       <div className="space-y-2.5">
         {steps.map((s, i) => (
           /* ASK-29 — `layout` makes a reorder travel: when a step and its
@@ -968,6 +1046,7 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [] 
           </motion.div>
         ))}
       </div>
+      )}
 
       {editing && (
         /* KM-7 — the add row joins the material. The field is .nm-field like
@@ -1353,7 +1432,8 @@ function BulkActionBar({ selectedIds, tasks = [], busy, onClear, onComplete, ope
    saturated colour on the card, and it is the priority.
    PILL and QUIET_PILL now live in components/neuglass/glass (as CHIP and
    QUIET_CHIP) so the leave cards wear the same chip. */
-const PRIO_STRIPE = { high: "bg-red-500", medium: "bg-blue-500", low: "bg-neutral-500" };
+// Medium is the priority amber the bar and the Decide review use, not blue.
+const PRIO_STRIPE = { high: "bg-red-500", medium: "bg-[hsl(40_90%_52%)]", low: "bg-neutral-500" };
 const PRIO_LABEL = { high: "High", medium: "Medium", low: "Low" };
 /* `arc` is how far through the flow a status sits — the ring's fill — and
    deliberately NOT t.progress: an In Progress task at 0% would otherwise draw
@@ -1701,12 +1781,13 @@ function cardPeople(t, members, roleOptions) {
    server re-checks who may do this (owner, team_manage, the creator, the
    lead). ASK-27: every person is a raised glass pill, as in the founder's
    reference; the ones you can take off carry an ×. */
-function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
+function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched, compact = false }) {
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
-  // ASK-28 TK-06 — the rest of who is on a task, in words: who asked for it,
-  // who approves it and when, and how a team task found its doer.
-  const teamLabel = (key) => roleLabel(key, roleOptions);
+  // 2026-10-29 — the phone's compact form: three people in a row, View all, a +.
+  const [showAll, setShowAll] = useState(false);
+  const [adding, setAdding] = useState(false);
+  // ASK-28 TK-06 — the rest of who is on a task, in words, is TaskRolesLines.
   const people = cardPeople(t, members, roleOptions);
   const co = (t.co_assignee_ids || []).filter((id) => id && id !== t.assignee_id);
   // ASK-28 TK-08 — only people this person may give work to.
@@ -1724,6 +1805,74 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
     }
   };
   const showAdd = canEdit && !!t.assignee_id && addable.length > 0;
+  const addPicker = (
+    <GlassSelect value="" placeholder="Add a person" icon={UserPlus} disabled={busy}
+      ariaLabel="Add a person to this task" testid={`task-people-add-${t.id}`}
+      onChange={(id) => {
+        // FIX-2 — "Everyone" adds every person this list offers at once.
+        if (id === EVERYONE) save([...co, ...addable.map((m) => m.id)], `Added ${addable.length} people`);
+        else if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
+        setAdding(false);
+      }}
+      options={addPeopleOptions(addable, roleOptions)} />
+  );
+  if (compact) {
+    /* 2026-10-29, founder — ASSIGNEES (N), at most three faces in a row, View
+       all for the rest and a + to add someone. Who asked for it and who
+       approves it moved to the Details tab (TaskRolesLines). */
+    const shown = showAll ? people : people.slice(0, 3);
+    return (
+      <section data-testid={`task-people-${t.id}`} className={`${DRAWER_CARD} p-4`}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Assignees ({people.length})</p>
+          {people.length > 3 && (
+            <button type="button" onClick={() => setShowAll((v) => !v)} data-testid={`task-people-all-${t.id}`}
+              className="text-[13px] font-semibold text-slate-900 underline-offset-4 hover:underline">
+              {showAll ? "Show less" : "View all"}
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`flex min-w-0 flex-1 gap-2 ${showAll ? "flex-wrap" : "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}`}>
+            {people.length === 0 && <span className="text-sm text-slate-500">Nobody yet</span>}
+            {shown.map((p) => {
+              const lead = !!t.assignee_id && p.id === t.assignee_id;
+              const removable = canEdit && !lead && p.kind !== "team";
+              const pill = `inline-flex h-12 shrink-0 items-center gap-2 rounded-pill pl-1.5 pr-3.5 ${GLASS_PILL}`;
+              const body = (
+                <>
+                  {p.kind === "team"
+                    ? <AvatarStack people={[p]} size={36} />
+                    : <PersonAvatar name={p.name} src={p.avatar_url} size={36} ring={false} />}
+                  <span className="max-w-[7.5rem] truncate text-[14px] font-semibold text-slate-800">{p.name}</span>
+                  {lead && people.length > 1 && (
+                    <span className="rounded-pill bg-slate-900/[0.06] px-2 py-0.5 text-[11px] font-semibold text-slate-600">Lead</span>
+                  )}
+                  {removable && <X size={12} weight="bold" aria-hidden="true" className="text-slate-400" />}
+                </>
+              );
+              return removable ? (
+                <button key={p.id} type="button" disabled={busy}
+                  onClick={() => save(co.filter((x) => x !== p.id), `Removed ${p.name}`)}
+                  aria-label={`Remove ${p.name} from this task`} data-testid={`task-people-remove-${p.id}`}
+                  className={`${pill} disabled:opacity-50`}>{body}</button>
+              ) : (
+                <span key={p.id} className={pill}>{body}</span>
+              );
+            })}
+          </div>
+          {showAdd && (
+            <button type="button" onClick={() => setAdding((v) => !v)} aria-expanded={adding}
+              aria-label="Add a person to this task" data-testid={`task-people-plus-${t.id}`}
+              className={`grid h-12 w-12 shrink-0 place-items-center rounded-full border-[1.5px] border-dashed ${adding ? "border-neutral-900 text-neutral-900" : "border-slate-300 text-slate-600"}`}>
+              <UserPlus size={18} weight="bold" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {showAdd && adding && <div className="mt-3">{addPicker}</div>}
+      </section>
+    );
+  }
   return (
     /* ASK-50 — A CONTAINER BEHIND IT. The people on a task grow as a list of
        pills as "Add a person" is used, and on the drawer's bare ground that
@@ -1765,17 +1914,20 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
             );
           })}
         </div>
-        {showAdd && (
-          <GlassSelect value="" placeholder="Add a person" icon={UserPlus} disabled={busy}
-            ariaLabel="Add a person to this task" testid={`task-people-add-${t.id}`}
-            onChange={(id) => {
-              // FIX-2 — "Everyone" adds every person this list offers at once.
-              if (id === EVERYONE) save([...co, ...addable.map((m) => m.id)], `Added ${addable.length} people`);
-              else if (id) save([...co, id], `Added ${members.find((m) => m.id === id)?.name || "a member"}`);
-            }}
-            options={addPeopleOptions(addable, roleOptions)} />
-        )}
+        {showAdd && addPicker}
       </div>
+      <TaskRolesLines t={t} roleOptions={roleOptions} />
+    </section>
+  );
+}
+
+/* ASK-28 TK-06 / ASK-50 — who asked for the task, where it came from and who
+   approves it. Under the people on desktop; the phone's Details tab. */
+function TaskRolesLines({ t, roleOptions }) {
+  const { user } = useAuth();
+  const teamLabel = (key) => roleLabel(key, roleOptions);
+  return (
+    <>
       {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.decision_id || t.approval_required ? (
         <div className="mt-3 flex flex-col gap-1.5 text-sm" data-testid={`task-roles-${t.id}`}>
           {t.auto_assigned?.role && t.assignee_id && (
@@ -1821,7 +1973,7 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched }) {
           )}
         </div>
       ) : null}
-    </section>
+    </>
   );
 }
 
@@ -1942,7 +2094,7 @@ function dueLabel(iso) {
  * `showAssignee` too: the faces on the card and the Assigned section in the
  * drawer show everyone on the task, for everyone.
  */
-export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, drawerOnly = false }) {
+export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, drawerOnly = false, initialTab = "steps" }) {
   const { user, tenant } = useAuth();
   // MW-01 fix: the queryClient is used to write PATCH responses straight
   // into the cache before onChange() invalidates. The old flow was
@@ -2078,6 +2230,16 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const canDelete = user?.role === "owner";
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // 2026-10-29 — the phone's task view: which tab is open, the Activity form's
+  // trigger, and Ask Dex (armed by a first tap when it would redo ticked steps).
+  const isMobile = useIsMobile();
+  const [mTab, setMTab] = useState(initialTab || "steps");
+  const [trailOpen, setTrailOpen] = useState(0);
+  const [askArmed, setAskArmed] = useState(false);
+  const [askBusy, setAskBusy] = useState(false);
+  useEffect(() => {
+    if (expanded) { setMTab(initialTab || "steps"); setAskArmed(false); }
+  }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
   const deleteTask = async () => {
     setDeleting(true);
     try {
@@ -2222,7 +2384,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     cancelledRef.current = true;
     mediaRef.current?.stop();
     setRecording(false);
-    toast("Recording discarded");
+    toast.message("Recording discarded");
   };
 
   /* PILOT-1 A — A RECORDING IS NOT THROWN AWAY BY LEAVING THE SCREEN. Go to
@@ -2251,7 +2413,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     const unsavedName = hasDraft(scope, wordingDraftName(t.id));
     if (!unsentNote && !unsavedName && !recording) return;
     e.preventDefault();
-    toast(recording ? "Still recording — press Stop to attach it to the task"
+    toast.message(recording ? "Still recording — press Stop to attach it to the task"
       : unsentNote ? "Your update isn't posted yet — Post it, or Cancel to throw it away"
         : "Your change to the name isn't saved yet — Save it, or Cancel", { id: `unsent-${t.id}` });
   };
@@ -2493,6 +2655,372 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     </div>
   ) : null);
 
+  // The delete confirmation, shared by the desktop drawer and the phone view.
+  const deleteDialog = (
+  <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
+    <AlertDialogContent data-testid={`drawer-delete-dialog-${t.id}`}
+      className="max-w-md gap-5 rounded-[1.75rem] border-0 bg-[linear-gradient(165deg,hsl(0_0%_96%),hsl(0_0%_91%))] p-6 shadow-[0_30px_80px_-20px_hsl(0_0%_0%/0.45)] sm:rounded-[1.75rem]">
+      <div className="flex items-start gap-4">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-inset ring-red-100">
+          <Trash size={22} weight="duotone" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 pt-0.5">
+          <AlertDialogTitle className="text-lg font-semibold text-slate-900">Delete this task?</AlertDialogTitle>
+          <AlertDialogDescription className="mt-1.5 text-sm leading-relaxed text-slate-600">
+            “{t.title}” will be deleted permanently. It can no longer be opened or accessed by anyone, and this cannot be undone.
+          </AlertDialogDescription>
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <AlertDialogCancel disabled={deleting} data-testid={`drawer-delete-cancel-${t.id}`}
+          className={`mt-0 h-11 rounded-pill border-0 px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
+          Cancel
+        </AlertDialogCancel>
+        <AlertDialogAction disabled={deleting} data-testid={`drawer-delete-confirm-${t.id}`}
+          /* preventDefault keeps the dialog open while the request
+             runs; deleteTask closes it once the server agrees. */
+          onClick={(e) => { e.preventDefault(); deleteTask(); }}
+          className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${MAROON_PILL}`}>
+          {deleting ? "Deleting…" : "Yes, delete task"}
+        </AlertDialogAction>
+      </div>
+    </AlertDialogContent>
+  </AlertDialog>
+  );
+
+  /* 2026-10-29, founder — THE TASK, FULL SCREEN, ON A PHONE.
+     Top to bottom: a way back; the task itself (its stage, when it is due and
+     how far off that is, what it is, who and what it is for); the approval
+     step when it waits on someone; who is on it; Dex's guide to the steps;
+     then four tabs — Steps (the checklist as a flow), Documents (everything
+     attached, and adding more), Activity (the timeline, which used to sit at
+     the very bottom) and Details (the rest: status, waiting on, the date,
+     the workflow, who asked, delete). The action bar stays at the foot. One
+     tree, built only on a phone, so nothing in it is mounted twice. */
+  const askDex = async () => {
+    if (planDone > 0 && !askArmed) {
+      setAskArmed(true);
+      toast.message("Tap Ask Dex again to redraft every step — ticked steps start over.", { id: `ask-dex-${t.id}` });
+      return;
+    }
+    setAskBusy(true);
+    setAskArmed(false);
+    try {
+      const { data } = await api.post(`/tasks/${t.id}/execution-plan/generate`);
+      applyPatched(data);
+      setMTab("steps");
+      toast.success("Dex drafted the steps — check them and accept the plan");
+      onChange();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Dex couldn't draft the steps");
+    } finally { setAskBusy(false); }
+  };
+  const mobileTaskView = () => {
+    const proofN = (t.attachments || []).length;
+    const deptLabel = t.task_type ? (opModel(tenant).task_categories.find((c) => c.key === t.task_type)?.label || null) : null;
+    const dueIn = (() => {
+      if (!t.due_date || terminal || overdue || isDueToday(t)) return null;
+      const due = String(t.due_date);
+      const days = dayNo(due.length <= 10 ? due : ymdOf(new Date(due))) - dayNo(todayYmd());
+      return days === 1 ? "Tomorrow" : days > 1 ? `In ${days} days` : null;
+    })();
+    const chips = [
+      t.contact_name && { key: "contact", icon: Buildings, text: t.contact_name },
+      deptLabel && { key: "dept", icon: Kanban, text: deptLabel },
+      t.op_category && { key: "cat", icon: Tag, text: t.op_category },
+    ].filter(Boolean);
+    const tabs = [
+      { key: "steps", label: "Steps", icon: ListChecks, n: planSteps.length || null },
+      { key: "documents", label: "Documents", icon: Paperclip, n: proofN || null },
+      { key: "activity", label: "Activity", icon: ChatCircleText, n: null },
+      { key: "details", label: "Details", icon: Info, n: null },
+    ];
+    const chip = "inline-flex max-w-full items-center gap-1.5 rounded-pill bg-slate-900/[0.05] px-3 py-1.5 text-[13px] font-medium text-slate-700";
+    return (
+      /* A column at least the screen tall, so the action bar sits at the foot
+         even on a short tab, and sticks there on a long one. */
+      <div className="flex min-h-full flex-col">
+        <div className="sticky top-0 z-10 flex items-center gap-2 bg-[hsl(0_0%_95%/0.85)] px-4 pb-3 pt-[max(0.75rem,var(--sa-top))] backdrop-blur-xl"
+          data-testid={`task-view-bar-${t.id}`}>
+          <SheetClose ref={closeRef} data-testid={`task-drawer-close-${t.id}`} aria-label="Back to My Work"
+            className="flex h-11 items-center gap-2 rounded-pill bg-white/90 pl-2.5 pr-4 text-[15px] font-semibold text-slate-900 ring-1 ring-inset ring-slate-900/[0.06] shadow-[0_8px_22px_-12px_hsl(0_0%_0%/0.4)]">
+            <ArrowLeft size={18} weight="bold" aria-hidden="true" /> My Work
+          </SheetClose>
+          <span className="flex-1" />
+          {t.created_by && t.created_by !== user?.id && (
+            <ReportButton kind="content" targetType="task" targetId={t.id}
+              snapshot={[t.title, t.description].filter(Boolean).join("\n\n")} size={17}
+              className="h-11 w-11 shrink-0 justify-center rounded-full bg-white/70 text-slate-500 max-lg:my-0 ring-1 ring-inset ring-slate-900/[0.06]" />
+          )}
+          {rights.wording && !renaming && (
+            <button type="button" onClick={() => setRenaming(true)} data-testid={`task-rename-${t.id}`}
+              aria-label="Rename or describe this task" title="Rename"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/70 text-slate-700 ring-1 ring-inset ring-slate-900/[0.06]">
+              <PencilSimple size={17} weight="bold" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {/* The camera and file pickers the action bar and Documents tab open. */}
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+        <input ref={evidenceRef} type="file" className="hidden" onChange={onEvidence} />
+
+        <div className="flex-1 space-y-4 px-4 pb-6 pt-1" data-testid={`task-body-m-${t.id}`}>
+          {renaming && (
+            <TaskWordingEditor t={t} onSaved={(data) => { applyPatched(data); onChange(); }} onClose={() => setRenaming(false)} />
+          )}
+
+          <section className={`${DRAWER_CARD} p-5`} data-testid={`task-hero-${t.id}`}>
+            <div className="flex items-start justify-between gap-3">
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-pill px-3 py-1.5 text-[13px] font-semibold ring-1 ring-inset ${tone.pill}`}
+                data-testid={`task-hero-status-${t.id}`}>
+                <StatusRing status={t.status} tone={tone} /> {STATUS_LABEL[t.status] || t.status}
+              </span>
+              <div className="min-w-0 text-right">
+                <DueLine t={t} canMove={rights.priority && !terminal} onSaved={onChange}
+                  testid={`task-due-m-${t.id}`} className="justify-end text-[14px] font-semibold text-slate-800" />
+                {dueIn && <p className="mt-0.5 text-[13px] font-medium text-blue-700" data-testid={`task-due-in-${t.id}`}>{dueIn}</p>}
+              </div>
+            </div>
+            <SheetTitle className="mt-3 text-left text-[24px] font-bold leading-[1.15] tracking-tight text-slate-900">{t.title}</SheetTitle>
+            {t.description && (
+              <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-slate-600" data-testid={`task-context-m-${t.id}`}>{t.description}</p>
+            )}
+            {(chips.length > 0 || t.workflow_summary?.id || t.recurrence?.every) && (
+              <div className="mt-4 flex flex-wrap gap-2" data-testid={`task-chips-${t.id}`}>
+                {chips.map((c) => (
+                  <span key={c.key} className={chip}><c.icon size={14} weight="bold" aria-hidden="true" className="shrink-0" />
+                    <span className="truncate">{c.text}</span></span>
+                ))}
+                {t.workflow_summary?.id && (
+                  <WorkflowLink type={t.workflow_summary.type}
+                    href={`/workflows?type=${encodeURIComponent(t.workflow_summary.type || "")}&focus=${encodeURIComponent(t.workflow_summary.id)}`}
+                    data-testid={`wf-chip-full-${t.id}`} className={chip} title={`Open workflow: ${t.workflow_summary.title}`}>
+                    <FlowArrow size={14} weight="bold" aria-hidden="true" className="shrink-0" />
+                    <span className="truncate">{(t.workflow_summary.title || "Workflow").slice(0, 40)}</span>
+                  </WorkflowLink>
+                )}
+                {t.recurrence?.every && (
+                  <span className={chip}><ArrowsClockwise size={14} weight="bold" aria-hidden="true" /> {repeatLabel(t.recurrence)}</span>
+                )}
+              </div>
+            )}
+          </section>
+
+          {approvalBlocks("-m")}
+
+          <AssigneesEditor compact t={t} members={members} roleOptions={roleOptions}
+            canEdit={canEditPeople} onPatched={onPeoplePatched} />
+
+          {!workLocked && onThisTask && (
+            <section data-testid={`task-guide-${t.id}`}
+              className={`rounded-[1.4rem] p-4 text-white ${INK_PLATE}`}>
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-amber-300">
+                  <Sparkle size={17} weight="fill" aria-hidden="true" />
+                </span>
+                <p className="min-w-0 flex-1 text-[16px] font-semibold">AI Execution Guide</p>
+                {planSteps.length > 0 && (
+                  <button type="button" onClick={() => setMTab("steps")} data-testid={`task-guide-plan-${t.id}`}
+                    className="flex shrink-0 items-center gap-0.5 text-[13px] font-semibold text-white/75">
+                    View plan <CaretUp size={12} weight="bold" aria-hidden="true" className="rotate-90" />
+                  </button>
+                )}
+              </div>
+              <div className="mt-3 flex items-end gap-3">
+                <p className="min-w-0 flex-1 text-[14px] leading-relaxed text-white/75" data-testid={`task-guide-text-${t.id}`}>
+                  {planSteps.length
+                    ? (planDone === planSteps.length
+                      ? "Every step is ticked. Mark the task complete when the work is in."
+                      : `${t.execution_plan?.auto ? "I drafted" : "There are"} ${planSteps.length} steps for this task — ${planDone} done. Tell me if you want them changed.`)
+                    : "I can draft the steps for this task, or you can add your own."}
+                </p>
+                <button type="button" onClick={askDex} disabled={askBusy} data-testid={`task-ask-dex-${t.id}`}
+                  className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-[14px] font-semibold disabled:opacity-60 ${
+                    askArmed ? "bg-amber-300 text-neutral-900" : "bg-white text-neutral-900"}`}>
+                  <Sparkle size={15} weight="fill" aria-hidden="true" />
+                  {askBusy ? "Thinking…" : askArmed ? "Redraft" : "Ask Dex"}
+                </button>
+              </div>
+            </section>
+          )}
+
+          <div role="tablist" aria-label="Task sections" className={`grid grid-cols-4 gap-1 rounded-[1.4rem] p-1 ${DRAWER_TRACK}`}
+            data-testid={`task-tabs-${t.id}`}>
+            {tabs.map((tb) => {
+              const on = mTab === tb.key;
+              return (
+                <button key={tb.key} type="button" role="tab" aria-selected={on} onClick={() => setMTab(tb.key)}
+                  data-testid={`task-tab-${tb.key}-${t.id}`}
+                  className={`flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-[1.1rem] px-1 text-[12px] ${
+                    on ? `${INK_PILL} font-semibold` : "font-medium text-slate-600"}`}>
+                  <span className="relative">
+                    <tb.icon size={18} weight={on ? "fill" : "regular"} aria-hidden="true" />
+                    {tb.n > 0 && (
+                      <span className={`absolute -right-3 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold tabular-nums ${
+                        on ? "bg-amber-300 text-neutral-900" : "bg-neutral-900 text-white"}`}>{tb.n}</span>
+                    )}
+                  </span>
+                  <span className="max-w-full truncate">{tb.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div role="tabpanel" hidden={mTab !== "steps"} data-testid={`task-panel-steps-${t.id}`}>
+            {!workLocked && onThisTask ? (
+              <ExecutionPlan flow t={t} onChange={onChange} onPatched={applyPatched} members={members} roleOptions={roleOptions} />
+            ) : (
+              <p className="px-1 text-sm text-slate-500" data-testid={`requester-hint-${t.id}`}>
+                {workLocked ? "The steps open once this task can start."
+                  : t.approver_id === user?.id ? `You approve this task, so ${t.assignee_name || "the team"} does the work. Leave a note in Activity to follow up.`
+                  : waitedOnMe ? `${t.assignee_name || "The team"} is waiting on you for this task. Leave a note in Activity with what they need.`
+                  : `${t.assignee_name || "Your team"} is doing this task. Leave a note in Activity to follow up.`}
+              </p>
+            )}
+          </div>
+
+          <div role="tabpanel" hidden={mTab !== "documents"} data-testid={`task-panel-documents-${t.id}`}>
+            {evidenceNotice("-m")}
+            {attachmentBlocks("-m")}
+            {proofN === 0 && (
+              <p className="px-1 py-2 text-sm text-slate-500">Nothing attached yet. Add the bill, a photo of the work or a voice note.</p>
+            )}
+            {!signoffPending && rights.work && !terminal && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <button type="button" onClick={() => evidenceRef.current?.click()} disabled={uploading} data-testid={`docs-file-${t.id}`}
+                  className={`flex h-12 items-center justify-center gap-1.5 rounded-pill text-[14px] font-medium text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+                  <FileArrowUp size={17} aria-hidden="true" /> File
+                </button>
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} data-testid={`docs-photo-${t.id}`}
+                  className={`flex h-12 items-center justify-center gap-1.5 rounded-pill text-[14px] font-medium text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+                  <Camera size={17} aria-hidden="true" /> Photo
+                </button>
+                <button type="button" onClick={toggleVoice} data-testid={`docs-voice-${t.id}`}
+                  className={`flex h-12 items-center justify-center gap-1.5 rounded-pill text-[14px] font-medium ${recording ? "bg-ng-accent text-white" : `text-slate-700 ${GLASS_PILL}`}`}>
+                  {recording ? <><Stop size={16} weight="fill" aria-hidden="true" /> Stop</> : <><Microphone size={17} aria-hidden="true" /> Voice</>}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div role="tabpanel" hidden={mTab !== "activity"} data-testid={`task-panel-activity-${t.id}`}>
+            <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} openTrigger={trailOpen} />
+          </div>
+
+          <div role="tabpanel" hidden={mTab !== "details"} className="space-y-4" data-testid={`task-panel-details-${t.id}`}>
+            {!terminal && !workLocked && rights.work && (
+              <section className={`${DRAWER_CARD} p-4`}>
+                <p className={DRAWER_LABEL}>Status</p>
+                <div className="ng-pressed grid grid-cols-2 gap-1 rounded-pill p-1" role="group"
+                  aria-label="Task status" data-testid={`status-pills-m-${t.id}`}>
+                  {M_STATUS_PILLS.map((sp) => {
+                    const on = stageOf(t.status) === sp.key;
+                    return (
+                      <button key={sp.key} type="button" onClick={() => setStatus(sp.key)} aria-pressed={on}
+                        data-testid={`status-pill-m-${sp.key}-${t.id}`}
+                        className={`flex h-10 min-w-0 items-center justify-center rounded-pill px-2 text-[13px] leading-tight ${
+                          on ? `ng-pop ${sp.on} font-semibold` : "text-foreground/60"}`}>
+                        <span className="truncate">{sp.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-3"><WaitingOn t={t} members={members} onPatched={onPeoplePatched} /></div>
+              </section>
+            )}
+            {!terminal && !workLocked && !rights.work && t.status === "waiting" && (
+              <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly />
+            )}
+            <section className={`${DRAWER_CARD} space-y-2.5 p-4 text-sm`} data-testid={`task-details-${t.id}`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Due</span>
+                <DueLine t={t} canMove={rights.priority && !terminal} onSaved={onChange} className="text-sm text-slate-800" />
+              </div>
+              {t.recurrence?.every && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-500">Repeats</span>
+                  <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} className="text-sm text-slate-800" />
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Priority</span>
+                <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+                  <span aria-hidden="true" className={`h-2 w-2 rounded-full ${PRIO_STRIPE[prio]}`} /> {PRIO_LABEL[prio]}
+                </span>
+              </div>
+              {t.created_at && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-500">Created</span>
+                  <span className="text-slate-800" title={fullTime(t.created_at)}>{timeAgo(t.created_at)}</span>
+                </div>
+              )}
+              <div className="border-t border-slate-900/[0.06] pt-2.5"><TaskRolesLines t={t} roleOptions={roleOptions} /></div>
+            </section>
+            {scores && (
+              <div className={`${DRAWER_CARD} p-4`} data-testid={`ai-scores-${t.id}`}>
+                <p className={DRAWER_LABEL}>Why it ranks here</p>
+                <PriorityScoreBars scores={scores} />
+              </div>
+            )}
+            {reopenBlock("-m")}
+            {canDelete && (
+              <button type="button" onClick={() => setConfirmDelete(true)} data-testid={`drawer-delete-task-${t.id}`}
+                className="mx-auto flex h-11 w-fit items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-600">
+                <Trash size={16} weight="bold" aria-hidden="true" /> Delete task
+              </button>
+            )}
+            {canDelete && deleteDialog}
+          </div>
+        </div>
+
+        {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
+          <div data-testid={`task-actions-m-${t.id}`}
+            className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,var(--sa-bottom))] pt-3 backdrop-blur-xl">
+            <div className="flex items-center gap-2">
+              {rights.finish ? (
+                <button type="button" onClick={complete} data-testid={`complete-m-${t.id}`}
+                  title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
+                  className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-[15px] font-semibold ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
+                  <CheckCircle size={18} weight="fill" aria-hidden="true" /> Complete
+                </button>
+              ) : (
+                <p className="min-w-0 flex-1 text-[13px] leading-snug text-slate-500" data-testid={`finish-hint-m-${t.id}`}>
+                  {t.assignee_name || "The doer"} marks this done.
+                </p>
+              )}
+              <button type="button" onClick={() => { setMTab("activity"); setTrailOpen((n) => n + 1); }}
+                data-testid={`note-m-${t.id}`} aria-label="Log an update or hand off"
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 ${GLASS_PILL}`}>
+                <ChatText size={18} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => evidenceRef.current?.click()} disabled={uploading}
+                data-testid={`upload-file-m-${t.id}`} aria-label="Upload a file"
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+                <Paperclip size={18} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                data-testid={`photo-m-${t.id}`} aria-label="Attach a photo"
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
+                <Camera size={18} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={toggleVoice} data-testid={`voice-m-${t.id}`}
+                aria-label={recording ? "Stop recording and send" : "Record a voice reply"}
+                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${recording ? "bg-ng-accent text-white" : `text-slate-700 ${GLASS_PILL}`}`}>
+                {recording ? <Stop size={18} weight="fill" aria-hidden="true" /> : <Microphone size={18} aria-hidden="true" />}
+              </button>
+              {recording && (
+                <button type="button" onClick={cancelVoice} data-testid={`voice-cancel-m-${t.id}`} aria-label="Discard recording"
+                  className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 ${GLASS_PILL}`}>
+                  <X size={18} weight="bold" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   /* 2026-09-14, founder — the drawer is a value of its own so a caller that
      only wants the DRAWER (the Decision Desk's Task approvals column: "open
      the drawer in the decision desk itself, don't go to My Work") can render
@@ -2527,6 +3055,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
            open. Without this Radix focuses the stock close. */
         onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
         <div className="h-full overflow-y-auto">
+        {isMobile ? mobileTaskView() : (<>
         {/* ASK-27 — the close is INSIDE the sheet now, at every width. It
             was a tab hanging off the left edge, which the founder read as
             detached from the card. It sits at the header's right as a
@@ -2981,35 +3510,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             className="mx-auto -mt-2 flex h-11 w-fit items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-600 transition-colors hover:bg-white/70 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ng-outline">
             <Trash size={16} weight="bold" aria-hidden="true" /> Delete task
           </button>
-          <AlertDialog open={confirmDelete} onOpenChange={(o) => { if (!deleting) setConfirmDelete(o); }}>
-            <AlertDialogContent data-testid={`drawer-delete-dialog-${t.id}`}
-              className="max-w-md gap-5 rounded-[1.75rem] border-0 bg-[linear-gradient(165deg,hsl(0_0%_96%),hsl(0_0%_91%))] p-6 shadow-[0_30px_80px_-20px_hsl(0_0%_0%/0.45)] sm:rounded-[1.75rem]">
-              <div className="flex items-start gap-4">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-inset ring-red-100">
-                  <Trash size={22} weight="duotone" aria-hidden="true" />
-                </span>
-                <div className="min-w-0 pt-0.5">
-                  <AlertDialogTitle className="text-lg font-semibold text-slate-900">Delete this task?</AlertDialogTitle>
-                  <AlertDialogDescription className="mt-1.5 text-sm leading-relaxed text-slate-600">
-                    “{t.title}” will be deleted permanently. It can no longer be opened or accessed by anyone, and this cannot be undone.
-                  </AlertDialogDescription>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <AlertDialogCancel disabled={deleting} data-testid={`drawer-delete-cancel-${t.id}`}
-                  className={`mt-0 h-11 rounded-pill border-0 px-5 text-sm font-medium text-slate-700 hover:bg-white ${GLASS_PILL}`}>
-                  Cancel
-                </AlertDialogCancel>
-                <AlertDialogAction disabled={deleting} data-testid={`drawer-delete-confirm-${t.id}`}
-                  /* preventDefault keeps the dialog open while the request
-                     runs; deleteTask closes it once the server agrees. */
-                  onClick={(e) => { e.preventDefault(); deleteTask(); }}
-                  className={`h-11 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${MAROON_PILL}`}>
-                  {deleting ? "Deleting…" : "Yes, delete task"}
-                </AlertDialogAction>
-              </div>
-            </AlertDialogContent>
-          </AlertDialog>
+          {deleteDialog}
         </>
       )}
     </div>
@@ -3056,6 +3557,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
         </div>
       </div>
     )}
+        </>)}
         </div>
       </SheetContent>
     </Sheet>
@@ -3754,7 +4256,12 @@ export default function MyWork({ only = null }) {
   const scopeFromUrl = (v) => (URL_SCOPES.includes(v) || v === "mine" || (v === "all" && canSeeAll) ? v : null);
   const [scope, setScope] = useState(scopeFromUrl(rawView) || savedScope);
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
-  const [aiPriority, setAiPriority] = useState(Boolean(loadedPrefs.aiPriority));
+  /* 2026-10-29, founder — ON A PHONE THE PRIORITY BANDS ARE THE DEFAULT VIEW
+     (High / Medium / Low over the deck); the sparkle turns them off and on.
+     Its own saved setting, so the desktop's choice is not changed by it. */
+  const isMobile = useIsMobile();
+  const [aiPriority, setAiPriority] = useState(() => (isMobile
+    ? (loadedPrefs.aiPriorityM ?? true) : Boolean(loadedPrefs.aiPriority)));
   /* KM-30 — ONE progress lens, and no priority lens at all.
      KM-29 added a High/Medium/Low bar; the founder pointed out the priority
      band bar inside TaskPriorityColumns already does exactly that, so mine was
@@ -3814,9 +4321,13 @@ export default function MyWork({ only = null }) {
     if (!prefsKey) return;
     try {
       // "asked" is a URL view, not a default to come back to (ASK-28 TK-01).
-      localStorage.setItem(prefsKey, JSON.stringify({ scope: URL_SCOPES.includes(scope) ? savedScope : scope, tab, aiPriority }));
+      const prev = JSON.parse(localStorage.getItem(prefsKey) || "{}");
+      localStorage.setItem(prefsKey, JSON.stringify({
+        ...prev, scope: URL_SCOPES.includes(scope) ? savedScope : scope, tab,
+        ...(isMobile ? { aiPriorityM: aiPriority } : { aiPriority }),
+      }));
     } catch { /* quota; ignore */ }
-  }, [prefsKey, scope, tab, aiPriority, savedScope]);
+  }, [prefsKey, scope, tab, aiPriority, savedScope, isMobile]);
 
   // U7-05.3: bulk selection. Set of task ids across the currently-visible
   // list. Cleared when the tab / scope / view changes so a stale selection
@@ -3896,6 +4407,11 @@ export default function MyWork({ only = null }) {
     enabled: !!openId && openId !== focusTaskId, retry: false,
   });
   const openTask = openId === focusTaskId ? focusQ.data : openTaskQ.data;
+  // 2026-10-29 — the phone opens a task from its deck card: which tab first
+  // (the card's next action opens Steps, its attachments Documents), and the
+  // row the drawer last showed, so it can play its close.
+  const [openTab, setOpenTab] = useState("steps");
+  const [drawerRow, setDrawerRow] = useState(null);
   const openTaskStatus = !!openId
     ? (openId === focusTaskId ? focusQ : openTaskQ).error?.response?.status
     : undefined;
@@ -3964,7 +4480,9 @@ export default function MyWork({ only = null }) {
     else if (!rawView && URL_SCOPES.includes(scope)) setScope(savedScope);
   }, [rawView]); // eslint-disable-line react-hooks/exhaustive-deps
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
-  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiOn });
+  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiOn,
+    // An AI call over the whole list; on by default on a phone now, so not on every visit.
+    staleTime: 5 * 60 * 1000 });
   const members = usersQ.data || [];
   // ASK-28 TK-03 — My team is offered to anyone who is someone's Reporting
   // Manager. A My team link opened by someone without reports lands on My Tasks
@@ -4123,9 +4641,16 @@ export default function MyWork({ only = null }) {
   const bandHasWork = Object.fromEntries(bandCounts);
   const firstBandWithWork = (bandCounts.find(([, n]) => n > 0) || [])[0];
   useEffect(() => {
-    if (!aiOn || bandChosen.current) return;
+    // The phone's bands are on for everyone (not only those who may run the AI
+    // ranking), so the first band with work is chosen for them too.
+    if (!(aiOn || (isMobile && aiPriority)) || bandChosen.current) return;
     if (!bandHasWork[band] && firstBandWithWork) setBand(firstBandWithWork);
-  }, [aiOn, band, firstBandWithWork, bandHasWork]);
+  }, [aiOn, isMobile, aiPriority, band, firstBandWithWork, bandHasWork]);
+  useEffect(() => {
+    if (!openId) return;
+    const row = (tasksQ.data || []).find((tk) => tk.id === openId) || (openId === focusTaskId ? focusQ.data : openTaskQ.data);
+    if (row) setDrawerRow(row);
+  }, [openId, tasksQ.data, focusTaskId, focusQ.data, openTaskQ.data]);
 
   // KR-14.6 · MOBILE HEADER — reference-driven layout for MyWork on phones:
   //   Row 1 (segment views only): h1 title left, [+ New Task] and the
@@ -4294,6 +4819,174 @@ export default function MyWork({ only = null }) {
     setFilterParams({ person: "", status: "", filter: "", priority: "" });
   };
   const tasksLoading = tasksQ.isLoading && !tasksQ.data;
+
+  /* ─── THE PHONE (2026-10-29, founder) ─────────────────────────────────────
+     Below lg My Work is the Desk's shape: the filters as KPI tiles on the sky,
+     and the work in a black sheet, every task a card the height of its own
+     content, the page scrolling as usual (pages/mywork/WorkDeck).
+     It is its own tree — the desktop below is untouched — and it covers the
+     task views and My requests; the Approvals page keeps its own layout. */
+  if (isMobile && !approvalsPage && view !== "approvals") {
+    const bandsOn = aiPriority && !showingCompleted && view === "mywork";
+    const deckList = bandsOn ? list.filter((tk) => TIER_OF(tk) === band) : list;
+    const kit = { isOverdue, isDueToday, isTerminal, stageOf, lateness, latenessText, dueLabel,
+      STATUS_LABEL, STATUS_TONE, StatusRing, cardPeople };
+    // The patched row goes into this view's list at once (the refetch confirms).
+    const listKey = ["tasks", asked ? "asked" : team ? "team" : mine];
+    const patchRow = (row) => {
+      if (!row?.id) return;
+      qc.setQueryData(listKey, (rows) => (Array.isArray(rows) ? rows.map((r) => (r.id === row.id ? { ...r, ...row } : r)) : rows));
+      qc.setQueryData(["task", row.id], (prev) => ({ ...(prev || {}), ...row }));
+    };
+    const openRow = openId
+      ? (all.find((tk) => tk.id === openId) || (openId === focusTaskId ? focusQ.data : openTaskQ.data) || null)
+      : null;
+    const openOpts = all.filter((tk) => !isTerminal(tk));
+    const overdueN = openOpts.filter(isOverdue).length;
+    const todayN = openOpts.filter(isDueToday).length;
+    const summary = view === "requests" ? "What you have asked for, and where each stands"
+      : [`${openOpts.length} open`, overdueN ? `${overdueN} overdue` : null, todayN ? `${todayN} due today` : null]
+        .filter(Boolean).join(" · ");
+    const viewTileOptions = mobileViewOptions.map((o) => ({ key: o.key, label: o.label, leaves: o.leaves, pick: o.pick }));
+    const firstWithWork = BANDS.find((b) => list.some((tk) => TIER_OF(tk) === b.key));
+    const bandLabel = BANDS.find((b) => b.key === band)?.label || "High";
+
+    let slides;
+    if (view !== "requests") {
+      if (tasksLoading) slides = [{ key: "loading", notice: true, node: <DeckNotice loading testid="deck-loading" /> }];
+      else if (tasksQ.isError && !tasksQ.data) {
+        slides = [{ key: "failed", notice: true, node: <DeckNotice testid="deck-failed" title="Couldn't load your tasks"
+          hint="Check the connection and try again." action="Try again" onAction={() => tasksQ.refetch()} /> }];
+      } else if (deckList.length === 0) {
+        const node = bandsOn && list.length > 0 ? (
+          <DeckNotice testid="deck-band-empty" title={`Nothing ${bandLabel.toLowerCase()} priority`}
+            hint={firstWithWork ? `${firstWithWork.label} has ${list.filter((tk) => TIER_OF(tk) === firstWithWork.key).length}.` : null}
+            action={firstWithWork ? `Show ${firstWithWork.label}` : null} onAction={() => firstWithWork && pickBand(firstWithWork.key)} />
+        ) : filtersActive && all.length > 0 ? (
+          <DeckNotice testid="mywork-empty-filtered" title="No tasks match these filters" hint={filterSummary}
+            action="Clear filters" onAction={clearFilters} />
+        ) : (
+          <DeckNotice testid="mywork-empty"
+            title={asked ? "Nothing you've asked for is open" : team ? "Your team has nothing open"
+              : neverAnyTasks ? "No tasks yet" : showingCompleted ? t("mywork.empty_completed_title") : t("mywork.empty_title")}
+            hint={asked ? "Tasks you create for other people show up here, with their live status."
+              : neverAnyTasks ? "Tasks arrive here when a decision is approved on the Desk — or add one with the + above."
+              : null} />
+        );
+        slides = [{ key: "empty", notice: true, node }];
+      } else {
+        slides = deckList.map((tk) => ({
+          key: tk.id,
+          node: <TaskSummaryCard t={tk} kit={kit} members={members} roleOptions={roleOptions}
+            onOpen={(tabKey) => { setOpenTab(tabKey || "steps"); setOpenId(tk.id); }}
+            onPatched={patchRow} onChange={refresh} />,
+        }));
+      }
+    }
+
+    const top = (
+      <>
+        {focusDenied && (
+          <div data-testid="access-restricted-banner" data-reason={focusMissing ? "missing" : "denied"}
+            className="flex items-center gap-3 rounded-control border-l-[3px] border-ng-accent bg-ng-accent/10 p-3">
+            <LockKey size={18} weight="bold" aria-hidden="true" className="shrink-0 text-ng-accent" />
+            <p className="min-w-0 flex-1 text-[13px] font-semibold">{focusMissing ? t("mywork.task_missing", "This task no longer exists") : t("mywork.access_restricted")}</p>
+            <button type="button" onClick={() => setFilterParams({ task: "", focus: "" })} data-testid="access-restricted-dismiss"
+              className="shrink-0 text-[13px] font-medium text-foreground/70 underline underline-offset-4">Dismiss</button>
+          </div>
+        )}
+        <div className="flex items-center gap-2" data-testid="mywork-mobile-header">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-[30px] leading-none">{t("mywork.title")}</h1>
+            <p className="mt-1.5 truncate text-[13px] text-foreground/60" data-testid="mywork-mobile-summary">
+              {summary}
+              {filtersActive && view === "mywork" && (
+                <> · <button type="button" onClick={clearFilters} data-testid="work-mobile-filter-clear"
+                  className="font-medium text-foreground underline underline-offset-4">Clear filters</button></>
+              )}
+            </p>
+          </div>
+          {view === "mywork" && (
+            <button type="button" onClick={() => setAiPriority((v) => !v)}
+              aria-pressed={aiPriority} data-testid="work-mobile-priority"
+              aria-label={aiPriority ? "Priority bands on" : "Priority bands off"}
+              title={scoring ? t("mywork.scoring", "Scoring…") : aiPriority ? "Priority bands on" : "Priority bands off"}
+              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
+              <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true" className={scoring ? "animate-pulse" : ""} />
+            </button>
+          )}
+          <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
+            onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
+            onRequestCreated={() => { if (view !== "requests") goView(null, "requests"); }}
+            testid="new-work-button-mobile"
+            triggerChildren={<Plus size={20} weight="bold" aria-hidden="true" />}
+            triggerClassName={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${INK_PILL}`} />
+        </div>
+        <div className={`grid gap-2 ${view === "requests" ? "grid-cols-1" : personOptions.length > 0 ? "grid-cols-2" : "grid-cols-3"}`}
+          data-testid="mywork-filter-tiles">
+          <FilterTile testid="work-tile-view" icon={Kanban} category="Showing"
+            value={mobileView} options={viewTileOptions} narrowed={false}
+            counts={(k) => (k === mobileView ? (view === "requests" ? null : all.filter((tk) => !isTerminal(tk)).length) : null)}
+            onSelect={(o) => o.pick()} loading={tasksLoading} />
+          {view !== "requests" && (
+            <>
+              <FilterTile testid="work-tile-status" icon={ListChecks} category="Status"
+                value={filters.status} options={STATUS_FILTER_OPTIONS} narrowed={!!filters.status}
+                counts={(k) => countWith({ status: k })} onSelect={(o) => setStatusFilter(o.key)} loading={tasksLoading} />
+              <FilterTile testid="work-tile-department" icon={Buildings} category="Department"
+                value={tab === "completed" ? "all" : tab} options={mobileFilterTabs} narrowed={tab !== "all" && tab !== "completed"}
+                counts={(k) => countWith({ tab: k })} onSelect={(o) => setTab(o.key)} loading={tasksLoading} />
+              {personOptions.length > 0 && (
+                <FilterTile testid="work-tile-person" icon={UserCircle} category="Person"
+                  value={personFilter} options={personOptions} narrowed={!!personFilter}
+                  counts={(k) => countWith({ person: k })} onSelect={(o) => setPersonFilter(o.key)} loading={tasksLoading} />
+              )}
+            </>
+          )}
+        </div>
+        {bandsOn && (
+          <div className="ng-pressed flex items-center gap-1 rounded-pill p-1" role="group"
+            aria-label="Filter by priority" data-testid="mywork-priority-bands">
+            {BANDS.map((b) => {
+              const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
+              return (
+                <button key={b.key} type="button" onClick={() => pickBand(b.key)}
+                  aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
+                  className={`ng-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[13px] ${
+                    band === b.key ? "ng-pop font-semibold text-foreground" : "text-foreground/60"}`}>
+                  <span aria-hidden="true" className={`h-2 w-2 rounded-full ${PRIO_STRIPE[b.key]}`} />
+                  {b.label}
+                  <span className="tabular-nums opacity-55">{tasksLoading ? "–" : n}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
+
+    return (
+      <div data-testid="mywork-phone">
+        {view === "requests" ? (
+          <WorkSplit top={top} mode="scroll" tone="light" label={t("mywork.my_requests", "My requests")} testid="mywork-split">
+            <RequestsPanel embedded mineOnly highlightId={params.get("request")} />
+          </WorkSplit>
+        ) : (
+          <WorkSplit top={top} slides={slides} focusId={focusTaskId}
+            label={bandsOn ? `${bandLabel} priority` : (showingCompleted ? "Done" : mobileViewLabel)}
+            testid="mywork-split" />
+        )}
+        {drawerRow && (
+          <TaskCard key={drawerRow.id} t={openRow || drawerRow} drawerOnly open={!!openId && openId === drawerRow.id}
+            initialTab={openTab}
+            onToggleOpen={() => { setOpenId(null); if (focusTaskId) setFilterParams({ task: "", focus: "" }); }}
+            onChange={() => { refresh(); qc.invalidateQueries({ queryKey: ["task", drawerRow.id] }); }}
+            members={members} roleOptions={roleOptions}
+            scores={aiOn ? scoreMap[drawerRow.id] : undefined} />
+        )}
+      </div>
+    );
+  }
 
   return (
     /* ASK-20 (2026-09-13): on desktop the page owns its own height and only
@@ -4893,7 +5586,7 @@ export default function MyWork({ only = null }) {
                         Requests routed to you will appear here.
                       </div>
                     ) : (
-                      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3" data-testid="approvals-requests">
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3" data-testid="approvals-requests">
                         {pendingRequests.map((r) => (
                           <RequestCard key={r.id} r={r} highlight={r.id === params.get("request")} />
                         ))}

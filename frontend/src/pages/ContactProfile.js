@@ -23,7 +23,7 @@ import {
 // Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
 // so the timeline reads at a glance.
 const ACTIVITY_META = {
-  call: { icon: Phone, label: "Call", cls: "bg-brand-blue text-white" },
+  call: { icon: Phone, label: "Call", cls: "bg-ng-ink text-white" },
   meeting: { icon: Handshake, label: "Meeting", cls: "bg-caution-50 text-caution-800" },
   note: { icon: Note, label: "Note", cls: "bg-black/10 text-black" },
   whatsapp: { icon: WhatsappLogo, label: "WhatsApp", cls: "bg-brand-green text-white" },

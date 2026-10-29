@@ -1,6 +1,6 @@
 {
-  "count": 435,
-  "sha": "91e0eb87018fa5e45832c16cdcafd3b158f289a126e51f98dc01fa8367b1bb71",
+  "count": 438,
+  "sha": "2bbf5d407dc71168f2fa542a6d25f98a984ff1d980a0b1b08ff593d85b892488",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -134,6 +134,7 @@
     "GET /api/finance/everything/preview",
     "GET /api/finance/export/{token}",
     "GET /api/finance/trash",
+    "GET /api/finished-tasks",
     "GET /api/health",
     "GET /api/inbox",
     "GET /api/ingest",
@@ -337,6 +338,7 @@
     "POST /api/finance/imports/{ingestion_id}/undo",
     "POST /api/finance/imports/{ingestion_id}/undo/preview",
     "POST /api/finance/trash/{batch_id}/restore",
+    "POST /api/finished-tasks/seen",
     "POST /api/follow-up/run",
     "POST /api/inbox/{item_id}/status",
     "POST /api/ingest/csv",
@@ -403,6 +405,7 @@
     "POST /api/support/tickets",
     "POST /api/support/tickets/{ticket_id}/reply",
     "POST /api/tasks",
+    "POST /api/tasks/auto-plan",
     "POST /api/tasks/prioritize",
     "POST /api/tasks/{task_id}/approve",
     "POST /api/tasks/{task_id}/attachment",

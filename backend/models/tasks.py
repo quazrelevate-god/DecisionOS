@@ -121,6 +121,17 @@ class ExecStep(BaseModel):
     done: Optional[bool] = False
 
 
+class AutoPlanInput(BaseModel):
+    """2026-10-29 — the tasks on screen that still have no checklist."""
+    task_ids: List[str] = Field(default_factory=list, max_length=20)
+    wait: bool = False   # True: answer with the drafted tasks (the task view, one at a time)
+
+
+class FinishedSeenInput(BaseModel):
+    """2026-10-29 — the newest completion the person has been shown."""
+    until: str = Field(..., min_length=10, max_length=40)
+
+
 class ExecPlanInput(BaseModel):
     steps: List[ExecStep]
     status: Optional[str] = None

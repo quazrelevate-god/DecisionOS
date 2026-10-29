@@ -141,7 +141,7 @@ class TestGenerate:
 class TestPatch:
     def test_patch_edit_add_remove_reorder_and_status_transitions(self, owner_auth, prod_auth):
         """One flow covering: reorder, add custom, remove, empty-text drop,
-        progress recompute, status→in_progress at >0%, status→done at 100%."""
+        progress recompute, status unchanged at >0% (2026-10-29), status→done at 100%."""
         # Self-contained: generate a fresh plan so this works under pytest-xdist
         t = _create_task(owner_auth["token"], title="TEST_iter20_patch_flow", assignee_role="production")
         g = requests.post(
@@ -205,8 +205,9 @@ class TestPatch:
         expected_progress = round(done_count / n * 100)
         assert plan["progress"] == expected_progress
         assert 0 < plan["progress"] < 100
-        # task status flipped todo → in_progress (progress>0 & accepted)
-        assert body["status"] == "in_progress", f"task status did not transition to in_progress: {body.get('status')}"
+        # 2026-10-29 (founder): ticking a step no longer starts the task — only
+        # the person does (Mark as Doing). A To do task stays To do.
+        assert body["status"] == "todo", f"ticking a step moved the task to {body.get('status')}"
 
         # ---- 3) mark ALL done → task becomes 'done' ----
         for s in plan["steps"]:

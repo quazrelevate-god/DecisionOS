@@ -63,13 +63,24 @@ def test_the_card_carries_what_the_founder_asked_for():
 
 
 def test_the_task_view_has_the_four_tabs_and_the_flow():
-    for key in ("steps", "documents", "activity", "details"):
+    # 2026-10-29, second pass: Details gave way to Notes (kept on the phone).
+    for key in ("steps", "documents", "activity", "notes"):
         assert f'{{ key: "{key}", label:' in MW, key
+    assert "<TaskNotes taskId={t.id} userId={user?.id} />" in MW
     assert "<ExecutionPlan flow t={t}" in MW
     assert 'data-testid={`exec-flow-${t.id}`}' in MW
     # Ticking a step fills its node, then the line down to the next one.
     assert "style={{ transform: `scaleY(${s.done ? 1 : 0})`" in MW
-    # The timeline lives in the Activity tab now, not at the foot.
-    assert "openTrigger={trailOpen}" in MW
+    # The timeline lives in the Activity tab, with no form of its own: logging,
+    # handing off and escalating are the slider's left end, and the card
+    # rises from just above it.
+    assert "<TaskTrail formless t={t}" in MW
+    assert "<TaskActionSlider testid={`task-slider-${t.id}`}" in MW
+    assert "onUpdate={() => setUpdateOpen(true)}" in MW
+    phone_view = MW[MW.index("const mobileTaskView = () =>"):MW.index("const buildDrawer = () =>")]
+    for gone in ("upload-file-m-", "photo-m-", "voice-m-", "note-m-"):
+        assert gone not in phone_view, gone
+    slider = (FE / "pages" / "mywork" / "TaskActionSlider.jsx").read_text(encoding="utf-8")
+    assert "ng-slider-well" in slider and "ng-slider-knob" in slider, "the Dex slider's own materials"
     assert "<AssigneesEditor compact" in MW and "{showAll ? \"Show less\" : \"View all\"}" in MW
     assert 'data-testid={`task-ask-dex-${t.id}`}' in MW

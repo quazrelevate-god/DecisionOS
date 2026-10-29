@@ -55,10 +55,11 @@ import {
   Hourglass, // ASK-28 TK-07 · Waiting on
   HandCoins, // 2026-10-21 · Requests
   ArrowLeft, // 2026-10-29 · the phone task view's way back
+  NotePencil, // 2026-10-29 · the task view's Notes tab
 } from "@phosphor-icons/react";
 import { AvatarStack, PersonAvatar } from "../components/neuglass/PersonAvatar";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   DRAWER_LABEL, DRAWER_CARD, GLASS_PILL, GLASS_ICON_BTN, INK_PILL, INK_PLATE, MAROON_PILL,
   DRAWER_FIELD, DRAWER_TRACK, GLASS_SHEET,
@@ -76,6 +77,8 @@ import { ReportButton } from "../components/ReportButton";
 import { askBeforeMic } from "../lib/micNotice";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { WorkSplit, TaskSummaryCard, FilterTile, DeckNotice } from "./mywork/WorkDeck";
+import { TaskActionSlider } from "./mywork/TaskActionSlider";
+import { TaskNotes } from "./mywork/TaskNotes";
 
 // RD-2 (2026-08-17): the toolbar control. Was uppercase + wide tracking +
 // hard black border — eight of these in a row read as a control panel. Now a
@@ -473,7 +476,10 @@ function ProgressControl({ value, onCommit, testid, valueTestid, checklist }) {
   );
 }
 
-function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnly = false }) {
+/* `formless` (2026-10-29, the phone's task view): the timeline only. Logging a
+   note, handing off and escalating moved to the slider at the foot of the
+   view, so the form and its button are not drawn here a second time. */
+function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnly = false, formless = false }) {
   const { user, tenant } = useAuth();
   /* PILOT-1 A — a task with an unsent update opens with the form already out
      and the words in it. Behind a closed "Log update" button they would read
@@ -561,13 +567,13 @@ function TaskTrail({ t, members, roleOptions, onChange, openTrigger = 0, noteOnl
           })}
         </ol>
       )}
-      {open && (
+      {open && !formless && (
         <div className="mt-3">
           <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions} noteOnly={noteOnly}
             onDone={() => { setOpen(false); onChange(); }} onCancel={() => setOpen(false)} />
         </div>
       )}
-      {!open && (
+      {!open && !formless && (
         <div className="mt-5 border-t border-slate-900/[0.07] pt-5">
           <button
             onClick={() => setOpen(true)}
@@ -2230,16 +2236,36 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const canDelete = user?.role === "owner";
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // 2026-10-29 — the phone's task view: which tab is open, the Activity form's
-  // trigger, and Ask Dex (armed by a first tap when it would redo ticked steps).
+  // 2026-10-29 — the phone's task view: which tab is open, whether the update
+  // card (the slider's left end) is up, and Redraft (armed by a first tap when
+  // it would redo ticked steps).
   const isMobile = useIsMobile();
-  const [mTab, setMTab] = useState(initialTab || "steps");
-  const [trailOpen, setTrailOpen] = useState(0);
+  const [mTab, setMTab] = useState(initialTab === "details" ? "activity" : (initialTab || "steps"));
+  const [updateOpen, setUpdateOpen] = useState(false);
   const [askArmed, setAskArmed] = useState(false);
   const [askBusy, setAskBusy] = useState(false);
   useEffect(() => {
-    if (expanded) { setMTab(initialTab || "steps"); setAskArmed(false); }
+    if (expanded) { setMTab(initialTab === "details" ? "activity" : (initialTab || "steps")); setAskArmed(false); setUpdateOpen(false); }
   }, [expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* 2026-10-29 (founder) — DEX WRITES THE CHECKLIST WITHOUT BEING ASKED. A
+     task opened with no steps (one made before this, or one whose first try
+     failed) asks for its draft once, on open; the server holds every rule
+     (consent, never over a checklist, never on finished or locked work).
+     The guide says Dex is drafting until the steps arrive. */
+  const [autoAsked, setAutoAsked] = useState(false);
+  const needsDraft = expanded && isMobile && !(t.execution_plan?.steps || []).length && !isTerminal(t);
+  useEffect(() => {
+    if (!needsDraft || autoAsked) return undefined;
+    setAutoAsked(true);
+    let alive = true;
+    api.post("/tasks/auto-plan", { task_ids: [t.id], wait: true })
+      .then(({ data }) => {
+        const got = (data?.tasks || []).find((x) => x.id === t.id);
+        if (alive && got) { applyPatched(got); onChange(); }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [needsDraft]); // eslint-disable-line react-hooks/exhaustive-deps
   const deleteTask = async () => {
     setDeleting(true);
     try {
@@ -2733,7 +2759,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       { key: "steps", label: "Steps", icon: ListChecks, n: planSteps.length || null },
       { key: "documents", label: "Documents", icon: Paperclip, n: proofN || null },
       { key: "activity", label: "Activity", icon: ChatCircleText, n: null },
-      { key: "details", label: "Details", icon: Info, n: null },
+      // 2026-10-29 (founder) — Details gave way to Notes; what it held moved
+      // to Activity (status at the top, the facts under the timeline).
+      { key: "notes", label: "Notes", icon: NotePencil, n: null },
     ];
     const chip = "inline-flex max-w-full items-center gap-1.5 rounded-pill bg-slate-900/[0.05] px-3 py-1.5 text-[13px] font-medium text-slate-700";
     return (
@@ -2812,11 +2840,14 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             canEdit={canEditPeople} onPatched={onPeoplePatched} />
 
           {!workLocked && onThisTask && (
+            /* 2026-10-29 (founder) — Dex drafts the steps when the task is
+               made; nobody has to ask. The guide says where that stands, and
+               Redraft stays for when the steps are wrong. */
             <section data-testid={`task-guide-${t.id}`}
               className={`rounded-[1.4rem] p-4 text-white ${INK_PLATE}`}>
               <div className="flex items-center gap-2.5">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-amber-300">
-                  <Sparkle size={17} weight="fill" aria-hidden="true" />
+                  <Sparkle size={17} weight="fill" aria-hidden="true" className={!planSteps.length && !isTerminal(t) ? "animate-pulse motion-reduce:animate-none" : ""} />
                 </span>
                 <p className="min-w-0 flex-1 text-[16px] font-semibold">AI Execution Guide</p>
                 {planSteps.length > 0 && (
@@ -2831,15 +2862,17 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                   {planSteps.length
                     ? (planDone === planSteps.length
                       ? "Every step is ticked. Mark the task complete when the work is in."
-                      : `${t.execution_plan?.auto ? "I drafted" : "There are"} ${planSteps.length} steps for this task — ${planDone} done. Tell me if you want them changed.`)
-                    : "I can draft the steps for this task, or you can add your own."}
+                      : `${t.execution_plan?.auto ? "I drafted" : "There are"} ${planSteps.length} steps for this task — ${planDone} done. Change any of them in Steps.`)
+                    : "Drafting the steps for this task — they'll appear in Steps in a moment."}
                 </p>
-                <button type="button" onClick={askDex} disabled={askBusy} data-testid={`task-ask-dex-${t.id}`}
-                  className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-[14px] font-semibold disabled:opacity-60 ${
-                    askArmed ? "bg-amber-300 text-neutral-900" : "bg-white text-neutral-900"}`}>
-                  <Sparkle size={15} weight="fill" aria-hidden="true" />
-                  {askBusy ? "Thinking…" : askArmed ? "Redraft" : "Ask Dex"}
-                </button>
+                {planSteps.length > 0 && (
+                  <button type="button" onClick={askDex} disabled={askBusy} data-testid={`task-ask-dex-${t.id}`}
+                    className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-[14px] font-semibold disabled:opacity-60 ${
+                      askArmed ? "bg-amber-300 text-neutral-900" : "bg-white/12 text-white ring-1 ring-inset ring-white/20"}`}>
+                    <ArrowsClockwise size={15} weight="bold" aria-hidden="true" />
+                    {askBusy ? "Thinking…" : askArmed ? "Redraft all" : "Redraft"}
+                  </button>
+                )}
               </div>
             </section>
           )}
@@ -2903,11 +2936,12 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             )}
           </div>
 
-          <div role="tabpanel" hidden={mTab !== "activity"} data-testid={`task-panel-activity-${t.id}`}>
-            <TaskTrail t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} openTrigger={trailOpen} />
-          </div>
-
-          <div role="tabpanel" hidden={mTab !== "details"} className="space-y-4" data-testid={`task-panel-details-${t.id}`}>
+          {/* 2026-10-29 (founder) — Activity: where the task stands (its
+              status, who it waits on) at the top, the timeline under it, and
+              the task's facts at the foot. Logging, handing off and
+              escalating are the slider's left end, so the timeline carries
+              no form of its own here. */}
+          <div role="tabpanel" hidden={mTab !== "activity"} className="space-y-4" data-testid={`task-panel-activity-${t.id}`}>
             {!terminal && !workLocked && rights.work && (
               <section className={`${DRAWER_CARD} p-4`}>
                 <p className={DRAWER_LABEL}>Status</p>
@@ -2931,6 +2965,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             {!terminal && !workLocked && !rights.work && t.status === "waiting" && (
               <WaitingOn t={t} members={members} onPatched={onPeoplePatched} readOnly />
             )}
+            <TaskTrail formless t={t} onChange={onChange} members={members} roleOptions={roleOptions} noteOnly={noteOnly} />
             <section className={`${DRAWER_CARD} space-y-2.5 p-4 text-sm`} data-testid={`task-details-${t.id}`}>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-500">Due</span>
@@ -2971,52 +3006,74 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             )}
             {canDelete && deleteDialog}
           </div>
+
+          <div role="tabpanel" hidden={mTab !== "notes"} data-testid={`task-panel-notes-${t.id}`}>
+            <TaskNotes taskId={t.id} userId={user?.id} />
+          </div>
         </div>
 
-        {!isTerminal(t) && !workLocked && !signoffPending && rights.work && (
-          <div data-testid={`task-actions-m-${t.id}`}
-            className="sticky bottom-0 z-10 border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] px-4 pb-[max(0.75rem,var(--sa-bottom))] pt-3 backdrop-blur-xl">
-            <div className="flex items-center gap-2">
-              {rights.finish ? (
-                <button type="button" onClick={complete} data-testid={`complete-m-${t.id}`}
-                  title={t.evidence_required && !hasEvidence ? "Add proof first" : "Mark as complete"}
-                  className={`flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-[15px] font-semibold ${t.evidence_required && !hasEvidence ? `${GLASS_PILL} text-slate-500` : INK_PILL}`}>
-                  <CheckCircle size={18} weight="fill" aria-hidden="true" /> Complete
-                </button>
-              ) : (
-                <p className="min-w-0 flex-1 text-[13px] leading-snug text-slate-500" data-testid={`finish-hint-m-${t.id}`}>
-                  {t.assignee_name || "The doer"} marks this done.
-                </p>
-              )}
-              <button type="button" onClick={() => { setMTab("activity"); setTrailOpen((n) => n + 1); }}
-                data-testid={`note-m-${t.id}`} aria-label="Log an update or hand off"
-                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 ${GLASS_PILL}`}>
-                <ChatText size={18} aria-hidden="true" />
-              </button>
-              <button type="button" onClick={() => evidenceRef.current?.click()} disabled={uploading}
-                data-testid={`upload-file-m-${t.id}`} aria-label="Upload a file"
-                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
-                <Paperclip size={18} aria-hidden="true" />
-              </button>
-              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-                data-testid={`photo-m-${t.id}`} aria-label="Attach a photo"
-                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 disabled:opacity-40 ${GLASS_PILL}`}>
-                <Camera size={18} aria-hidden="true" />
-              </button>
-              <button type="button" onClick={toggleVoice} data-testid={`voice-m-${t.id}`}
-                aria-label={recording ? "Stop recording and send" : "Record a voice reply"}
-                className={`grid h-12 w-12 shrink-0 place-items-center rounded-full ${recording ? "bg-ng-accent text-white" : `text-slate-700 ${GLASS_PILL}`}`}>
-                {recording ? <Stop size={18} weight="fill" aria-hidden="true" /> : <Microphone size={18} aria-hidden="true" />}
-              </button>
-              {recording && (
-                <button type="button" onClick={cancelVoice} data-testid={`voice-cancel-m-${t.id}`} aria-label="Discard recording"
-                  className={`grid h-12 w-12 shrink-0 place-items-center rounded-full text-slate-700 ${GLASS_PILL}`}>
-                  <X size={18} weight="bold" aria-hidden="true" />
-                </button>
-              )}
+        {/* 2026-10-29 (founder) — THE FOOT IS ONE SLIDER. Right is Complete
+            (with everything completing does: proof, approval before closing);
+            left lifts the update card — Log note, Hand off, Escalate — out of
+            the bar, just above it. The file, photo and voice buttons are gone
+            from here: Documents adds those. Anyone who may write on the task
+            gets the left end; only someone who may close it gets the right. */}
+        {!isTerminal(t) && (rights.work || noteOnly) && (() => {
+          const canFinishNow = rights.work && rights.finish && !workLocked && !signoffPending;
+          const finishHint = !rights.finish || !rights.work ? `${t.assignee_name || "The doer"} marks this done.`
+            : workLocked ? "It can be completed once it's approved."
+            : signoffPending ? `Waiting for ${t.approver_name || "the approver"} to sign it off.` : "";
+          return (
+            <div className="sticky bottom-0 z-10" data-testid={`task-actions-m-${t.id}`}>
+              <AnimatePresence>
+                {updateOpen && (
+                  /* From the very bottom of the screen up, BEHIND the card and the
+                     bar (2026-10-29, second look: starting at the card's top
+                     edge, the blur read as cut off around the card). */
+                  <motion.div key="scrim" aria-hidden="true" onClick={() => setUpdateOpen(false)}
+                    data-testid={`task-update-scrim-${t.id}`}
+                    className="absolute inset-x-0 bottom-0 z-0 h-[200vh] bg-slate-900/30 backdrop-blur-[6px]"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }} />
+                )}
+              </AnimatePresence>
+              <AnimatePresence initial={false}>
+                {updateOpen && (
+                  <motion.div key="card" className="relative z-10 origin-bottom px-3 pb-2"
+                    data-testid={`task-update-card-${t.id}`}
+                    initial={{ opacity: 0, y: 28, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 20, scale: 0.98 }} transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}>
+                    <div className="rounded-[1.6rem] bg-[hsl(0_0%_97%)] p-2 shadow-[0_-18px_44px_-20px_hsl(0_0%_0%/0.45)] ring-1 ring-inset ring-white">
+                      <div className="flex items-center justify-between px-3 pb-1 pt-2">
+                        <p className="text-[15px] font-semibold text-slate-900">{noteOnly ? "Leave a note" : "Update this task"}</p>
+                        <button type="button" onClick={() => setUpdateOpen(false)} aria-label="Close"
+                          data-testid={`task-update-close-${t.id}`}
+                          className="grid h-11 w-11 place-items-center rounded-full text-slate-500 hover:bg-white">
+                          <X size={16} weight="bold" aria-hidden="true" />
+                        </button>
+                      </div>
+                      <UpdateForm taskId={t.id} stepId={null} members={members} roleOptions={roleOptions} noteOnly={noteOnly}
+                        onDone={() => { setUpdateOpen(false); onChange(); }} onCancel={() => setUpdateOpen(false)} />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <div className={`relative z-10 px-4 pb-[max(0.75rem,var(--sa-bottom))] pt-3 ${updateOpen
+                ? "" : "border-t border-white/70 bg-[hsl(0_0%_93%/0.92)] backdrop-blur-xl"}`}>
+                <TaskActionSlider testid={`task-slider-${t.id}`}
+                  canFinish={canFinishNow} finishHint={finishHint}
+                  needsProof={!!t.evidence_required && !hasEvidence}
+                  updateLabel={noteOnly ? "Note" : "Update"}
+                  onComplete={() => {
+                    // Proof first: say so and take them to where it is added.
+                    if (t.evidence_required && !hasEvidence) { setMTab("documents"); }
+                    complete();
+                  }}
+                  onUpdate={() => setUpdateOpen(true)} />
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     );
   };
@@ -4370,6 +4427,28 @@ export default function MyWork({ only = null }) {
     queryKey: ["tasks", asked ? "asked" : team ? "team" : mine],
     queryFn: () => api.get(asked ? "/tasks?view=asked" : team ? "/tasks?view=team" : `/tasks?mine=${mine}`).then((r) => r.data),
   });
+  /* 2026-10-29 (founder) — EVERY CARD NAMES ITS REAL FIRST STEP. A task made
+     before Dex drafted checklists on its own, or one whose first try failed,
+     would sit on "Add the first step"; the open ones on screen without a
+     checklist are asked for, ten at a time and each once a visit, and the
+     list is read again as the drafts land. The server keeps every rule. */
+  const planAskedRef = useRef(new Set());
+  const planTimersRef = useRef([]);
+  useEffect(() => () => planTimersRef.current.forEach(clearTimeout), []);
+  useEffect(() => {
+    const rows = Array.isArray(tasksQ.data) ? tasksQ.data : [];
+    const want = rows.filter((tk) => !isTerminal(tk) && !(tk.execution_plan?.steps || []).length
+      && Number(tk.plan_auto_tries || 0) < 3 && !planAskedRef.current.has(tk.id)
+      && !(tk.approval_required && tk.approval_stage !== "close" && tk.approval_status === "pending"))
+      .slice(0, 10).map((tk) => tk.id);
+    if (!want.length) return;
+    want.forEach((id) => planAskedRef.current.add(id));
+    api.post("/tasks/auto-plan", { task_ids: want })
+      .then(() => {
+        [9000, 22000, 40000].forEach((ms) => planTimersRef.current.push(setTimeout(() => tasksQ.refetch(), ms)));
+      })
+      .catch(() => {});
+  }, [tasksQ.data]); // eslint-disable-line react-hooks/exhaustive-deps
   // ASK-28 TK-02 — how many task approvals wait on me (the server already
   // limits the feed to what I may approve), for the switcher's count. A named
   // approver who holds no approval access still gets the view.

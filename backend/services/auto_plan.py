@@ -84,20 +84,30 @@ async def draft_plan(db, tenant_id: str, task_id: str) -> bool:
         if not getattr(claim, "modified_count", 0):
             return False
         from services.ai.extraction import ai_execution_plan
-        try:
-            gen = await ai_execution_plan(t, tenant.get("industry") or "general", tenant.get("currency") or "INR",
-                                          session_id=f"exec-auto-{task_id}")
-        except Exception:
-            # The provider failed (network, outage): hand the claim back so the
-            # sweep tries again — at most three times, then it is left to the
-            # person's own Ask Dex.
+
+        async def _give_back():
+            # Hand the claim back so a later try can draft it — at most three
+            # times, then it is left to the person's own Redraft.
             tries = int(t.get("plan_auto_tries") or 0) + 1
             if tries < 3:
                 await db.tasks.update_one({"id": task_id, "tenant_id": tenant_id},
                                           {"$unset": {"plan_auto_at": ""}, "$set": {"plan_auto_tries": tries}})
+            else:
+                await db.tasks.update_one({"id": task_id, "tenant_id": tenant_id},
+                                          {"$set": {"plan_auto_tries": tries}})
+        try:
+            gen = await ai_execution_plan(t, tenant.get("industry") or "general", tenant.get("currency") or "INR",
+                                          session_id=f"exec-auto-{task_id}")
+        except Exception:
+            await _give_back()   # the provider failed (network, outage)
             raise
         texts = [s for s in (gen.get("steps") or []) if s]
         if not texts or texts == _FALLBACK:
+            # 2026-10-29 — the placeholder is what comes back when the model
+            # could not be reached or read (AI keys missing, a bad answer). It
+            # was taken as an answer and the task stamped for good, so it never
+            # got a checklist; it is a failed try like any other now.
+            await _give_back()
             return False
         from core import new_id
         now = _now()
@@ -114,7 +124,7 @@ async def draft_plan(db, tenant_id: str, task_id: str) -> bool:
         # nobody pressed anything, and the line says who did it.
         try:
             await db.activity.insert_one({
-                "id": new_id(), "tenant_id": tenant_id, "actor": None, "kind": "task_plan",
+                "id": new_id(), "tenant_id": tenant_id, "actor": None, "actor_name": "Dex", "kind": "task_plan",
                 "message": f"Dex drafted a checklist for '{t.get('title', 'the task')}'",
                 "detail": f"Dex drafted a checklist ({len(steps)} steps)",
                 "entity_type": "task", "entity_id": task_id, "created_at": now,
@@ -125,6 +135,36 @@ async def draft_plan(db, tenant_id: str, task_id: str) -> bool:
     except Exception as e:  # noqa: BLE001 — a draft that fails leaves the manual routes in place
         logger.info(f"[auto-plan] no draft for task {task_id}: {e}")
         return False
+
+
+async def request(db, user: dict, task_ids: list, may_read, wait: bool = False) -> list:
+    """2026-10-29 (founder) — My Work asks for the checklists it is about to
+    show: a task still without one (made before this, or whose tries were
+    spent on a failure that has since cleared) gets its draft now, instead of
+    its card saying "Plan the first step". Every rule of draft_plan holds;
+    this only clears a stamp left by a try that wrote nothing, and only once it
+    is a minute old, so a draft still in flight is never started twice.
+    Returns the ids it asked for."""
+    tid = user["tenant_id"]
+    asked = []
+    stale = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+    for task_id in task_ids[:10]:
+        t = await db.tasks.find_one({"id": task_id, "tenant_id": tid}, {"_id": 0})
+        if not t or not await may_read(user, t):
+            continue
+        if (t.get("execution_plan") or {}).get("steps") or t.get("status") in _TERMINAL or _start_locked(t):
+            continue
+        if t.get("plan_auto_at"):
+            if int(t.get("plan_auto_tries") or 0) >= 3 or str(t["plan_auto_at"]) > stale:
+                continue
+            await db.tasks.update_one({"id": task_id, "tenant_id": tid, "execution_plan.steps.0": {"$exists": False}},
+                                      {"$unset": {"plan_auto_at": ""}})
+        asked.append(task_id)
+        if wait:
+            await draft_plan(db, tid, task_id)
+        else:
+            schedule(db, tid, task_id)
+    return asked
 
 
 def schedule(db, tenant_id: str, task_id: str) -> None:

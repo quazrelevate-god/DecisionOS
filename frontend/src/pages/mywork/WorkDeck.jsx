@@ -14,7 +14,7 @@
  * Helpers that live in pages/MyWork.js reach these components as `kit`, so the
  * two files do not import each other.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowSquareOut, CalendarBlank, CaretDown, CaretRight, CheckCircle, ListChecks,
   LockKey, Paperclip, Play, Sparkle, ArrowClockwise, Hourglass, ShieldCheck, File as FileIcon,
@@ -36,17 +36,25 @@ const uiScale = () => parseFloat(getComputedStyle(document.documentElement).getP
    category's name, what it is set to and how many tasks that is. A tile that
    narrows the list wears an ink edge, so a filtered deck says so at a glance.
    The options open in the app's glass list, never an OS dropdown. */
-export function FilterTile({ testid, icon: Icon, category, value, options, counts, onSelect, loading, narrowed }) {
+/* 2026-10-29 (founder) — "a very subtle light shade" on each tile. */
+export const TILE_TINTS = {
+  // 2026-10-29, second look (founder): the hues were nice but not this design
+  // system's — one very soft grey gradient for every tile instead.
+  grey: { tile: "bg-[linear-gradient(160deg,hsl(220_12%_95.5%/0.96),hsl(0_0%_100%/0.86))]", chip: "bg-slate-200/70 text-slate-700" },
+};
+
+export function FilterTile({ testid, icon: Icon, category, value, options, counts, onSelect, loading, narrowed, tint = "grey" }) {
   const active = options.find((o) => o.key === value) || options[0];
   const n = counts ? counts(active?.key) : null;
+  const hue = TILE_TINTS[tint] || TILE_TINTS.grey;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" data-testid={testid} aria-label={`${category}: ${active?.label}`}
-          className={`flex min-w-0 flex-col gap-2 rounded-[1.25rem] bg-white/80 p-3 text-left shadow-[0_10px_30px_-18px_hsl(220_30%_20%/0.45)] backdrop-blur-md transition-[box-shadow] ${
+        <button type="button" data-testid={testid} aria-label={`${category}: ${active?.label}`} data-tint={tint}
+          className={`flex min-w-0 flex-col gap-2 rounded-[1.25rem] ${hue.tile} p-3 text-left shadow-[0_10px_30px_-18px_hsl(220_30%_20%/0.45)] backdrop-blur-md transition-[box-shadow] ${
             narrowed ? "ring-2 ring-inset ring-neutral-900" : "ring-1 ring-inset ring-white"}`}>
           <span className="flex items-center justify-between">
-            <span className={`grid h-8 w-8 place-items-center rounded-full ${narrowed ? `${INK_PLATE} text-white` : "bg-slate-100 text-slate-700"}`}>
+            <span className={`grid h-8 w-8 place-items-center rounded-full ${narrowed ? `${INK_PLATE} text-white` : hue.chip}`}>
               <Icon size={15} weight="bold" aria-hidden="true" />
             </span>
             <CaretDown size={12} weight="bold" aria-hidden="true" className="text-slate-400" />
@@ -229,43 +237,50 @@ function Attachments({ t, onOpen }) {
 /* The checklist as a short path in the card's middle: the steps around the
    one to do now, each a small node on a line — the task view's flow, at the
    size of a glance. */
-function StepPath({ t, steps, current }) {
-  const done = steps.filter((x) => x.done).length;
-  const from = Math.max(0, Math.min(current < 0 ? steps.length - 4 : current - 1, steps.length - 4));
-  const shown = steps.slice(from, from + 4);
+/* 2026-10-29 (founder), third look — THE STEP NUMBERS ARE ONE ROW, and the
+   words are not in it. A line of numbered nodes, left to right, sits just
+   above the Next action box: done steps filled with the ink, the chosen one
+   ringed with a gold halo. Tapping a number does not tick it — it chooses
+   which step the box below shows, in full ("Step 3 of 8"). The flow says how
+   far along the checklist is, so there is no separate progress bar. A long
+   checklist scrolls sideways and keeps the chosen node in view. */
+function StepDots({ t, steps, current, sel, onPick }) {
+  const rowRef = useRef(null);
+  const selRef = useRef(null);
+  useEffect(() => {
+    const row = rowRef.current, el = selRef.current;
+    if (!row || !el || row.scrollWidth <= row.clientWidth) return;
+    row.scrollTo({ left: Math.max(0, el.offsetLeft - row.clientWidth / 2 + el.offsetWidth / 2), behavior: "smooth" });
+  }, [sel]);
   return (
-    <div className="min-h-0" data-testid={`deck-path-${t.id}`}>
-      <div className="mb-3 flex items-center gap-3">
-        <span className="text-[13px] font-medium text-slate-600">Steps</span>
-        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
-          <span className="block h-full rounded-full bg-neutral-900 transition-[width] duration-700 ease-out"
-            style={{ width: `${steps.length ? Math.round((done / steps.length) * 100) : 0}%` }} />
-        </span>
-        <span className="text-[12px] font-semibold tabular-nums text-slate-500">{done}/{steps.length}</span>
-      </div>
-      <ol className="space-y-0">
-        {shown.map((st, k) => {
-          const idx = from + k;
-          const isCur = idx === current;
-          const lastRow = k === shown.length - 1;
+    <div ref={rowRef} className="-mx-1 mb-3 overflow-x-auto px-1 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      data-testid={`deck-path-${t.id}`}>
+      <ol className="flex min-w-full items-center" aria-label={`Checklist, ${steps.filter((x) => x.done).length} of ${steps.length} done`}>
+        {steps.map((st, idx) => {
+          const on = idx === sel;
+          const isNext = idx === current;
           return (
-            <li key={st.id || idx} className="flex gap-3">
-              <span className="flex w-5 flex-col items-center">
-                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
-                  st.done ? `${INK_PLATE} text-white` : isCur ? "bg-white text-slate-900 ring-2 ring-neutral-900 shadow-[0_0_0_4px_hsl(44_88%_60%/0.3)]" : "bg-white text-slate-400 ring-1 ring-inset ring-slate-300"}`}>
-                  {st.done ? <CheckCircle size={12} weight="fill" aria-hidden="true" /> : idx + 1}
-                </span>
-                {!lastRow && <span aria-hidden="true" className={`w-px flex-1 ${st.done ? "bg-neutral-900" : "bg-slate-300"}`} />}
-              </span>
-              <span className={`min-w-0 flex-1 truncate pb-2.5 text-[14px] leading-5 ${
-                st.done ? "text-slate-400 line-through decoration-slate-300" : isCur ? "font-semibold text-slate-900" : "text-slate-600"}`}>{st.text}</span>
-            </li>
+            <Fragment key={st.id || idx}>
+              {idx > 0 && (
+                <span aria-hidden="true" className={`h-[2px] min-w-[6px] flex-1 rounded-full ${steps[idx - 1].done ? "bg-neutral-900" : "bg-slate-300"}`} />
+              )}
+              <li ref={on ? selRef : null} className="shrink-0">
+                <button type="button" aria-pressed={on} data-testid={`deck-step-${t.id}-${idx}`}
+                  aria-label={`Show step ${idx + 1}${st.done ? ", done" : isNext ? ", next" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); onPick(idx); }}
+                  className="grid h-10 w-9 place-items-center focus-visible:outline-none">
+                  <span className={`grid h-7 w-7 place-items-center rounded-full text-[11px] font-bold transition-shadow duration-200 ${
+                    st.done ? `${INK_PLATE} text-white` : "bg-white text-slate-600 ring-1 ring-inset ring-slate-300"} ${
+                    on ? "ring-2 ring-neutral-900 shadow-[0_0_0_4px_hsl(44_88%_60%/0.35)]" : ""} ${
+                    isNext && !on ? "text-slate-900 ring-slate-500" : ""}`}>
+                    {st.done ? <CheckCircle size={14} weight="fill" aria-hidden="true" /> : idx + 1}
+                  </span>
+                </button>
+              </li>
+            </Fragment>
           );
         })}
       </ol>
-      {steps.length > shown.length && (
-        <p className="pl-8 text-[12px] text-slate-400">{steps.length - shown.length} more in the task</p>
-      )}
     </div>
   );
 }
@@ -276,8 +291,11 @@ function nextStep(t) {
   const i = steps.findIndex((s) => !s.done);
   return { steps, i, step: i >= 0 ? steps[i] : null };
 }
-const drafting = (t) => !t.execution_plan?.steps?.length && !t.plan_auto_at && t.created_at
-  && Date.now() - new Date(t.created_at).getTime() < 3 * 60 * 1000;
+/* 2026-10-29 (founder) — no checklist yet means Dex is writing one: My Work
+   asks for every card on screen that has none (POST /tasks/auto-plan), so the
+   line says so until the steps land. Only after three failed tries does it
+   fall back to asking the person for a first step. */
+const drafting = (t) => !t.execution_plan?.steps?.length && Number(t.plan_auto_tries || 0) < 3;
 
 export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen, onPatched, onChange }) {
   const { user } = useAuth();
@@ -288,6 +306,14 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
   const tone = kit.STATUS_TONE[t.status] || kit.STATUS_TONE.todo;
   const people = kit.cardPeople(t, members, roleOptions);
   const { steps, i, step } = nextStep(t);
+  // Which step the Next action box shows: the next one to do, until a number
+  // in the row above it is tapped.
+  // (With every step ticked there is no next one: nothing is chosen, and the
+  // box says the checklist is done until a number is tapped.)
+  const [sel, setSel] = useState(i);
+  useEffect(() => { setSel(i); }, [i, steps.length]);
+  const shownStep = sel >= 0 && sel < steps.length ? steps[sel] : null;
+  const showingNext = sel === i;
   const apprStart = t.approval_required && t.approval_stage !== "close" && t.approval_status !== "approved";
   const signoff = t.approval_required && t.approval_stage === "close" && t.approval_status === "pending" && !terminal;
   const waitingDecision = t.status === "blocked" && !!t.decision_id && !t.approval_required;
@@ -352,7 +378,6 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
         <p className="mt-2 line-clamp-3 shrink-0 text-[15px] leading-relaxed text-slate-500">{t.description}</p>
       )}
 
-      {steps.length > 0 && <div className="mt-5"><StepPath t={t} steps={steps} current={i} /></div>}
 
       <div className="mt-4 grid shrink-0 grid-cols-[auto_1px_minmax(0,1fr)] items-start gap-4">
         <div className="flex min-w-0 flex-col gap-2">
@@ -365,21 +390,29 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
       </div>
 
       <div className="shrink-0 pt-4">
+        {steps.length > 0 && <StepDots t={t} steps={steps} current={i} sel={sel} onPick={setSel} />}
         <button type="button" onClick={() => onOpen?.("steps")} data-testid={`deck-next-${t.id}`}
-          className="flex w-full items-center gap-3 rounded-2xl bg-slate-50 p-3.5 text-left ring-1 ring-inset ring-slate-900/[0.05]">
+          className="flex w-full items-center gap-3 rounded-2xl bg-[linear-gradient(180deg,hsl(220_10%_95%),hsl(220_10%_93.5%))] p-3.5 text-left ring-1 ring-inset ring-slate-900/[0.04]">
           <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${INK_PLATE} text-amber-300`}>
             {drafting(t) ? <Sparkle size={18} weight="fill" aria-hidden="true" className="animate-pulse" />
               : <ListChecks size={19} weight="bold" aria-hidden="true" />}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Next action{step && steps.length > 1 ? ` · step ${i + 1} of ${steps.length}` : ""}
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500" data-testid={`deck-next-label-${t.id}`}>
+              {shownStep && !showingNext
+                ? `Step ${sel + 1} of ${steps.length}${shownStep.done ? " · done" : ""}`
+                : `Next action${step && steps.length > 1 ? ` · step ${i + 1} of ${steps.length}` : ""}`}
             </span>
-            <span className="mt-0.5 line-clamp-2 block text-[16px] font-semibold leading-snug text-slate-900" data-testid={`deck-next-text-${t.id}`}>
-              {step ? step.text
+            {/* The whole step, however long — never cut short. */}
+            <span className={`mt-0.5 block whitespace-pre-line break-words text-[16px] font-semibold leading-snug ${
+              !steps.length && !terminal && drafting(t) ? "animate-pulse text-slate-500 motion-reduce:animate-none"
+                : shownStep?.done && !showingNext ? "text-slate-500" : "text-slate-900"}`}
+              data-testid={`deck-next-text-${t.id}`}>
+              {shownStep && (!showingNext || step) ? shownStep.text
                 : steps.length ? "Every step is done — mark it complete"
+                : terminal ? "Done"
                 : drafting(t) ? "Dex is drafting the steps…"
-                : "Plan the first step"}
+                : "Add the first step"}
             </span>
           </span>
           <CaretRight size={16} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400" />

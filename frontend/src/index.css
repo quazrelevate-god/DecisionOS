@@ -1924,16 +1924,21 @@ body {
    620ms, deliberately slower than the content's 320ms arrival: the weather
    should still be settling as the furniture lands. That lag is what makes a
    navigation feel like walking into a room instead of a slide advancing. */
-@property --sky-core { syntax: "<color>"; initial-value: hsl(38 97% 58% / .62); inherits: true; }
-@property --sky-deep { syntax: "<color>"; initial-value: hsl(22 95% 52% / .38); inherits: true; }
-@property --sky-lift { syntax: "<color>"; initial-value: hsl(45 95% 68% / .38); inherits: true; }
-@property --sky-wash { syntax: "<color>"; initial-value: hsl(33 90% 60% / .22); inherits: true; }
+/* 2026-10-29 (founder) — THE AMBER GLOW IS GONE. It was the default sky,
+   seen on every room without a picture of its own (Notifications was the one
+   the founder saw: "orangish yellow glow… not nice, remove it entirely").
+   The default is the Finance room's palette now — warm grey with a touch of
+   gold. The Desk is unaffected: its picture is opaque and covers this. */
+@property --sky-core { syntax: "<color>"; initial-value: hsl(35 12% 72% / .62); inherits: true; }
+@property --sky-deep { syntax: "<color>"; initial-value: hsl(220 8% 64% / .38); inherits: true; }
+@property --sky-lift { syntax: "<color>"; initial-value: hsl(46 92% 68% / .38); inherits: true; }
+@property --sky-wash { syntax: "<color>"; initial-value: hsl(40 14% 68% / .22); inherits: true; }
 
 .app-sky {
-    --sky-core: hsl(38 97% 58% / .62);
-    --sky-deep: hsl(22 95% 52% / .38);
-    --sky-lift: hsl(45 95% 68% / .38);
-    --sky-wash: hsl(33 90% 60% / .22);
+    --sky-core: hsl(35 12% 72% / .62);
+    --sky-deep: hsl(220 8% 64% / .38);
+    --sky-lift: hsl(46 92% 68% / .38);
+    --sky-wash: hsl(40 14% 68% / .22);
 }
 /* NO `transition` HERE, and that absence is the finding.
    A CSS transition on these four WEDGES them: with it declared, navigating
@@ -1948,8 +1953,8 @@ body {
    table; the motion is not CSS's job any more. */
 
 /* ── the per-page palettes ──────────────────────────────────────────────
-   /inbox is deliberately absent: the founder asked for it to stay put, and
-   the defaults above ARE its amber. /brain is absent too — the Dex room
+   /inbox is deliberately absent: its own picture covers the sky (the
+   defaults above were its amber until 2026-10-29). /brain is absent too — the Dex room
    swaps to ::after and owns its own weather.
 
    Lightness is held in a narrow band on purpose. A genuinely dark "smoky"
@@ -2129,7 +2134,8 @@ html[data-page="operating-score"] {
 /* 2026-10-22, founder — Requests wears the Money room's sky: picture, darker
    secondary text, gradient, and no blur on its glass (rules below). */
 html[data-page="finance"],
-html[data-page="requests"] {
+html[data-page="requests"],
+html[data-page="notifications"] {
     --sky-art: url("/sky/finance.webp");
     /* KM-34 — the secondary text on this room is darkened rather than the
        picture faded; see the note on --text-secondary below. Kept through the
@@ -2676,7 +2682,8 @@ html[data-page="operating-score"] .app-sky {
    gets the most restrained sky in the app; the gold is the only thing in it
    with any chroma. */
 html[data-page="finance"] .app-sky,
-html[data-page="requests"] .app-sky {
+html[data-page="requests"] .app-sky,
+html[data-page="notifications"] .app-sky {
     --sky-core: hsl(35 12% 72% / .62);
     --sky-deep: 220  8% 64%;
     --sky-lift: hsl(46 92% 68% / .38);

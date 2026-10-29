@@ -18,8 +18,9 @@ PANEL = (SRC / "components" / "mobile" / "AllAppsPanel.jsx").read_text(encoding=
 
 
 def test_requests_takes_every_money_sky_rule():
-    assert 'html[data-page="finance"],\nhtml[data-page="requests"] {\n    --sky-art: url("/sky/finance.webp");' in CSS
-    assert 'html[data-page="finance"] .app-sky,\nhtml[data-page="requests"] .app-sky {' in CSS
+    # 2026-10-29 — and Notifications wears it too (the founder: not the amber glow).
+    assert 'html[data-page="finance"],\nhtml[data-page="requests"],\nhtml[data-page="notifications"] {\n    --sky-art: url("/sky/finance.webp");' in CSS
+    assert 'html[data-page="finance"] .app-sky,\nhtml[data-page="requests"] .app-sky,\nhtml[data-page="notifications"] .app-sky {' in CSS
     assert 'html[data-page="requests"] .ng-frost:not(.ng-keep-blur),' in CSS
     # Every finance rule has its requests twin.
     assert CSS.count('html[data-page="finance"]') == CSS.count('html[data-page="requests"]')

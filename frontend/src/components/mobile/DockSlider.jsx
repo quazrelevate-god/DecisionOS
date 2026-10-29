@@ -186,11 +186,13 @@ export function DockSlider({
           a sibling of the bar inside this fixed <nav>, so it is portalled
           nowhere and needs no z-index war — the nav's own stacking puts the
           bar above it. */}
+      {/* 2026-10-29 (founder) — AND THE PAGE BEHIND IT BLURS, so the menu is
+          the thing to look at: a light dim and a soft blur, faded in. */}
       {moreOpen && !askOpen && (
         <div
           aria-hidden="true"
           data-testid="dock-more-backdrop"
-          className="fixed inset-0 -z-10"
+          className="fixed inset-0 -z-10 bg-slate-900/20 backdrop-blur-md animate-in fade-in-0 duration-200"
           onPointerDown={(e) => { e.preventDefault(); onMore?.(); }}
         />
       )}

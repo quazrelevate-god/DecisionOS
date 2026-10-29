@@ -210,6 +210,9 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [saidOpen, setSaidOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [sendingNote, setSendingNote] = useState(false);
   const scrollRef = useRef(null);
   useEffect(() => { scrollRef.current?.scrollTo?.({ top: 0 }); }, [view]);
 
@@ -577,6 +580,52 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
           <span className={cn("mt-2 block whitespace-pre-wrap text-[14px] leading-relaxed text-slate-600", !saidOpen && "line-clamp-2")}
             data-testid="decision-said">&ldquo;{d.said.text}&rdquo;</span>
         </button>
+      )}
+
+      {/* Opened from the Desk (DecisionDialog on a phone), the review keeps the
+          two things the old one had: a note back to whoever raised it, and
+          what has happened to it so far. */}
+      {d.created_by && d.created_by !== user?.id && (
+        <section className={cn(CARD, "p-4")} data-testid="decision-note-section">
+          <p className={LABEL}>Send a note to {d.created_by_name || "the person who raised it"}</p>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={4000}
+            data-testid="decision-note-input" placeholder="A question, or what to change before you approve"
+            className={cn(DRAWER_FIELD, "mt-2.5 resize-none leading-relaxed")} />
+          <button type="button" disabled={sendingNote || !note.trim()} data-testid="decision-note-send"
+            onClick={async () => {
+              setSendingNote(true);
+              try {
+                await api.post(`/decisions/${decisionId}/comment`, { text: note.trim() });
+                setNote("");
+                toast.success("Note sent");
+                invalidate();
+              } catch (e) { toast.error(e.response?.data?.detail || "Could not send the note"); }
+              finally { setSendingNote(false); }
+            }}
+            className={cn("mt-2.5 flex h-11 w-full items-center justify-center rounded-pill text-sm font-medium disabled:opacity-50", INK_PILL)}>
+            {sendingNote ? "Sending…" : "Send note"}
+          </button>
+        </section>
+      )}
+
+      {(d.timeline || []).length > 0 && (
+        <section className={cn(CARD, "p-4")} data-testid="decision-history-card">
+          <button type="button" onClick={() => setHistoryOpen((v) => !v)} aria-expanded={historyOpen}
+            className="flex w-full items-center justify-between text-left">
+            <span className={LABEL}>History · {d.timeline.length}</span>
+            <CaretDown size={13} weight="bold" aria-hidden="true" className={cn("text-slate-400 transition-transform", historyOpen && "rotate-180")} />
+          </button>
+          {historyOpen && (
+            <ol className="mt-3 space-y-2.5" data-testid="decision-history">
+              {d.timeline.map((e, i) => (
+                <li key={`${e.ts}-${i}`} className="border-l-2 border-slate-900/15 pl-3 text-[13px] text-slate-700">
+                  <p>{e.label}</p>
+                  <p className="text-[12px] text-slate-500">{e.actor || "System"} · {timeAgo(e.ts)}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
       )}
     </div>
   );

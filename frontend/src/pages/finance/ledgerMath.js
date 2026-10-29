@@ -103,7 +103,7 @@ export function periodWindow(period, fyStartMonth, now = Date.now()) {
   if (value === "30d") {
     const start = now - 30 * DAY;
     return { value, kind: "30d", label: "Last 30 days", range: dateRange(start, now), windowed: true, running: true,
-      start, end: now, prevStart: start - 30 * DAY, prevEnd: start, prevLabel: "the previous 30 days", points: 15 };
+      start, end: now, countEnd: now + 1, prevStart: start - 30 * DAY, prevEnd: start, prevLabel: "the previous 30 days", points: 15 };
   }
   if (value.startsWith("custom:")) {
     const [, a, b] = value.split(":");
@@ -112,7 +112,7 @@ export function periodWindow(period, fyStartMonth, now = Date.now()) {
     const end = Math.min(new Date(`${to}T23:59:59.999`).getTime(), Math.max(now, start));
     const span = Math.max(end - start, DAY);
     return { value, kind: "custom", label: dateRange(start, end), range: dateRange(start, end), windowed: true,
-      running: false, from, to, start, end, prevStart: start - span, prevEnd: start,
+      running: false, from, to, start, end, countEnd: end + 1, prevStart: start - span, prevEnd: start,
       prevLabel: "the same length of time before", points: span > 120 * DAY ? 12 : 13 };
   }
   // A financial year, or one of its halves or quarters.
@@ -126,7 +126,10 @@ export function periodWindow(period, fyStartMonth, now = Date.now()) {
   const fullEnd = addMonths(start, months).getTime();
   const running = start.getTime() <= now && now < fullEnd;
   const future = start.getTime() > now;
-  const end = running ? now : fullEnd;
+  const end = running ? now : fullEnd;   // the trend runs to today
+  // A record dated later in this quarter (next week's invoice) belongs to it:
+  // a period counts everything dated inside it, start included, end excluded.
+  const countEnd = fullEnd;
   const prevStart = addMonths(start, -months).getTime();
   const what = kind === "fy" ? "year" : kind;
   return {
@@ -134,7 +137,7 @@ export function periodWindow(period, fyStartMonth, now = Date.now()) {
     range: dateRange(start.getTime(), fullEnd - 1),
     months: `${MONTHS[start.getMonth()]}–${MONTHS[addMonths(start, months - 1).getMonth()]}`,
     windowed: true, running, future,
-    start: start.getTime(), end, prevStart, prevEnd: running ? prevStart + (now - start.getTime()) : start.getTime(),
+    start: start.getTime(), end, countEnd, prevStart, prevEnd: running ? prevStart + (now - start.getTime()) : start.getTime(),
     prevLabel: running ? `the same point last ${what}` : `the ${what} before`, points: kind === "quarter" ? 13 : 12,
   };
 }
@@ -159,6 +162,17 @@ export function periodChoices(fyStartMonth, earliest, now = Date.now()) {
     half: (y) => [w(`h1:${y}`), w(`h2:${y}`)],
     quarter: (y) => [w(`q1:${y}`), w(`q2:${y}`), w(`q3:${y}`), w(`q4:${y}`)],
   };
+}
+
+/** When a record happened, for a period: its own date (invoice, payment,
+ *  expense, purchase), else when it was entered. */
+export const rowTime = (r) => timeOf(r?.date, r?.purchase_date, r?.created_at);
+
+/** Whether a record falls in a period window (always, for All time). */
+export function inPeriod(r, w) {
+  if (!w?.windowed) return true;
+  const t = rowTime(r);
+  return t != null && t >= w.start && t < (w.countEnd ?? w.end);
 }
 
 /** The oldest dated record on the page (for how far back the picker goes). */
@@ -240,11 +254,14 @@ const isStockOrCapital = (c) =>
   isStockCategory(c) || CAPITAL_CATEGORIES.has(String(c || "").trim().toLowerCase());
 const vendorName = (v) => String(v || "").trim() || "Unspecified";
 
-const inside = (t, a, b) => t != null && t > a && t <= b;
+/* 2026-10-29 — a period includes its first moment and stops before its end:
+   an invoice dated 1 April belongs to the year that starts that day (it used
+   to land in the year before, because the start was left out). */
+const inside = (t, a, b) => t != null && t >= a && t < b;
 const sumIn = (rows, a, b) => rows.reduce((s, r) => (inside(r.t, a, b) ? s + r.v : s), 0);
 // A balance at time b: every row dated on or before b, plus undated rows
 // (they exist; we only don't know since when).
-const balanceAt = (rows, b) => rows.reduce((s, r) => (r.t == null || r.t <= b ? s + r.v : s), 0);
+const balanceAt = (rows, b) => rows.reduce((s, r) => (r.t == null || r.t < b ? s + r.v : s), 0);
 const sumAll = (rows) => rows.reduce((s, r) => s + r.v, 0);
 
 function group(rows, key) {
@@ -300,6 +317,7 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
   // "All time" still draws a trend: the last 12 months.
   // A finished quarter / half / year ends where it ended, not today.
   const end = windowed ? p.end : now;
+  const countEnd = windowed ? (p.countEnd ?? p.end) : now + 1;
   const start = windowed ? p.start : end - 365 * DAY;
   const prevStart = windowed ? p.prevStart : start - 365 * DAY;
   const prevEnd = windowed ? p.prevEnd : start;   // the same point of the window before
@@ -312,7 +330,7 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
 
   const flow = (list, allTime) => {
     if (!windowed) return { value: allTime ?? sumAll(list), change: null, trend: flowTrend(list) };
-    const cur = sumIn(list, start, end);
+    const cur = sumIn(list, start, countEnd);
     return { value: cur, change: change(cur, sumIn(list, prevStart, prevEnd)), trend: flowTrend(list) };
   };
   const billed = flow(rows.billed, tt.revenue_billed);
@@ -351,7 +369,7 @@ export function financeMetrics({ summary, revenue, expenses, assets, inventory, 
   const allCategories = (summary?.by_category || [])
     .map((c) => ({ label: categoryName(c.category), amount: num(c.amount) }))
     .filter((c) => c.amount > 0);
-  const inWindow = windowed ? rows.spend.filter((r) => inside(r.t, start, end)) : [];
+  const inWindow = windowed ? rows.spend.filter((r) => inside(r.t, start, countEnd)) : [];
 
   return {
     period: p,

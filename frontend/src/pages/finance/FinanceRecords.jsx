@@ -21,7 +21,7 @@ import { AiPanel } from "./FinanceAi";
 import {
   AttachmentLink, CARD, EmptyNote, FIELD, LoadError, SMALL_INK, SMALL_PILL, SourceTag, TONE_CHIP, Tag, fmt,
 } from "./financeKit";
-import { latestEntryAt, daysSince, isInvoiceOverdue, overdueDays } from "./ledgerMath";
+import { latestEntryAt, daysSince, isInvoiceOverdue, overdueDays, inPeriod, baseOf } from "./ledgerMath";
 import { BillsToPayPanel, InvoiceRowActions, NeedsRateNote } from "./MoneyActions";
 // 2026-10-22 (client) — select-and-delete, and every delete asks first
 // (FinanceDelete: the preview says what goes with it; it can be put back).
@@ -57,6 +57,32 @@ function ListCard({ title, count, action, children }) {
       </div>
       {children}
     </section>
+  );
+}
+
+/* 2026-10-29 (founder) — ONE PERIOD FOR ALL OF FINANCE. The period picked on
+   any tab is the period on every tab that reports money moving: Overview,
+   Revenue, Expenses. This line says which one a tab is showing, how much of
+   the list it holds, and — when the period leaves out invoices still owed —
+   says so, with one tap to see every date. What is owed, what needs matching
+   and the bills to pay are never hidden by a period. */
+function PeriodLine({ window: w, shown, total, noun, unpaidOutside, unpaidAmount, f, onAllDates, testid }) {
+  if (!w?.windowed) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[1.25rem] bg-slate-500/[0.06] px-4 py-2.5 text-sm text-slate-700 ring-1 ring-inset ring-slate-900/[0.04]"
+      data-testid={testid}>
+      <span><span className="font-semibold text-slate-900">{w.label}</span> · {w.range}</span>
+      <span className="text-slate-500">{shown} of {plural(total, noun)}</span>
+      {unpaidOutside > 0 && (
+        <span className="font-medium text-amber-800" data-testid={`${testid}-unpaid-outside`}>
+          {plural(unpaidOutside, "unpaid invoice")}{unpaidAmount ? ` (${f(unpaidAmount)})` : ""} dated outside this period
+        </span>
+      )}
+      {shown < total && onAllDates && (
+        <button type="button" onClick={onAllDates} data-testid={`${testid}-all`}
+          className="ml-auto text-xs font-semibold text-slate-900 underline-offset-2 hover:underline">Show all dates</button>
+      )}
+    </div>
   );
 }
 
@@ -202,18 +228,26 @@ const SORTS = [
   { value: "overdue", label: "Oldest awaiting" },
 ];
 
-export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPay, onSetRate, initialFilter = "all" }) {
+export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPay, onSetRate, initialFilter = "all", period, onAllDates }) {
   const f = fmt(cur);
   const tt = data?.totals || {};
-  const invoices = useMemo(() => data?.invoices || [], [data]);
-  const payments = useMemo(() => data?.payments || [], [data]);
+  const allInvoices = useMemo(() => data?.invoices || [], [data]);
+  const allPayments = useMemo(() => data?.payments || [], [data]);
+  // The period on the page (2026-10-29): the lists and Billed / Received follow
+  // it; Outstanding and Overdue are what is owed, whatever the date.
+  const invoices = useMemo(() => allInvoices.filter((s) => inPeriod(s, period)), [allInvoices, period]);
+  const payments = useMemo(() => allPayments.filter((p) => inPeriod(p, period)), [allPayments, period]);
+  const windowed = !!period?.windowed;
+  const sumBase = (rows) => rows.reduce((t, r) => t + (baseOf(r) || 0), 0);
+  const unpaidOutside = allInvoices.filter((s) => s.status !== "paid" && !inPeriod(s, period));
   const group = useState(null);
   // U7-08.1: status filter + sort; KR-10: ?filter= seeds the filter.
   const [statusFilter, setStatusFilter] = useState(FILTER_KEYS.includes(initialFilter) ? initialFilter : "all");
   const [sortKey, setSortKey] = useState("date-desc");
 
   const awaiting = (s) => s.status !== "paid" && s.status !== "partial";
-  const overdueCount = invoices.filter((s) => isInvoiceOverdue(s)).length;
+  // Overdue counts every overdue invoice, in the period or not: money owed.
+  const overdueCount = allInvoices.filter((s) => isInvoiceOverdue(s)).length;
   const counts = {
     all: invoices.length,
     awaiting: invoices.filter(awaiting).length,
@@ -224,7 +258,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
 
   const filtered = useMemo(() => {
     let list = invoices;
-    if (statusFilter === "overdue") list = list.filter((s) => isInvoiceOverdue(s));
+    if (statusFilter === "overdue") list = allInvoices.filter((s) => isInvoiceOverdue(s));
     else if (statusFilter === "awaiting") list = list.filter((s) => s.status !== "paid" && s.status !== "partial");
     else if (statusFilter === "partial") list = list.filter((s) => s.status === "partial");
     else if (statusFilter === "paid") list = list.filter((s) => s.status === "paid");
@@ -234,7 +268,7 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
     else if (sortKey === "amount-desc") sorted.sort((a, b) => (b.amount || 0) - (a.amount || 0));
     else if (sortKey === "overdue") sorted.sort((a, b) => (daysSince(b.date) || 0) - (daysSince(a.date) || 0));
     return sorted;
-  }, [invoices, statusFilter, sortKey]);
+  }, [invoices, allInvoices, statusFilter, sortKey]);
   const selInv = useSelection(filtered, () => "invoice", "invoices", group);
   const selPay = useSelection(payments, () => "payment", "payments", group);
   // Audit 2026-10-08: in the company's currency; no-rate foreign invoices left out.
@@ -326,13 +360,18 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
   return (
     <div className="space-y-5" data-testid="ledger-revenue">
       <div className="grid gap-3 lg:grid-cols-3 lg:gap-4">
-        <MoneyTile icon={cur === "INR" ? CurrencyInr : CurrencyCircleDollar} tone="emerald" label="Billed" value={f(tt.billed || 0)}
+        <MoneyTile icon={cur === "INR" ? CurrencyInr : CurrencyCircleDollar} tone="emerald" label="Billed"
+          value={f(windowed ? sumBase(invoices) : (tt.billed || 0))}
           note={plural(invoices.length, "invoice")} testid="kpi-billed" />
-        <MoneyTile icon={DownloadSimple} tone="sky" label="Received" value={f(tt.received || 0)}
+        <MoneyTile icon={DownloadSimple} tone="sky" label="Received"
+          value={f(windowed ? sumBase(payments) : (tt.received || 0))}
           note={plural(payments.length, "payment")} testid="kpi-received-rev" />
         <MoneyTile icon={WarningCircle} tone={overdueCount > 0 ? "rose" : "slate"} label="Outstanding" value={f(tt.outstanding || 0)}
-          note={overdueCount > 0 ? `${overdueCount} overdue` : "Nothing overdue"} testid="kpi-outstanding" />
+          note={`${overdueCount > 0 ? `${overdueCount} overdue` : "Nothing overdue"}${windowed ? " · all dates" : ""}`} testid="kpi-outstanding" />
       </div>
+      <PeriodLine window={period} shown={invoices.length} total={allInvoices.length} noun="invoice" f={f} testid="revenue-period"
+        unpaidOutside={unpaidOutside.length} unpaidAmount={unpaidOutside.reduce((t, s) => t + (s.balance ?? baseOf(s) ?? 0), 0)}
+        onAllDates={onAllDates} />
 
       <NeedsRateNote rows={tt.needs_rate} testid="revenue-needs-rate" />
 
@@ -354,14 +393,14 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
       <AiPanel scope="revenue" scopeLabel="revenue" changedAt={latestEntryAt(data, [])} />
 
       <ListCard title="Sales & service invoices" count={invoices.length}
-        action={invoices.length > 0 && (
+        action={allInvoices.length > 0 && (
           <span className="flex flex-wrap items-center gap-2">
             <SelectToggle sel={selInv} rows={filtered} testid="revenue-invoices-select" />
             <GlassSelect testid="revenue-sort" ariaLabel="Sort invoices" value={sortKey} onChange={setSortKey} align="end"
               options={SORTS} triggerClassName="h-10 w-auto min-w-[11rem] text-sm" />
           </span>
         )}>
-        {invoices.length > 0 && (
+        {allInvoices.length > 0 && (
           <div role="group" aria-label="Filter invoices" data-testid="revenue-status-filter"
             className={`mb-4 inline-flex max-w-full flex-wrap gap-1 rounded-[1.25rem] p-1 ${DRAWER_TRACK}`}>
             {FILTERS.map((x) => {
@@ -383,15 +422,17 @@ export function RevenueTab({ data, loading, error, cur, onDelete, onChange, onPa
             })}
           </div>
         )}
-        {invoices.length === 0 ? (
+        {allInvoices.length === 0 ? (
           <EmptyNote icon={Receipt} title="No invoices yet" hint="Record a sale or service with Add income, or send a sales invoice by WhatsApp or upload — it lands here." />
+        ) : invoices.length === 0 && statusFilter !== "overdue" ? (
+          <EmptyNote icon={Receipt} title={`No invoices in ${period?.label || "this period"}`} hint="Pick another period, or Show all dates." />
         ) : filtered.length === 0 ? (
           <EmptyNote icon={Receipt} title={`No ${FILTERS.find((x) => x.key === statusFilter)?.label.toLowerCase()} invoices`} hint="Try a different filter, or clear it to see all." />
         ) : (
           <DataList testid="revenue-invoices-table" rows={filtered} rowKey={(s) => s.id}
             rowTestid={(s) => `revenue-invoice-row-${s.id}`}
             rowClass={(s) => (isInvoiceOverdue(s) ? "bg-rose-50/40" : "")}
-            footer={filtered.length > 1 ? { label: `Showing ${filtered.length} of ${invoices.length}`, value: f(filteredTotal), testid: "revenue-filtered-total" } : undefined}
+            footer={filtered.length > 1 ? { label: `Showing ${filtered.length} of ${statusFilter === "overdue" ? allInvoices.length : invoices.length}`, value: f(filteredTotal), testid: "revenue-filtered-total" } : undefined}
             columns={invoiceColumns} select={selInv} />
         )}
       </ListCard>
@@ -449,15 +490,18 @@ function CommittedPanel({ rows, cur, testid = "payables-committed" }) {
   );
 }
 
-export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onChange, onPay, onSetRate, needsRate }) {
+export function ExpensesTab({ rows: allRows, loading, error, payables, cur, onDelete, onChange, onPay, onSetRate, needsRate, period, onAllDates }) {
   const { t } = useTranslation();
   const f = fmt(cur);
   const { user } = useAuth();
   const group = useState(null);
+  // The period on the page (2026-10-29): the expenses and the payments made
+  // follow it; Bills to pay, approved purchases and payments to match don't.
+  const rows = useMemo(() => allRows.filter((e) => inPeriod(e, period)), [allRows, period]);
   const sel = useSelection(rows, () => "expense", "expenses", group);
   // 2026-10-22 — payments made had no list of their own, so one could not be
   // deleted at all; they sit under the expenses now, like Payments received.
-  const paid = useMemo(() => payables?.payments || [], [payables]);
+  const paid = useMemo(() => (payables?.payments || []).filter((p) => inPeriod(p, period)), [payables, period]);
   const selPaid = useSelection(paid, () => "payment", "paid", group);
   const canApprove = hasPerm(user, "approvals");
   const decide = async (e, approve) => {
@@ -527,11 +571,16 @@ export function ExpensesTab({ rows, loading, error, payables, cur, onDelete, onC
         unmatched={payables?.unmatched_payments} open={payables?.open_invoices || []} cur={cur}
         endpoint="/payables/payment" standaloneLabel={{ btn: "Standalone expense", done: "Booked as a standalone expense" }}
         onChange={onChange} />
-      <AiPanel scope="expenses" scopeLabel={t("finance.t_expenses").toLowerCase()} changedAt={latestEntryAt(null, rows)} />
+      <AiPanel scope="expenses" scopeLabel={t("finance.t_expenses").toLowerCase()} changedAt={latestEntryAt(null, allRows)} />
+      {!loading && !error && (
+        <PeriodLine window={period} shown={rows.length} total={allRows.length} noun="expense" f={f} testid="expenses-period" onAllDates={onAllDates} />
+      )}
       <ListCard title={t("finance.t_expenses")} count={loading || error ? null : rows.length}
         action={<SelectToggle sel={sel} rows={rows} testid="expenses-select" />}>
         <Records loading={loading} error={error} what="expenses" rows={rows}
-          empty={<EmptyNote icon={Receipt} title={t("finance.empty_exp_title")} hint={t("finance.empty_exp_hint")} />}>
+          empty={allRows.length
+            ? <EmptyNote icon={Receipt} title={`No expenses in ${period?.label || "this period"}`} hint="Pick another period, or Show all dates." />
+            : <EmptyNote icon={Receipt} title={t("finance.empty_exp_title")} hint={t("finance.empty_exp_hint")} />}>
           <DataList columns={columns} rows={rows} rowKey={(e) => e.id} rowTestid={(e) => `expense-row-${e.id}`} testid="expenses-table" select={sel} />
         </Records>
       </ListCard>

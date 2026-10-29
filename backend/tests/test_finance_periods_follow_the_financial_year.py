@@ -67,3 +67,19 @@ def test_settings_asks_when_the_financial_year_starts():
     company = _src("components/CompanyDetails.js")
     assert 'data-testid="company-field-fy_start_month"' in company
     assert "fy_start_month: tenant.fy_start_month ?? 4" in company
+
+
+def test_one_period_for_every_tab_that_reports_money_moving():
+    """2026-10-29 (founder): one period, picked once, for Overview, Revenue and
+    Expenses; never hiding what is owed."""
+    ledger = _src("pages/Ledger.js")
+    assert 'const PERIOD_TABS = ["overview", "revenue", "expenses"];' in ledger
+    assert "PERIOD_TABS.includes(tab) && (" in ledger
+    assert ledger.count("period={periodWin} onAllDates={allDates}") == 2
+    recs = _src("pages/finance/FinanceRecords.jsx")
+    assert "allInvoices.filter((s) => inPeriod(s, period))" in recs
+    assert "allRows.filter((e) => inPeriod(e, period))" in recs
+    # Owed money is never hidden: overdue counts and lists every date.
+    assert "const overdueCount = allInvoices.filter((s) => isInvoiceOverdue(s)).length;" in recs
+    assert 'if (statusFilter === "overdue") list = allInvoices.filter((s) => isInvoiceOverdue(s));' in recs
+    assert "unpaid invoice" in recs and "dated outside this period" in recs and "Show all dates" in recs

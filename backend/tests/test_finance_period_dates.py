@@ -51,6 +51,18 @@ out.billed = { fy: billed("fy", "2026-10-29T12:00:00"), q1: billed("q1:2026", "2
                h1: billed("h1:2026", "2026-10-29T12:00:00"), last: billed("fy:2025", "2026-10-29T12:00:00"),
                all: billed("all", "2026-10-29T12:00:00"), nextYear: billed("fy", "2027-04-10T12:00:00"),
                closedYear: billed("fy:2026", "2027-04-10T12:00:00") };
+const edge = { invoices: [{ amount: 1000, date: "2026-04-01" }, { amount: 2000, date: "2027-03-31" }, { amount: 4000, date: "2026-03-31" },
+                         { amount: 8000, date: "2026-11-20" }], payments: [] };
+const ebilled = (p, now) => m.financeMetrics({ summary: { totals: { revenue_billed: 15000 } }, revenue: edge, expenses: [], assets: [],
+  inventory: [], period: p, fyStartMonth: 4, now: at(now) }).billed.value;
+out.edges = { fy: ebilled("fy:2026", "2027-06-01T12:00:00"), q1: ebilled("q1:2026", "2027-06-01T12:00:00"), q4: ebilled("q4:2026", "2027-06-01T12:00:00"),
+              last: ebilled("fy:2025", "2027-06-01T12:00:00"), q3running: ebilled("q3:2026", "2026-10-29T12:00:00") };
+const W = (v, now) => m.periodWindow(v, 4, at(now));
+out.inPeriod = { apr1: m.inPeriod({ date: "2026-04-01" }, W("fy:2026", "2026-10-29T12:00:00")),
+                 mar31: m.inPeriod({ date: "2026-03-31" }, W("fy:2026", "2026-10-29T12:00:00")),
+                 nextWeek: m.inPeriod({ date: "2026-11-05" }, W("q3:2026", "2026-10-29T12:00:00")),
+                 all: m.inPeriod({ date: "1999-01-01" }, W("all", "2026-10-29T12:00:00")),
+                 undated: m.inPeriod({}, W("fy", "2026-10-29T12:00:00")) };
 console.log(JSON.stringify(out));
 """
 
@@ -121,3 +133,20 @@ def test_each_period_counts_its_own_records(r):
     b = r["billed"]
     assert (b["fy"], b["q1"], b["q2"], b["h1"], b["last"], b["all"]) == (102000, 9000, 43000, 52000, 7000, 109000)
     assert b["nextYear"] == 0 and b["closedYear"] == 102000, "after the rollover, last year's books are where they were"
+
+
+def test_the_first_day_of_a_period_belongs_to_it(r):
+    """An invoice dated 1 April is in the year that starts that day, not the one
+    before; one dated 31 March is in the year that ends that day."""
+    e = r["edges"]
+    assert e["fy"] == 1000 + 2000 + 8000, "1 Apr 2026 and 31 Mar 2027 are both in FY 2026-27"
+    assert e["q1"] == 1000 and e["q4"] == 2000
+    assert e["last"] == 4000, "31 Mar 2026 is FY 2025-26; 1 Apr 2026 is not"
+    assert e["q3running"] == 8000, "an invoice dated later in the running quarter counts in it"
+
+
+def test_a_record_is_in_a_period_by_its_own_date(r):
+    p = r["inPeriod"]
+    assert p["apr1"] is True and p["mar31"] is False
+    assert p["nextWeek"] is True, "next week, still this quarter"
+    assert p["all"] is True and p["undated"] is False

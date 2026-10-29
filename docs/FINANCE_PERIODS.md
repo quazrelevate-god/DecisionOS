@@ -12,6 +12,8 @@ Epic 11 · Sprint 9 · Feature · 2026-10-29
 - **Set when your year starts.** Settings › Company details › *Financial year starts in* (April unless you change it). Quarters, halves and labels follow it: a January year reads "FY 2026" with Q1 = Jan–Mar.
 - **Fair comparisons.** The up / down figure on each tile compares like with like: a quarter still running against the same point of the last quarter; a finished quarter against the whole of the one before.
 - **It rolls over by itself.** At midnight on the last day of the year, Finance moves to the new year — no setting to change, even with the page left open.
+- **One period for all of Finance.** Pick it on Overview, Revenue or Expenses and all three follow: the lists and the Billed / Received figures show that period. Assets, Inventory and the Inbox — what you own and what's waiting — always show everything.
+- **Money owed is never hidden.** Outstanding and Overdue always count every unpaid invoice, whatever its date; when a period leaves some out, Revenue says so ("1 unpaid invoice (₹40,000) dated outside this period") with *Show all dates*. Bills to pay and payments to match are never filtered.
 
 ## Why
 
@@ -29,6 +31,9 @@ Frontend only, plus one company setting.
 | The figures | `financeMetrics` sums each tile over the window; asset and stock value for a finished window are what they stood at when it ended |
 | The picker | `pages/finance/PeriodPicker.jsx`: kind, then which one; a year switcher back to the oldest record (`periodChoices`, `oldestRecord`); periods that haven't started are shown but can't be picked; a custom range can't pass today |
 | Rollover | nothing names a year; `Ledger.js` `useToday()` notices the date changing (every minute and on returning to the tab); a choice lasts the visit (`sessionStorage`), every new visit opens on the current year |
+
+| One period across tabs | `Ledger.js` `PERIOD_TABS` (overview, revenue, expenses) show the picker; the window goes to `RevenueTab` / `ExpensesTab` (`FinanceRecords.jsx`), which filter with `inPeriod`; `PeriodLine` says which period, how much of the list, unpaid invoices outside it, *Show all dates* |
+| Boundaries | a period includes its first moment and stops before its end (an invoice dated 1 April is in the year that starts that day); a running quarter counts everything dated inside it, next week's invoice included |
 
 Invoice numbering keeps the April–March GST year regardless of the setting.
 

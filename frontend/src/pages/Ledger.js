@@ -46,7 +46,7 @@ import { AssetsTab, ExpensesTab, InventoryTab, RevenueTab } from "./finance/Fina
 import { RecordPaymentDialog, SetRateDialog, UseStockDialog } from "./finance/MoneyActions";
 import { FinanceMoreMenu, useFinanceDelete } from "./finance/FinanceDelete";
 import { CARD, LoadError } from "./finance/financeKit";
-import { LIST_LIMIT, PERIODS, oldestRecord, periodOf } from "./finance/ledgerMath";
+import { LIST_LIMIT, PERIODS, oldestRecord, periodOf, periodWindow } from "./finance/ledgerMath";
 import { PeriodPicker } from "./finance/PeriodPicker";
 
 const TABS = [
@@ -59,6 +59,9 @@ const TABS = [
   { key: "inbox", tkey: "finance.t_inbox", icon: Tray },
 ];
 const PERIOD_KEY = "finance.period";
+// The tabs a period applies to: money moving. Assets and stock are what the
+// company holds, and the Inbox is work waiting — a period would only hide them.
+const PERIOD_TABS = ["overview", "revenue", "expenses"];
 
 /* 2026-10-29 (founder: the year has to roll over by itself) — the date, as a
    value that changes when the day does, so a page left open over midnight on
@@ -347,6 +350,8 @@ export default function Ledger() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const now = useMemo(() => Date.now(), [today]);
   // How far back the period picker goes: the oldest dated record on the page.
+  const periodWin = useMemo(() => periodWindow(period, tenant?.fy_start_month, now), [period, tenant?.fy_start_month, now]);
+  const allDates = () => setPeriod("all");
   const earliest = useMemo(() => oldestRecord(revenueQ.data?.invoices || [], revenueQ.data?.payments || [],
     expensesQ.data || [], assetsQ.data || []), [revenueQ.data, expensesQ.data, assetsQ.data]);
   const cur = summary?.currency || tenant?.currency || "INR";
@@ -394,7 +399,8 @@ export default function Ledger() {
             </div>
           )}
           <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto" data-testid="ledger-controls">
-            {tab === "overview" && (
+            {/* 2026-10-29 — one period for every tab that reports money moving. */}
+            {PERIOD_TABS.includes(tab) && (
               <PeriodPicker value={period} onChange={setPeriod} fyStartMonth={tenant?.fy_start_month} earliest={earliest} now={now} />
             )}
             {canLedger && <AddRecordControl tab={tab} onPick={setAdding} />}
@@ -424,12 +430,12 @@ export default function Ledger() {
       {tab === "revenue" && (
         <RevenueTab key={filterParam} data={revenueQ.data} loading={revenueQ.isLoading} error={revenueQ.isError}
           cur={cur} onDelete={deleting.ask} onChange={invalidate} onPay={setPaying} onSetRate={setSettingRate}
-          initialFilter={filterParam} />
+          initialFilter={filterParam} period={periodWin} onAllDates={allDates} />
       )}
       {tab === "expenses" && (
         <ExpensesTab rows={expensesQ.data || []} loading={expensesQ.isLoading} error={expensesQ.isError} payables={payablesQ.data}
           cur={cur} onDelete={deleting.ask} onChange={invalidate} onPay={setPaying}
-          onSetRate={setSettingRate} needsRate={summary?.totals?.needs_rate} />
+          onSetRate={setSettingRate} needsRate={summary?.totals?.needs_rate} period={periodWin} onAllDates={allDates} />
       )}
       {tab === "assets" && (
         <AssetsTab rows={assetsQ.data || []} loading={assetsQ.isLoading} error={assetsQ.isError} cur={cur} onDelete={deleting.ask} />

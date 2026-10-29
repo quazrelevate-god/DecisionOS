@@ -26,6 +26,7 @@ credit note. Imported invoices are copies of another system's books and go
 freely. A number DecisionOS issued is never issued again — it is kept in
 retired_invoice_numbers after the invoice goes (routers/invoicing._next_number).
 """
+import asyncio
 import hashlib
 import io
 import secrets
@@ -127,6 +128,7 @@ class Plan:
         self.changes = []        # {"coll", "id", "now", "was"} on rows that stay
         self.kept = {}           # reason -> count (an import's contacts used elsewhere, ...)
         self.missing = 0
+        self.touching = None     # payment id -> payment applied to an invoice in the plan (set by _expand)
 
     def add(self, coll: str, doc: dict, asked: bool = False) -> bool:
         key = (coll, doc["id"])
@@ -155,101 +157,142 @@ class Plan:
 
 # ── what goes with what ──────────────────────────────────────────────────────
 async def _expand(plan: Plan) -> None:
-    """Close the set over what always goes together, until nothing new joins."""
+    """Close the set over what always goes together, until nothing new joins.
+
+    2026-10-29 (founder: deleting a sales invoice must not take long) — each
+    pass asks only about the rows that joined in the pass before, and asks
+    all of it at once. It used to put every question again on every pass,
+    one after another: 15 round trips to the database before the confirm
+    dialog could say anything, 4-8 seconds on a hosted database. A payment
+    left out in one pass is asked about again when another invoice it
+    settled joins, so nothing is missed by not repeating the questions."""
     tid = plan.tid
     scope = {"tenant_id": tid}
-    grew = True
-    while grew:
-        grew = False
-        inv_ids = plan.ids("invoices")
-        # A supplier bill's booking: the expense (or stock) written from it.
-        for e in await _find_in("expenses", "invoice_id", inv_ids, scope):
-            grew |= plan.add("expenses", e)
-        for i in await _find_in("inventory", "invoice_id", inv_ids, scope):
-            grew |= plan.add("inventory", i)
-        # An expense booked from a bill takes the bill: they are one purchase,
-        # and a bill left behind stays in Bills to pay with nothing booked.
-        exps = plan.docs("expenses")
-        want = [e["invoice_id"] for e in exps if e.get("invoice_id") and not plan.has("invoices", e["invoice_id"])]
-        for b in await _find_in("invoices", "id", want, {**scope, "type": "purchase_bill"}):
-            grew |= plan.add_invoice(b)
-        # The asset an "Asset Purchase" expense made.
-        for a in await _find_in("assets", "expense_id", [e["id"] for e in exps], scope):
-            grew |= plan.add("assets", a)
-        # The expense booked from a supplier payment marked standalone.
-        for e in await _find_in("expenses", "payment_id", plan.ids("payments"), scope):
-            grew |= plan.add("expenses", e)
+    seen_inv, seen_exp, seen_pay = set(), set(), set()
+    plan.touching = {}   # kept for _consequences, which needs the same answer
+    while True:
+        inv_new = [i for i in plan.ids("invoices") if i not in seen_inv]
+        exp_new = [e for e in plan.docs("expenses") if e["id"] not in seen_exp]
+        pay_new = [p for p in plan.ids("payments") if p not in seen_pay]
+        if not (inv_new or exp_new or pay_new):
+            break
+        seen_inv.update(inv_new)
+        seen_exp.update(e["id"] for e in exp_new)
+        seen_pay.update(pay_new)
+        bills_wanted = [e["invoice_id"] for e in exp_new
+                        if e.get("invoice_id") and not plan.has("invoices", e["invoice_id"])]
+        exps_by_bill, stock_by_bill, bills, assets, exps_by_pay, touching = await asyncio.gather(
+            # A supplier bill's booking: the expense (or stock) written from it.
+            _find_in("expenses", "invoice_id", inv_new, scope),
+            _find_in("inventory", "invoice_id", inv_new, scope),
+            # An expense booked from a bill takes the bill: they are one purchase,
+            # and a bill left behind stays in Bills to pay with nothing booked.
+            _find_in("invoices", "id", bills_wanted, {**scope, "type": "purchase_bill"}),
+            # The asset an "Asset Purchase" expense made.
+            _find_in("assets", "expense_id", [e["id"] for e in exp_new], scope),
+            # The expense booked from a supplier payment marked standalone.
+            _find_in("expenses", "payment_id", pay_new, scope),
+            _payments_touching(tid, inv_new),
+        )
+        for e in exps_by_bill:
+            plan.add("expenses", e)
+        for i in stock_by_bill:
+            plan.add("inventory", i)
+        for b in bills:
+            plan.add_invoice(b)
+        for a in assets:
+            plan.add("assets", a)
+        for e in exps_by_pay:
+            plan.add("expenses", e)
         # A payment applied only to invoices that go has nothing left to settle.
         gone = set(plan.ids("invoices"))
-        for p in await _payments_touching(tid, gone):
-            if plan.has("payments", p["id"]):
-                continue
-            if all(a["invoice_id"] in gone for a in _apps(p)):
-                grew |= plan.add("payments", p)
-    # Stock-used entries go with their stock item.
-    for m in await _find_in("stock_movements", "inventory_id", plan.ids("inventory"), scope):
-        plan.add("stock_movements", m)
+        for p in touching:
+            plan.touching.setdefault(p["id"], p)
+            if not plan.has("payments", p["id"]) and all(a["invoice_id"] in gone for a in _apps(p)):
+                plan.add("payments", p)
 
 
 async def _payments_touching(tid: str, invoice_ids) -> list:
-    ids = list(invoice_ids)
-    if not ids:
-        return []
-    found = {p["id"]: p for p in await _find_in("payments", "applications.invoice_id", ids, {"tenant_id": tid})}
-    for p in await _find_in("payments", "invoice_id", ids, {"tenant_id": tid}):
-        found.setdefault(p["id"], p)
+    """Payments applied to any of these invoices, by either field, in one query."""
+    ids = [i for i in dict.fromkeys(invoice_ids) if i]
+    found = {}
+    for n in range(0, len(ids), _CHUNK):
+        chunk = ids[n:n + _CHUNK]
+        q = {"tenant_id": tid, "$or": [{"applications.invoice_id": {"$in": chunk}}, {"invoice_id": {"$in": chunk}}]}
+        for p in await db.payments.find(q, {"_id": 0}).to_list(None):
+            found.setdefault(p["id"], p)
     return list(found.values())
 
 
 async def _consequences(plan: Plan) -> None:
     """What changes on the rows that stay, and the Brain notes that go."""
     tid = plan.tid
+    scope = {"tenant_id": tid}
     gone_inv = set(plan.ids("invoices"))
+    # A payment that goes but settled an invoice that stays: that invoice is
+    # owed again. (Worked out from the plan itself; no database question.)
+    for p in plan.docs("payments"):
+        for a in _apps(p):
+            if a["invoice_id"] not in gone_inv:
+                plan.paid_back[a["invoice_id"]] = _r2(plan.paid_back.get(a["invoice_id"], 0) + _num(a.get("amount")))
+    exps = plan.docs("expenses")
+    pay_ids = [e["payment_id"] for e in exps if e.get("payment_id") and not plan.has("payments", e["payment_id"])]
+    # 2026-10-29 — every question below is independent of the others, so they
+    # go together (one round trip, not nine); the answers are applied in the
+    # same order as before, so the preview reads the same.
+    async def touching_payments():
+        # _expand already asked, invoice by invoice as each joined; the plan's
+        # invoices don't change after it, so its answer is this one.
+        if plan.touching is not None:
+            return list(plan.touching.values())
+        return await _payments_touching(tid, gone_inv)
+
+    (touching, stock_used, kept_invoices, reqs, standalone,
+     bc_inv, bc_exp, bc_pay, bc_related) = await asyncio.gather(
+        touching_payments(),
+        # Stock-used entries go with their stock item.
+        _find_in("stock_movements", "inventory_id", plan.ids("inventory"), scope),
+        _find_in("invoices", "id", list(plan.paid_back), scope),
+        _find_in("requests", "expense_id", [e["id"] for e in exps], scope),
+        _find_in("payments", "id", pay_ids, {**scope, "match_status": "standalone"}),
+        # The Brain's notes about these records, so Dex stops quoting them.
+        _find_in("brain_context", "source_id", plan.ids("invoices"), {**scope, "source_type": "invoice"}),
+        _find_in("brain_context", "source_id", plan.ids("expenses"), {**scope, "source_type": "expense"}),
+        _find_in("brain_context", "source_id", plan.ids("payments"), {**scope, "source_type": "payment"}),
+        _find_in("brain_context", "related_ids.invoice_id", list(gone_inv), scope),
+    )
+    for m in stock_used:
+        plan.add("stock_movements", m)
     # A payment that stays but settled an invoice that goes: that part comes off.
-    for p in await _payments_touching(tid, gone_inv):
+    for p in touching:
         if plan.has("payments", p["id"]):
             continue
         off = [a for a in _apps(p) if a["invoice_id"] in gone_inv]
         if off:
             plan.unapply[p["id"]] = (p, off)
-    # A payment that goes but settled an invoice that stays: that invoice is
-    # owed again.
-    for p in plan.docs("payments"):
-        for a in _apps(p):
-            if a["invoice_id"] not in gone_inv:
-                plan.paid_back[a["invoice_id"]] = _r2(plan.paid_back.get(a["invoice_id"], 0) + _num(a.get("amount")))
     # A supplier bill that stays and is no longer paid in full: the expense
     # booked from it was marked paid with it, and is unpaid again.
-    for inv in await _find_in("invoices", "id", list(plan.paid_back), {"tenant_id": tid}):
-        if inv.get("type") != "purchase_bill" or inv.get("status") != "paid":
-            continue
-        if _num(inv.get("amount_paid")) - plan.paid_back[inv["id"]] + 0.01 >= _num(inv.get("amount")):
-            continue
-        for e in await db.expenses.find({"tenant_id": tid, "invoice_id": inv["id"], "status": "paid"},
-                                        {"_id": 0, "id": 1}).to_list(None):
+    unpaid_again = [inv["id"] for inv in kept_invoices
+                    if inv.get("type") == "purchase_bill" and inv.get("status") == "paid"
+                    and _num(inv.get("amount_paid")) - plan.paid_back[inv["id"]] + 0.01 < _num(inv.get("amount"))]
+    if unpaid_again:
+        for e in await _find_in("expenses", "invoice_id", unpaid_again, {**scope, "status": "paid"}):
             if not plan.has("expenses", e["id"]):
                 plan.changes.append({"coll": "expenses", "id": e["id"],
                                      "now": {"status": "unpaid"}, "was": {"status": "paid"}})
-    exps = plan.docs("expenses")
     # A staff request whose booked expense goes says so (as the old delete did).
-    for r in await _find_in("requests", "expense_id", [e["id"] for e in exps], {"tenant_id": tid}):
+    for r in reqs:
         plan.changes.append({"coll": "requests", "id": r["id"],
                              "now": {"expense_id": None,
                                      "expense_error": "The expense booked for this request was deleted in Finance."},
                              "was": {"expense_id": r.get("expense_id"), "expense_error": r.get("expense_error")}})
     # A supplier payment marked standalone whose expense goes is unexplained
     # again: back to "to match".
-    pay_ids = [e["payment_id"] for e in exps if e.get("payment_id") and not plan.has("payments", e["payment_id"])]
-    for p in await _find_in("payments", "id", pay_ids, {"tenant_id": tid, "match_status": "standalone"}):
+    for p in standalone:
         plan.changes.append({"coll": "payments", "id": p["id"],
                              "now": {"match_status": _match_status(p.get("amount"), _num(p.get("applied")))},
                              "was": {"match_status": "standalone"}})
-    # The Brain's notes about these records, so Dex stops quoting them.
-    by_type = {"invoice": plan.ids("invoices"), "expense": plan.ids("expenses"), "payment": plan.ids("payments")}
-    for stype, ids in by_type.items():
-        for b in await _find_in("brain_context", "source_id", ids, {"tenant_id": tid, "source_type": stype}):
-            plan.add("brain_context", b)
-    for b in await _find_in("brain_context", "related_ids.invoice_id", list(gone_inv), {"tenant_id": tid}):
+    for b in bc_inv + bc_exp + bc_pay + bc_related:
         plan.add("brain_context", b)
 
 
@@ -266,9 +309,10 @@ async def plan_items(tenant_id: str, items: list, include_issued: bool = False) 
         if kind not in KINDS or not rid:
             raise HTTPException(status_code=400, detail="That isn't a Finance record.")
         by_kind.setdefault(kind, []).append(rid)
-    for kind, ids in by_kind.items():
-        coll, extra = KINDS[kind]
-        docs = await _find_in(coll, "id", ids, {"tenant_id": tenant_id, **extra})
+    found = await asyncio.gather(*(
+        _find_in(KINDS[kind][0], "id", ids, {"tenant_id": tenant_id, **KINDS[kind][1]}) for kind, ids in by_kind.items()))
+    for (kind, ids), docs in zip(by_kind.items(), found):
+        coll = KINDS[kind][0]
         plan.missing += len(set(ids)) - len(docs)
         for d in docs:
             if coll == "invoices":
@@ -514,42 +558,47 @@ async def remove(plan: Plan, user: dict, *, kind: str, label: str, ingestion_id:
         "paid_back": [{"invoice_id": iid, "amount": amt} for iid, amt in plan.paid_back.items()],
         "changes": plan.changes,
     }
-    await db[TRASH].insert_one(dict(batch))
     # 1. A copy of every row first, so nothing is lost whatever fails next.
+    #    (2026-10-29: the batch and its rows are written together, and nothing
+    #    below starts until both are in.)
     rows = [{"id": new_id(), "batch_id": bid, "tenant_id": tid, "coll": c, "row_id": rid, "doc": d}
             for (c, rid), d in plan.rows.items()]
-    for n in range(0, len(rows), _CHUNK):
-        await db[TRASH_ROWS].insert_many([dict(r) for r in rows[n:n + _CHUNK]])
-    # 2. What stays is put right.
-    for pid, (_, off) in plan.unapply.items():
+    await asyncio.gather(
+        db[TRASH].insert_one(dict(batch)),
+        *(db[TRASH_ROWS].insert_many([dict(r) for r in rows[n:n + _CHUNK]]) for n in range(0, len(rows), _CHUNK)))
+
+    # 2. What stays is put right, and 3. what goes comes out of the books. The
+    #    two touch different rows (a row that stays is never one that goes), so
+    #    they run together instead of one write after another.
+    async def unapply(pid, off):
         p = await db.payments.find_one({"id": pid, "tenant_id": tid}, {"_id": 0})
         if p:
             gone = {a["invoice_id"] for a in off}
             left = [a for a in (p.get("applications") or []) if a.get("invoice_id") not in gone]
             await _set_applications(tid, pid, left, -sum(_num(a.get("amount")) for a in off))
-    for iid, amt in plan.paid_back.items():
-        await _shift_paid(tid, iid, -amt)
-    for ch in plan.changes:
-        await db[ch["coll"]].update_one({"id": ch["id"], "tenant_id": tid}, {"$set": ch["now"]})
-    for inv in plan.docs("invoices"):
-        if is_issued(inv) and inv.get("number"):
-            await db[RETIRED].update_one({"tenant_id": tid, "number": inv["number"]},
-                                         {"$setOnInsert": {"tenant_id": tid, "number": inv["number"],
-                                                           "invoice_id": inv["id"], "retired_at": now_iso()}},
-                                         upsert=True)
-    # 3. Out of the books.
+
+    writes = [unapply(pid, off) for pid, (_, off) in plan.unapply.items()]
+    writes += [_shift_paid(tid, iid, -amt) for iid, amt in plan.paid_back.items()]
+    writes += [db[ch["coll"]].update_one({"id": ch["id"], "tenant_id": tid}, {"$set": ch["now"]}) for ch in plan.changes]
+    writes += [db[RETIRED].update_one({"tenant_id": tid, "number": inv["number"]},
+                                      {"$setOnInsert": {"tenant_id": tid, "number": inv["number"],
+                                                        "invoice_id": inv["id"], "retired_at": now_iso()}},
+                                      upsert=True)
+               for inv in plan.docs("invoices") if is_issued(inv) and inv.get("number")]
     by_coll = {}
     for c, rid in plan.rows:
         by_coll.setdefault(c, []).append(rid)
-    for c, ids in by_coll.items():
-        for n in range(0, len(ids), _CHUNK):
-            await db[c].delete_many({"tenant_id": tid, "id": {"$in": ids[n:n + _CHUNK]}})
+    writes += [db[c].delete_many({"tenant_id": tid, "id": {"$in": ids[n:n + _CHUNK]}})
+               for c, ids in by_coll.items() for n in range(0, len(ids), _CHUNK)]
+    await asyncio.gather(*writes)
+
+    finish = [db[TRASH].update_one({"id": bid}, {"$set": {"status": "removed"}}),
+              _record(tid, user, "finance_deleted", f"{user.get('name') or 'Someone'} deleted {label}", bid,
+                      {"kind": kind, "counts": batch["counts"]})]
     if ingestion_id:
-        await db.ingestions.update_one({"id": ingestion_id, "tenant_id": tid}, {"$set": {
-            "status": "undone", "undone_at": now_iso(), "undone_by": user["id"], "undo_batch_id": bid}})
-    await db[TRASH].update_one({"id": bid}, {"$set": {"status": "removed"}})
-    await _record(tid, user, "finance_deleted", f"{user.get('name') or 'Someone'} deleted {label}", bid,
-                  {"kind": kind, "counts": batch["counts"]})
+        finish.append(db.ingestions.update_one({"id": ingestion_id, "tenant_id": tid}, {"$set": {
+            "status": "undone", "undone_at": now_iso(), "undone_by": user["id"], "undo_batch_id": bid}}))
+    await asyncio.gather(*finish)
     return {"batch_id": bid, "label": label, "counts": batch["counts"], "restore_until": batch["restore_until"]}
 
 
@@ -644,19 +693,25 @@ async def deleted_number(tenant_id: str, number: str, on=None) -> str:
 
 async def _record(tid: str, user: dict, action: str, text: str, batch_id: str, meta: dict) -> None:
     # core.log_activity's row, written through this module's own db so that a
-    # test's database catches it rather than whatever core is bound to.
-    try:
-        await db.activity.insert_one({
-            "id": new_id(), "tenant_id": tid, "actor": user["id"], "kind": action, "message": text,
-            "entity_type": "finance_trash", "entity_id": batch_id, "created_at": now_iso()})
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"finance_trash activity log failed: {e}")
-    try:
-        from services import audit_log
-        await audit_log.record(db, action=action, actor_id=user["id"], actor_email=user.get("email"),
-                               tenant_id=tid, entity_type="finance_trash", entity_id=batch_id, meta=meta)
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"finance_trash audit failed: {e}")
+    # test's database catches it rather than whatever core is bound to. The
+    # activity row and the audit row go together (2026-10-29).
+    async def activity():
+        try:
+            await db.activity.insert_one({
+                "id": new_id(), "tenant_id": tid, "actor": user["id"], "kind": action, "message": text,
+                "entity_type": "finance_trash", "entity_id": batch_id, "created_at": now_iso()})
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"finance_trash activity log failed: {e}")
+
+    async def audit():
+        try:
+            from services import audit_log
+            await audit_log.record(db, action=action, actor_id=user["id"], actor_email=user.get("email"),
+                                   tenant_id=tid, entity_type="finance_trash", entity_id=batch_id, meta=meta)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"finance_trash audit failed: {e}")
+
+    await asyncio.gather(activity(), audit())
 
 
 # ── a copy of the books, before everything goes ──────────────────────────────

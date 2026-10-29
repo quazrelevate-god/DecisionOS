@@ -365,3 +365,41 @@ def test_the_confirmation_says_what_goes_and_that_it_can_come_back():
         assert s in fd, s
     caps = _read("pages/Captures.js")
     assert "Undo this import" in caps and "undo.askImport(u)" in caps and "restoreBatch(u.undo_batch_id" in caps
+
+
+# ── speed: a delete never asks the same question twice ─────────────────────────
+def test_planning_an_invoice_delete_asks_each_question_once(with_test_db):
+    """2026-10-29 (founder: deleting a sales invoice must not take long). The
+    plan used to ask every question again on every pass, one after another:
+    15 round trips for one invoice and its payment, 4-8 seconds on a hosted
+    database before the confirm dialog could say anything. Each question is
+    now asked once, and a pass's questions go together."""
+    async def body(db):
+        _, _, _, _, _, _, _, ft, _, _ = _mods()
+        await db.invoices.insert_one(_inv("i1", "ST-1", 1000, paid=1000))
+        await db.payments.insert_one(_pay("p1", 1000, [{"invoice_id": "i1", "amount": 1000}]))
+        asked = []
+        real_find, real_touch = ft._find_in, ft._payments_touching
+
+        async def find(coll, field, ids, extra=None):
+            ids = [i for i in dict.fromkeys(ids) if i]
+            if ids:
+                asked.append((coll, field, tuple(sorted(ids)), tuple(sorted((extra or {}).items()))))
+            return await real_find(coll, field, ids, extra)
+
+        async def touch(tid, invoice_ids):
+            ids = [i for i in dict.fromkeys(invoice_ids) if i]
+            if ids:
+                asked.append(("payments", "touching", tuple(sorted(ids)), ()))
+            return await real_touch(tid, ids)
+
+        ft._find_in, ft._payments_touching = find, touch
+        try:
+            plan = await ft.plan_items("t1", [{"kind": "invoice", "id": "i1"}])
+        finally:
+            ft._find_in, ft._payments_touching = real_find, real_touch
+        assert plan.has("invoices", "i1") and plan.has("payments", "p1"), "the payment still goes with it"
+        dupes = [q for q in set(asked) if asked.count(q) > 1]
+        assert not dupes, f"asked more than once: {dupes}"
+        assert len(asked) <= 9, f"{len(asked)} database questions for one invoice: {asked}"
+    _run(with_test_db, body)

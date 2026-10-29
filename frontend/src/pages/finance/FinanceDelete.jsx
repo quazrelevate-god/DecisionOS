@@ -129,13 +129,28 @@ export function SelectionBar({ sel, onDelete, testid = "finance-select-bar" }) {
  * The delete flow for a page: `ask(items)` or `askImport(upload)` opens the
  * confirmation; `dialog` renders it. `onDone` runs after a delete goes through.
  */
+/* 2026-10-29 (founder: a delete must not take long) — the rows somebody
+   picked leave the lists the moment the server says they are gone, instead
+   of after every list has been fetched again (1-2 s more, with the row still
+   sitting there). The refetch that follows brings the rest: a payment that
+   went with an invoice, a balance that changed. */
+function dropFromLists(qc, items) {
+  const ids = new Set((items || []).map((i) => i.id));
+  if (!ids.size) return;
+  const drop = (rows) => (Array.isArray(rows) ? rows.filter((r) => !ids.has(r.id)) : rows);
+  ["expenses", "assets", "inventory"].forEach((k) => qc.setQueryData([k], drop));
+  qc.setQueryData(["revenue"], (d) => (d ? { ...d, invoices: drop(d.invoices), payments: drop(d.payments) } : d));
+}
+
 export function useFinanceDelete(onDone) {
   const refresh = useRefreshBooks();
+  const qc = useQueryClient();
   const [req, setReq] = useState(null);   // { items, after } | { upload }
   const dialog = (
     <DeleteConfirmDialog req={req} onOpenChange={(o) => !o && setReq(null)}
       onDone={(data) => {
         req?.after?.();
+        dropFromLists(qc, req?.items);
         setReq(null);
         refresh();
         onDone?.(data);

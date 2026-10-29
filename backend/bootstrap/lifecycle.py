@@ -1069,6 +1069,15 @@ async def _bootstrap():
         await db.expenses.create_index([("tenant_id", 1), ("ingestion_id", 1)])
         await db.invoices.create_index([("tenant_id", 1), ("ingestion_id", 1)])
         await db.payments.create_index([("tenant_id", 1), ("ingestion_id", 1)])
+        # 2026-10-29 — the rest of what a delete asks about (services/finance_trash
+        # _expand / _consequences), so a company with years of books doesn't
+        # scan a collection to find what goes with one invoice.
+        await db.inventory.create_index([("tenant_id", 1), ("invoice_id", 1)])
+        await db.assets.create_index([("tenant_id", 1), ("expense_id", 1)])
+        await db.expenses.create_index([("tenant_id", 1), ("payment_id", 1)])
+        await db.stock_movements.create_index([("tenant_id", 1), ("inventory_id", 1)])
+        await db.requests.create_index([("tenant_id", 1), ("expense_id", 1)])
+        await db.brain_context.create_index([("tenant_id", 1), ("related_ids.invoice_id", 1)])
         await db.finance_trash.create_index("id")
         await db.finance_trash.create_index([("tenant_id", 1), ("deleted_at", -1)])
         await db.finance_trash.create_index([("status", 1), ("restore_until", 1)])

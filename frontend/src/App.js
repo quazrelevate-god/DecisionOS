@@ -156,6 +156,8 @@ function PageBoundary({ children }) {
   return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
 }
 
+const QuickHome = () => null;
+
 function Protected({ children, perm, perms, ownerOnly }) {
   const { user, loading, offline } = useAuth();
   const location = useLocation();
@@ -308,6 +310,9 @@ function App() {
                 copy of that on the landing page would drift the first time a
                 role's defaults changed. */}
             <Route path="/app" element={<Home />} />
+            {/* The home-screen widget's see-through layer (lib/native/quick.js):
+                Layout draws the dock and the tapped flow, the page nothing. */}
+            <Route path="/quick" element={<Protected><QuickHome /></Protected>} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />

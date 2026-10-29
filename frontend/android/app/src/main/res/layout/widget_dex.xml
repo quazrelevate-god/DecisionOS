@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The dock's slider as a home-screen widget: Ask · app-icon knob · Decide on an
+     ink pill, on the launcher's own wallpaper (the root is transparent). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:background="@android:color/transparent"
+    android:padding="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="@drawable/widget_pill"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="6dp">
+
+        <TextView
+            android:id="@+id/widget_ask"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_end"
+            android:gravity="center"
+            android:text="@string/widget_ask"
+            android:textColor="#FFFFFFFF"
+            android:shadowColor="#80000000"
+            android:shadowDy="1"
+            android:shadowRadius="4"
+            android:textSize="15sp"
+            android:fontFamily="sans-serif-medium" />
+
+        <FrameLayout
+            android:id="@+id/widget_knob"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/widget_knob">
+
+            <!-- The app's own mark (the launcher icon's foreground, which
+                 carries its safe-zone margin) on the icon's ground. -->
+            <ImageView
+                android:layout_width="58dp"
+                android:layout_height="58dp"
+                android:layout_gravity="center"
+                android:contentDescription="@string/widget_knob"
+                android:scaleType="fitCenter"
+                android:src="@mipmap/ic_launcher_foreground" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/widget_decide"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/widget_end"
+            android:gravity="center"
+            android:text="@string/widget_decide"
+            android:textColor="#FFFFFFFF"
+            android:shadowColor="#80000000"
+            android:shadowDy="1"
+            android:shadowRadius="4"
+            android:textSize="15sp"
+            android:fontFamily="sans-serif-medium" />
+    </LinearLayout>
+</LinearLayout>

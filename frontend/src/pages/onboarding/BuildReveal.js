@@ -9,11 +9,13 @@ import api, { formatApiError } from "../../lib/api";
 import { DexForge } from "./DexForge";
 import { useAnswerRecorder, useSynthLevels } from "./voice";
 import { DexWave } from "../../components/mobile/DexWave";
-import { CountUp } from "../../components/neuglass";
 // ASK-36 5 — the app's one loading animation.
 import { Loader } from "../../components/common";
 import { currentDraft } from "../../lib/onboardingDraft";
 import { PipelineFlow, withRules } from "../../components/workflow/PipelineFlow";
+import { OsAssembly } from "./OsAssembly";
+import { OrgMap, Routines } from "./OsMap";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
 const WAIT_LINES = [
@@ -128,55 +130,6 @@ const Rise = forwardRef(function Rise(
   return <M ref={ref} initial={initial} animate={animate} transition={transition} {...rest}>{children}</M>;
 });
 
-/* One count tile. Two lives: an invisible spacer holding its cell open, then
-   the real thing once it has flown in. They are separate elements on purpose —
-   the layoutId can only belong to one of them at a time, and the spacer's job
-   is to make sure the row never changes height when they swap. */
-function CountTile({ c, index, landed, settled, still, glow }) {
-  const body = (
-    <>
-      <p className="text-3xl font-semibold tabular-nums">
-        {/* Before the sequence ends the numeral RAMPS; after it, it is plain
-            text. CountUp re-runs from zero whenever `value` changes (its deps
-            are [target, delay, duration]), so leaving it mounted would make a
-            refinement that adds one department animate 4 -> 0 -> 5 and read as
-            a reset. The ring is what announces the change instead. */}
-        {settled || still
-          ? c.n
-          : <CountUp value={c.n} duration={CHOREO.hold * 1000}
-              delay={(CHOREO.tilesAt + index * CHOREO.tileGap + CHOREO.bloom) * 1000} />}
-      </p>
-      <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{c.label}</p>
-    </>
-  );
-
-  /* KM-66 follow-up: heavier glassmorphism, not solid white. The founder
-     asked to keep the frost feel and just increase blur + opacity, so the
-     card is 60% white (was ~38% under ng-frost-min) with a 40px backdrop
-     blur (was 30px). Enough contrast that the label reads clean, thin
-     enough that the photograph still ghosts through the pane. */
-  const CARD = "bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_8px_28px_-10px_hsl(230_18%_15%/0.35)]";
-  if (!landed) {
-    // Holds the cell at exactly the tile's height. aria-hidden because the
-    // number it contains is about to be announced by the real one.
-    return <div aria-hidden="true" className={`${CARD} invisible rounded-2xl p-4 text-center`}>{body}</div>;
-  }
-  return (
-    <motion.div
-      layoutId={still ? undefined : `count-tile-${c.label}`}
-      data-testid="build-count-tile"
-      initial={still ? false : { filter: "blur(6px)" }}
-      animate={{ filter: "blur(0px)" }}
-      /* One transition object for the layout move AND the blur, so the blur
-         cannot finish after the tile has already arrived. */
-      transition={still ? { duration: 0 } : { duration: CHOREO.travel, ease: [0.16, 1, 0.3, 1] }}
-      style={{ willChange: settled ? "auto" : "filter, transform" }}
-      className={`${CARD} rounded-2xl p-4 text-center ${glow ? "ng-new-glow" : ""}`}>
-      {body}
-    </motion.div>
-  );
-}
-
 /* A section of pills, one per row, left-aligned and sized to their content.
    `w-fit` is what stops them stretching to the column; the stack is what stops
    them wrapping into a cluster. */
@@ -192,37 +145,51 @@ function CountTile({ c, index, landed, settled, still, glow }) {
 function ApprovalRules({ rules, onRemove, still, startAt }) {
   const list = (rules || []).filter((r) => r && (r.name || r.description)).slice(0, 10);
   if (list.length === 0) return null;
+  /* 2026-10-29 — drawn as gates that lead to the founder, not a list: each
+     rule is a gold gate on a line, and every line ends at "You". */
   return (
     <Rise still={still} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
       transition={{ delay: startAt, duration: 0.34 }}
-      className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] rounded-[1.75rem] p-5 sm:p-6"
+      className="ob-os rounded-[2rem] p-5 sm:p-7"
       data-testid="build-approval-rules">
-      <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        <ShieldCheck size={13} weight="bold" aria-hidden="true" /> Who signs off — from your answers
-      </p>
-      <p className="mb-3 text-xs text-muted-foreground">
-        Each becomes a setting where DecisionOS has one: who confirms orders up to what value, who approves
-        leave, and when spending comes to you. Anything else is kept as a note. You can change them any time
-        in Settings › Operations.
-      </p>
-      <ul className="space-y-2">
-        {list.map((r, i) => (
-          <li key={`${r.name}-${i}`} data-testid="build-approval-rule"
-            className="flex items-start gap-3 rounded-2xl bg-white/70 px-3.5 py-2.5 ring-1 ring-inset ring-slate-900/[0.05]">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">{r.name}</p>
-              {r.description && <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{r.description}</p>}
-            </div>
-            {onRemove && (
-              <button type="button" onClick={() => onRemove(i)} data-testid="build-approval-rule-remove"
-                aria-label={`Leave out “${r.name}”`} title="Leave this one out"
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white hover:text-foreground">
-                <X size={13} weight="bold" aria-hidden="true" />
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_11rem] lg:items-center lg:gap-8">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <ShieldCheck size={13} weight="bold" aria-hidden="true" className="-mt-0.5 mr-1 inline" />
+            What still comes to you
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">From your answers. Change them any time in Settings › Operations.</p>
+          <ul className="relative mt-4 space-y-2.5">
+            {list.map((r, i) => (
+              <li key={`${r.name}-${i}`} data-testid="build-approval-rule"
+                className="relative flex items-start gap-3 rounded-2xl border border-white/80 bg-white/80 px-3.5 py-3 shadow-[0_8px_20px_-14px_hsl(230_30%_18%/.5)] backdrop-blur-md lg:mr-6">
+                <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[hsl(var(--ng-gold)/.2)] text-[hsl(36_70%_32%)]">
+                  <ShieldCheck size={17} weight="fill" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">{r.name}</p>
+                  {r.description && <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{r.description}</p>}
+                </div>
+                {onRemove && (
+                  <button type="button" onClick={() => onRemove(i)} data-testid="build-approval-rule-remove"
+                    aria-label={`Leave out “${r.name}”`} title="Leave this one out"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white hover:text-foreground">
+                    <X size={13} weight="bold" aria-hidden="true" />
+                  </button>
+                )}
+                {/* The line from this gate to the founder. */}
+                <span aria-hidden="true" className="absolute -right-6 top-1/2 hidden h-px w-6 bg-[hsl(var(--ng-gold)/.6)] lg:block" />
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="order-first flex items-center gap-3 lg:order-none lg:flex-col lg:text-center" aria-hidden="true">
+          <span className="relative grid h-14 w-14 place-items-center rounded-full bg-[linear-gradient(160deg,hsl(0_0%_26%),hsl(0_0%_6%))] text-white ring-4 ring-[hsl(var(--ng-gold)/.35)] lg:h-20 lg:w-20">
+            <span className="font-display text-lg font-semibold lg:text-2xl">You</span>
+          </span>
+          <p className="text-sm text-slate-600"><span className="font-display text-2xl font-semibold text-slate-900">{list.length}</span> {list.length === 1 ? "decision" : "decisions"} reach you</p>
+        </div>
+      </div>
     </Rise>
   );
 }
@@ -241,13 +208,10 @@ function WorkFlowSection({ flow, state, teams, ruleNames, onRetry, still, startA
   return (
     <Rise still={still} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
       transition={{ delay: startAt, duration: 0.34 }}
-      className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_10px_32px_-12px_hsl(230_18%_15%/0.35)] rounded-[1.75rem] p-5 sm:p-6"
+      className="ob-os rounded-[2rem] p-5 sm:p-7"
       data-testid="build-workflow">
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">How work moves</p>
-      <p className="mb-4 text-xs text-muted-foreground">
-        Every order, purchase and hire moves through steps like these. Each step has a team that owns it and the
-        work it needs — Dex hands that work out as a card arrives. Tap a step to see it.
-      </p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">How work moves</p>
+      <p className="mb-5 mt-1 text-sm text-muted-foreground">Step by step, the team that owns each one. Tap a step to see its work.</p>
       {state === "ready" && pipelines.length ? (
         <PipelineFlow pipelines={pipelines} teams={teams} still={still} testid="build-pipeline-flow" />
       ) : state === "failed" ? (
@@ -267,7 +231,7 @@ function WorkFlowSection({ flow, state, teams, ruleNames, onRetry, still, startA
               </div>
             ))}
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">Dex is laying out how an order moves through your teams…</p>
+          <p className="ng-glow-text mt-4 text-center text-sm">Dex is laying out how an order moves through your teams…</p>
         </div>
       )}
     </Rise>
@@ -321,8 +285,12 @@ function PillSection({ label, items, tint, testid, startAt, stagger, still, newK
 
 // Generates the personalized OS blueprint from the interview, lets the founder
 // refine it, then registers the workspace and reveals it. Dex keeps the wait alive.
+/* `seedItems` — the pieces "Your OS" already holds from the interview
+   (Signup's osItems), so the build carries on the picture rather than
+   starting a new one. */
 export function BuildReveal({ sessionId, languageCode, payload, register, onEnter,
-                              savedBlueprint = null, onBlueprint, onFixPhone, onChangeEmail }) {
+                              savedBlueprint = null, onBlueprint, onFixPhone, onChangeEmail, seedItems = [] }) {
+  const isPhone = useIsMobile();
   /* 2026-09-29 — A RESUMED SIGNUP OPENS ON ITS OS. IT DOES NOT TRAVEL TO IT.
      These four all used to start at the fresh-build values and be corrected a
      moment later by the mount effect, which meant that a founder coming back
@@ -798,8 +766,18 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   const waveLevelsRef = useSynthLevels(waveState);
 
   const workflowNames = (bp?.workflows || []).map((w) => w.name).filter(Boolean);
-  const taskTitles = (bp?.operational_tasks || []).map((t) => t.title).filter(Boolean);
 
+  const reviewPipelines = flow
+    ? withRules(flow.operating_model?.pipelines, flow.approval_actions, (bp?.approval_rules || []).map((r) => r.name))
+    : [];
+  const glance = bp ? [
+    { n: (bp.departments || []).length, label: "Teams" },
+    { n: reviewPipelines.length, label: "Workflows" },
+    { n: reviewPipelines.reduce((k, p) => k + (p.stages || []).length, 0), label: "Steps" },
+    { n: (bp.approval_rules || []).length, label: "Sign-offs" },
+    { n: (bp.operational_tasks || []).length, label: "Routines" },
+  ].filter((c, i) => i === 0 || c.n > 0) : [];
+  const isNew = (v) => newKeys.has(norm(v));
   const isPreview = stage === "preview" && bp;
 
   return (
@@ -808,13 +786,20 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
        registering and reveal keep the identical wrapper they always had; only
        preview escapes it, widening to max-w-5xl to match the header pill in
        Signup.js and splitting into three bands of its own. */
-    <div className={`ng-well mx-auto w-full ${isPreview ? "max-w-5xl" : "max-w-2xl"}`} data-testid="signup-build">
+    <div className={`ng-well mx-auto w-full ${isPreview || stage === "building" ? "max-w-6xl" : "max-w-2xl"}`} data-testid="signup-build">
       <AnimatePresence mode="wait">
         {/* ------------------------------------------------------ BUILDING */}
         {stage === "building" && (
           <motion.div key="building" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-            className="ng-well__pane rounded-[1.75rem] p-6 text-center sm:p-9">
-            <p className="mb-2 flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            className="ng-well__pane rounded-[1.75rem] p-5 sm:p-9">
+            {/* 2026-10-29 — THE BUILD IS THE PICTURE CARRYING ON. The forge
+                was a second, unrelated animation at the moment the founder
+                most wants to see their answers become something; now "Your
+                OS" — already holding what the interview found — keeps
+                assembling beside the story of what Dex is doing. */}
+            <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-10">
+            <div className="min-w-0 text-center lg:text-left">
+            <p className="mb-2 flex items-center justify-center gap-2 lg:justify-start text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               <Sparkle size={14} weight="fill" className="text-[hsl(var(--ng-gold))]" /> Meet Dex — your build engineer
             </p>
             <h1 className="mb-7 font-display text-3xl leading-[1.04] sm:text-4xl lg:text-5xl">
@@ -825,11 +810,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               Dex is building {payload.company_name}&apos;s OS.
             </h1>
 
-            <DexForge label={`Dex is assembling ${payload.company_name}'s workspace`} />
 
             {!error && (
               <>
-                <div className="mx-auto mt-8 max-w-md">
+                <div className="mx-auto mt-6 max-w-md lg:mx-0">
                   {/* The track is pressed into the sheet and the fill is the
                       gold light — the same pair the forge above uses. */}
                   <div className="ng-pressed h-3 overflow-hidden rounded-pill p-[3px]" data-testid="build-progress-bar">
@@ -887,6 +871,10 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 )}
               </div>
             )}
+            </div>
+            <OsAssembly className="order-first lg:order-none" hub={payload.company_name} items={seedItems}
+              working={!error} variant={isPhone ? "strip" : "orbit"} />
+            </div>
           </motion.div>
         )}
 
@@ -928,89 +916,14 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               )}
             </div>
 
-            {/* ── BAND 2 · the counts ────────────────────────────────────
-                Free-standing tiles, no pane of their own — .ng-frost-min IS
-                the surface, and it is glass, so the 11px labels inside keep
-                their ground. The grid holds all three cells from the first
-                frame: a tile that has not landed leaves an invisible spacer of
-                exactly its own size behind, so nothing reflows when it
-                arrives. */}
-            <div className="relative" data-testid="build-counts">
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {counts.map((c, i) => (
-                  <CountTile key={c.label} c={c} index={i} landed={i < placed}
-                    settled={settled} still={still}
-                    glow={changedTiles.has(c.label)} />
-                ))}
-              </div>
-              {/* The bloom stage. Absolutely positioned over the row and
-                  pointer-transparent, so a tile can be centred at 1.35 without
-                  the row knowing. When `placed` passes it, the same layoutId
-                  mounts in the cell below and framer-motion FLIPs it there —
-                  a measured move, not a hand-computed translate. */}
-              {!still && placed < counts.length && (
-                <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                  {counts.map((c, i) => (i >= placed ? (
-                    <motion.div
-                      key={`bloom-${c.label}`}
-                      /* NO layoutId ON THE BLOOM, and this is a bug fix, not a
-                         simplification. Pairing it with the landed tile put two
-                         shared-layout nodes in the preview's subtree, and when
-                         the preview unmounted that pair left an exit which
-                         NEVER COMPLETED. The AnimatePresence around the stages
-                         is mode="wait", so it then never mounted the stage
-                         after it: pressing "Looks good — Enter DecisionOS"
-                         created the account and left the founder looking at the
-                         review screen, apparently ignored — and only a second
-                         press got them in, because that one failed on the
-                         address now existing and took the sign-in recovery.
-                         Measured: React rendered stage="reveal" while the
-                         preview was still in the DOM at 1s, 3s and 8s, with the
-                         reveal never mounted.
-                         The bloom already carries the whole effect on its own —
-                         it scales and un-blurs into place — so what is lost is
-                         the shared-layout MOVE, not the arrival. Bounding the
-                         id by `settled` was tried first and does not hold: the
-                         pair is live whenever a founder presses Create before
-                         the sequence has finished, which is most of them. */
-                      initial={{ opacity: 0, scale: 1.35, filter: "blur(8px)" }}
-                      animate={{ opacity: 1, scale: 1.35, filter: "blur(0px)" }}
-                      transition={{ delay: CHOREO.tilesAt + i * CHOREO.tileGap, duration: CHOREO.bloom }}
-                      style={{ willChange: "filter, transform", gridArea: "1 / 1" }}
-                      /* KM-66 follow-up: bloom matches the settled tile —
-                         same heavy-frost values so the FLIP looks like the
-                         same object moving, not two different cards. */
-                      className="bg-white/60 backdrop-blur-3xl border border-white/55 shadow-[0_8px_28px_-10px_hsl(230_18%_15%/0.35)] w-[9.5rem] rounded-2xl p-4 text-center">
-                      <p className="text-3xl font-semibold tabular-nums">
-                        <CountUp value={c.n} duration={CHOREO.hold * 1000}
-                          delay={(CHOREO.tilesAt + i * CHOREO.tileGap + CHOREO.bloom) * 1000} />
-                      </p>
-                      <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{c.label}</p>
-                    </motion.div>
-                  ) : null))}
-                </div>
-              )}
-            </div>
-
-            {/* ── BAND 3 · what Dex designed ─────────────────────────────
-                Two columns on desktop; the pills wrap across each (audit A-13). The old
-                wrapped cluster made a department and a task look like the same
-                kind of thing in the same soup. */}
-            <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
-              <PillSection
-                label="Departments" items={deptItems} testid="build-dept-pill"
-                tint="ng-pressed bg-white/[.34]"
-                startAt={CHOREO.sectionsAt} stagger={pillStagger} still={still}
-                newKeys={newKeys} firstNewRef={firstNewRef} />
-              <PillSection
-                label="Recurring tasks Dex will keep on rails" items={taskItems} testid="build-task-pill"
-                tint="ng-pressed"
-                startAt={CHOREO.sectionsAt + deptItems.length * pillStagger + CHOREO.betweenSections}
-                stagger={pillStagger} still={still}
-                newKeys={newKeys} firstNewRef={firstNewRef} />
-            </div>
-
-            {/* Audit 2026-10-08 — how work moves, before the founder enters. */}
+            {/* ── BAND 2 · the map (2026-10-29, founder: "analysed according
+                to its hierarchy and importance… illustrative and interactive,
+                not grids of cards and a form-like list"). In order of what a
+                founder needs to see: the teams and how work passes between
+                them (onboarding/OsMap), then how work moves step by step, then
+                what still comes to them, then the routines Dex keeps running. */}
+            <OrgMap company={payload.company_name} departments={bp?.departments}
+              pipelines={reviewPipelines} flowReady={flowState === "ready"} counts={glance} isNew={isNew} />
             {sessionId && (
               <WorkFlowSection flow={flow} state={flowState} teams={bp?.departments} still={still}
                 ruleNames={(bp?.approval_rules || []).map((r) => r.name)}
@@ -1026,6 +939,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
                 setBp(next);
                 onBlueprint?.(next);
               } : undefined} />
+            <Routines tasks={bp?.operational_tasks} isNew={isNew} />
 
             {/* Deliberately dead: WE-02 retired workflow_templates and the
                 blueprint stopped returning workflows. Kept because it is the

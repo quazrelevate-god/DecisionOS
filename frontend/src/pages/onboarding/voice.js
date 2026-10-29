@@ -78,6 +78,10 @@ export function useSynthLevels(state) {
 export function useAnswerRecorder(onResult) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  // 2026-10-29 (founder) — "add the pause functionality for the interview
+  // section where the user speaks": the take stays open, and resuming records
+  // into the same answer.
+  const [paused, setPaused] = useState(false);
   const mediaRef = useRef(null);
   const chunksRef = useRef([]);
 
@@ -116,6 +120,16 @@ export function useAnswerRecorder(onResult) {
   const stop = () => {
     mediaRef.current?.stop();
     setRecording(false);
+    setPaused(false);
   };
-  return { recording, transcribing, start, stop };
+  const pause = () => {
+    const mr = mediaRef.current;
+    if (mr?.state === "recording" && mr.pause) { mr.pause(); setPaused(true); }
+  };
+  const resume = () => {
+    const mr = mediaRef.current;
+    if (mr?.state === "paused") { mr.resume(); setPaused(false); }
+  };
+  const canPause = typeof MediaRecorder !== "undefined" && "pause" in MediaRecorder.prototype;
+  return { recording, transcribing, paused, canPause, start, stop, pause, resume };
 }

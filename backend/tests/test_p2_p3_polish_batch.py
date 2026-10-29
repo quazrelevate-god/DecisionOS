@@ -57,7 +57,7 @@ def test_browser_back_is_the_page_back():
 # ---- A-15 ---------------------------------------------------------------------
 def test_the_app_opens_in_english_whatever_the_interview_language():
     assert '"language": "en",' in be("routers/auth.py")
-    assert "This is only for the interview. DecisionOS itself opens in English." in fe("pages/onboarding/VoiceInterview.js")
+    assert "The app itself opens in English." in fe("pages/onboarding/VoiceInterview.js")
 
 
 # ---- C-07 ---------------------------------------------------------------------

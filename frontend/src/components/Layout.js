@@ -72,6 +72,7 @@ import { cn } from "../lib/utils";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { BottomSheet } from "./mobile/BottomSheet";
 import { InstallPrompt } from "./mobile/InstallPrompt";
+import { quickMode, leaveQuick } from "../lib/native/quick";
 
 // Epic 2 Sprint A (E2-01 / E2-02 / E2-15): People retired; CRM (customers +
 // suppliers) and Team (employees) are separate top-level entries. Ops is a
@@ -755,6 +756,30 @@ export default function Layout({ children }) {
      NM-18: `app-sky` is UNCONDITIONAL. The sky it owns is invisible at opacity
      0 off the Dex route, and keeping it mounted is what lets it fade in and out
      with the theme instead of snapping — see .app-sky::before. */
+  /* The home-screen widget's layer (lib/native/quick.js): a clear ground,
+     and the side that was tapped opens by itself — Ask as its dock end does
+     (listening), Decide into the same capture the bar hands over to. Set in
+     the timer rather than before it, so a development double-mount still
+     opens it once. */
+  const quick = quickMode(location);
+  const quickOpened = useRef(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (quick) root.classList.add("dos-quick"); else root.classList.remove("dos-quick");
+    return () => root.classList.remove("dos-quick");
+  }, [quick]);
+  useEffect(() => {
+    if (!quick || !dockIsSlider || quickOpened.current) return undefined;
+    const t = setTimeout(() => {
+      quickOpened.current = true;
+      if (quick === "ask") {
+        setDexChannel("ask"); setDexOpen(true); setDexInline(true);
+        if (!dex.recording && !dex.sending && !chat.busy) dex.startRecording();
+      } else setDockDecide(true);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [quick, dockIsSlider]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <HeaderSlotContext.Provider value={isMobileShell ? headerSlot : null}>
     <DexDoorsContext.Provider value={isMobileShell ? dexDeskHost : null}>
@@ -762,7 +787,10 @@ export default function Layout({ children }) {
         not divided by CSS zoom, so at 0.8 a bare 100dvh paints at 80% of the
         screen and the app stops short of the bottom; the desktop half of this
         line has divided 100vh since the day the scale existed, for that. */}
-    <div className="app-sky flex h-[calc(100dvh/var(--ui-scale,1))] flex-col overflow-hidden bg-nm text-foreground lg:h-[calc(100vh/var(--ui-scale,1))]">
+    <div className="app-sky flex h-[calc(100dvh/var(--ui-scale,1))] flex-col overflow-hidden bg-nm text-foreground lg:h-[calc(100vh/var(--ui-scale,1))]"
+      /* On the widget's layer the clear ground is the home screen: a tap on
+         it puts the person back there. */
+      onClick={quick ? (e) => { if (e.target === e.currentTarget) leaveQuick(); } : undefined}>
       {/* The page-artwork layer. Empty and invisible until a room sets
           --sky-art (see "PAGE ARTWORK" in index.css); position:fixed keeps it
           out of this flex column. It is a real element rather than a third
@@ -821,6 +849,7 @@ export default function Layout({ children }) {
           (88 - P - 40) / 2, and setting that equal to the gap below the pills
           (74.73 - 40 - top) solves to P = 13.26. */}
       <header
+        data-quick-hide
         /* minmax(0,1fr) on the LEFT track only. A bare 1fr has an `auto`
            minimum, so the workspace name grew the cell to its own max-content
            and ran on underneath the nav plate instead of ellipsing — measured
@@ -1038,7 +1067,7 @@ export default function Layout({ children }) {
           My Work wants the width (a 4-column card grid genuinely uses it), so
           it opts in by route and everything else keeps the composition it was
           designed for. */}
-      <div className={cn(
+      <div data-quick-hide className={cn(
         "flex min-h-0 flex-1 flex-col min-w-0 app-shell lg:w-full lg:mx-auto",
         !WIDE_ROUTES.some((p) => location.pathname.startsWith(p)) && "lg:max-w-[1400px]",
         location.pathname.startsWith("/inbox") && DESK_WIDE
@@ -1267,6 +1296,7 @@ export default function Layout({ children }) {
             setAskTranscribing(false);
             if (dex.recording) dex.cancelRecording();
             setDexOpen(false); setDexChannel(null); setDexInline(false);
+            if (quick) leaveQuick();
           }}
           /* A TOGGLE, because More is now a state of the bar rather than a card
              over it: the same press that grew the dock puts it back, which is
@@ -1402,7 +1432,10 @@ export default function Layout({ children }) {
              anywhere. --dock-h follows whichever bar is up. */
           className="fixed inset-x-3 z-[10050] mx-auto max-w-md"
           style={{ bottom: "calc(var(--dock-bottom) + var(--dock-h, 4.5rem) + 0.75rem)" }}
-          onClose={() => { setDockDecide(false); setDockLive({ recording: false, capturing: false, levelsRef: null, paused: false, canPause: false }); }}
+          onClose={() => {
+            setDockDecide(false); setDockLive({ recording: false, capturing: false, levelsRef: null, paused: false, canPause: false });
+            if (quick) leaveQuick();
+          }}
           onReview={(id) => { setDockDecide(false); navigate(`/inbox?decision=${encodeURIComponent(id)}`); }}
           /* "Save as draft — decide later", which the Desk used to wire and I
              did not: without it the pop-up's third answer was a button that

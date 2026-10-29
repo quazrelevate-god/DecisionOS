@@ -43,7 +43,6 @@ import { decisionCounts, readyLine, OUTCOME_COPY } from "../../lib/dexOutcome";
 import { cn } from "../../lib/utils";
 import { DexBuilderFit } from "../onboarding/DexBuilder";
 import { AiNotice } from "../../components/ReportButton";
-import { Loader } from "../../components/common";
 
 const STEP_COPY = {
   said: { n: 1, title: "What you said", hint: "Read it through, change anything Dex heard wrong, then press Next." },
@@ -351,36 +350,40 @@ export function DexCapturePopup({
             nothing typed in that gap is overwritten when they land (KM-53). */}
         {/* 2026-10-14 — THE WORDS ARE ON THEIR WAY, said out loud. The only
             sign used to be the field's placeholder pulsing, which on a phone
-            read as a frozen screen while the upload and transcription ran. */}
-        {transcribing && (
-          <div role="status" data-testid="dex-popup-transcribing"
-            className="flex items-center gap-2 text-sm font-medium text-slate-600">
-            <Loader size={18} color="currentColor" label="Transcribing" /> Transcribing what you said…
-          </div>
-        )}
-        <textarea
-          ref={fieldRef}
-          value={text}
-          onChange={(e) => onText?.(e.target.value)}
-          readOnly={transcribing}
-          rows={phone ? 2 : 6}
-          aria-label="What you said"
-          data-testid="dex-popup-transcript"
-          /* The empty-state copy names the thing being written: a decision in
-             Decide, a question in Ask. Same card, two jobs. */
-          placeholder={transcribing
-            ? "Transcribing what you said…"
-            : step === "ask"
-              ? "Nothing came through. Type what you want to ask, or close this and speak again."
-              : "Nothing came through. Type what you decided, or close this and speak again."}
-          className={cn(
-            "nm-field block w-full resize-none px-4 py-3 text-[15px] leading-6 text-slate-800 focus:outline-none lg:text-base lg:leading-7",
-            // Phone: grows to the words (measured), capped so a very long one
-            // scrolls in the field. Desktop: the fixed multi-line field.
-            phone ? "min-h-[3.75rem] max-h-[58dvh] overflow-y-auto" : "min-h-[7.5rem] flex-1 lg:min-h-[10.5rem]",
-            transcribing ? "animate-pulse placeholder:text-slate-600" : "placeholder:text-slate-400"
+            read as a frozen screen while the upload and transcription ran.
+            2026-10-29 (founder) — ONE SIGN, IN THE FIELD: the spinner row
+            above it and the pulse inside it were two loaders for one wait.
+            Now the line sits centred in the field and glows, nothing spins. */}
+        <div className={cn("relative", !phone && "flex min-h-0 flex-1 flex-col")}>
+          <textarea
+            ref={fieldRef}
+            value={text}
+            onChange={(e) => onText?.(e.target.value)}
+            readOnly={transcribing}
+            rows={phone ? 2 : 6}
+            aria-label="What you said"
+            data-testid="dex-popup-transcript"
+            /* The empty-state copy names the thing being written: a decision in
+               Decide, a question in Ask. Same card, two jobs. */
+            placeholder={transcribing
+              ? ""
+              : step === "ask"
+                ? "Nothing came through. Type what you want to ask, or close this and speak again."
+                : "Nothing came through. Type what you decided, or close this and speak again."}
+            className={cn(
+              "nm-field block w-full resize-none px-4 py-3 text-[15px] leading-6 text-slate-800 placeholder:text-slate-400 focus:outline-none lg:text-base lg:leading-7",
+              // Phone: grows to the words (measured), capped so a very long one
+              // scrolls in the field. Desktop: the fixed multi-line field.
+              phone ? "min-h-[3.75rem] max-h-[58dvh] overflow-y-auto" : "min-h-[7.5rem] flex-1 lg:min-h-[10.5rem]"
+            )}
+          />
+          {transcribing && !text && (
+            <div role="status" data-testid="dex-popup-transcribing"
+              className="pointer-events-none absolute inset-0 grid place-items-center px-4 text-center">
+              <span className="ng-glow-text text-[15px] font-medium lg:text-base">Transcribing what you said…</span>
+            </div>
           )}
-        />
+        </div>
         {files.length > 0 && (
           <div>
             <p className="mb-1.5 text-xs font-medium text-slate-500">Going with it</p>

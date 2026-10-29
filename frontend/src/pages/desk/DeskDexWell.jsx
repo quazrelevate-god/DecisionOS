@@ -249,6 +249,9 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
 
   const [attaching, setAttaching] = useState(false);
   const fileInputRef = useRef(null);
+  // 2026-10-30 (founder) — a live photo beside the paperclip: the same upload,
+  // straight from the camera (capture="environment" opens it on a phone).
+  const cameraInputRef = useRef(null);
 
   // KM-53 — the window between "stop" and the words coming back.
   const transcribing = (!!dex.sending || waitingWords) && !chat.draft;
@@ -1138,7 +1141,10 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
           renders — so it needs its own. One input either way; the pop-up's
           attach button is what presses this one. */}
       {surface === "overlay" && (
-        <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} onChange={onPickFile} />
+        <>
+          <input ref={fileInputRef} type="file" className="hidden" tabIndex={-1} onChange={onPickFile} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" tabIndex={-1} onChange={onPickFile} />
+        </>
       )}
       {surface === "overlay" && deskTop
         ? <div className={cn("relative z-20 order-3 shrink-0 px-1 lg:hidden", className)} style={style} data-testid={testid}>{deskTop}</div>
@@ -1182,6 +1188,7 @@ export function DeskDexWell({ className, style, testid, phone = false, onReview,
            screen's floor, which meant choosing a file before you had said what
            it was for. The founder moved it here, beside the words. */
         onAttach={surface === "overlay" ? () => fileInputRef.current?.click() : undefined}
+        onCamera={surface === "overlay" ? () => cameraInputRef.current?.click() : undefined}
         attaching={attaching}
       />
       {/* PILOT — THE FLOATING COMPOSER. On a phone, while the field is open, the

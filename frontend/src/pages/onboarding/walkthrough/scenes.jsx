@@ -694,7 +694,6 @@ export function buildScenes(j, device) {
           <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ left: cx, top: cy }}>
             <p className={`font-display font-semibold text-slate-900 ${phone ? "text-[20px]" : "text-[28px]"}`}>{j.company}</p>
             <p className="text-[13px] text-slate-500">on DecisionOS</p>
-            {p > 0.84 && <span className={`mt-3 inline-flex h-11 items-center gap-2 rounded-full px-5 text-[14px] font-semibold ${INK}`} style={rise(p, 0.84, 0.94)} data-mock="enter">Enter DecisionOS <ArrowRight size={14} weight="bold" /></span>}
           </div>
           {LOOP.map((x, i) => {
             const a = -Math.PI / 2 + (i * 2 * Math.PI) / LOOP.length;
@@ -715,7 +714,7 @@ export function buildScenes(j, device) {
       );
     },
     camera: [{ at: 0, ...C }, { at: 1, ...C }],
-    notes: [{ id: "enter", target: "enter", at: [0.9, 1], side: "bottom", title: "You're ready", text: "Everything you just saw is waiting inside." }],
+    notes: [],
   });
 
   /* The running order, and only what this company has: no sign-off chapter

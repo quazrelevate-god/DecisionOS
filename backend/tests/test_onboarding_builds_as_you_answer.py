@@ -57,14 +57,15 @@ def test_the_summary_then_their_first_week_inside_the_app():
     assert br.index("saveFirstTour(buildJourney(") < br.index("onEnter();"), "the script is kept before entering"
     assert "<FirstWeek" not in br, "the video left the summary"
     tour = (FE / "components" / "tour" / "FirstWeekTour.jsx").read_text(encoding="utf-8")
-    for key in ('key: "glance"', 'key: "desk"', 'key: "decide"', 'key: "flow"', 'key: "work"', 'key: "routines"',
-                'key: "signoff"', 'key: "ask"', 'key: "more"', 'key: "cycle"'):
+    for key in ('key: "glance"', 'key: "desk"', 'key: "numbers"', 'key: "decide"', 'key: "flow"', 'key: "work"',
+                'key: "routines"', 'key: "signoff"', 'key: "ask"', 'key: "more"', 'key: "cycle"'):
         assert key in tour, key
-    assert "clearToStart(user)" in tour and '"/auth/tour/done"' in tour
+    assert "clearToStart(user)" in tour and "if (phone ||" in tour, "desktop only; the phone keeps its short walkthrough"
+    assert "first-tour-lens" not in tour, "the real page is never drawn over"
     assert 'cta: "Start using DecisionOS"' in tour and 'finish("/inbox")' in tour
     layout = (FE / "components" / "Layout.js").read_text(encoding="utf-8")
     assert "<FirstWeekTour />" in layout and 'data-testid="nav-first-tour"' in layout
     wt = (FE / "components" / "mobile" / "Walkthrough.jsx").read_text(encoding="utf-8")
-    assert "firstTourPending()" in wt, "the short phone tour stands aside for it"
+    assert "export function clearToStart" in wt
     journey = (FE / "pages" / "onboarding" / "walkthrough" / "journey.js").read_text(encoding="utf-8")
     assert "bp?.approval_rules" in journey and '"Tasks set up"' in journey

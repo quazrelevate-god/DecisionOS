@@ -28,6 +28,7 @@ import { DexForge } from "./onboarding/DexForge";
 import { DexBuilder } from "./onboarding/DexBuilder";
 import { FirstWeek } from "./onboarding/walkthrough/FirstWeek";
 
+
 const LAB_TOUR = {
   company: "Verma Spices",
   bp: {
@@ -39,6 +40,14 @@ const LAB_TOUR = {
     operational_tasks: ["Monday warehouse stock check", "Reconcile buyer payments", "Monthly review of wholesale accounts", "Chase payments after 30 days"],
   },
   pipelines: [{
+    key: "buying", label: "Raw Spice Buying",
+    stages: [
+      { key: "need", label: "Requirement Raised", role: "buying", tasks: [{ title: "Note the spice, grade and quantity needed" }] },
+      { key: "quote", label: "Quotes In", role: "buying", tasks: [{ title: "Get rates from three farmers" }] },
+      { key: "ok", label: "Approved", role: "owner", approval: { role: "owner" }, tasks: [{ title: "Sign off purchases above ₹1 lakh" }] },
+      { key: "paid", label: "Paid", role: "finance", tasks: [{ title: "Pay the farmer and file the bill" }] },
+    ],
+  }, {
     key: "orders", label: "Wholesale Orders",
     stages: [
       { key: "in", label: "Order Received", role: "sales", tasks: [{ title: "Confirm items and quantities with the buyer" }, { title: "Check finished stock against the order" }, { title: "Flag any shortfall to the warehouse" }] },
@@ -340,7 +349,6 @@ function NeuGlassGallery() {
       <div className="app-canvas mb-6 space-y-10 rounded-cardlg p-6" style={{ background: "hsl(var(--nm-bg))" }} data-testid="lab-first-week">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-60">FirstWeek · signup's last screen</p>
         <FirstWeek company={LAB_TOUR.company} founder="Asha Verma" bp={LAB_TOUR.bp} pipelines={LAB_TOUR.pipelines} device="desktop" />
-        <FirstWeek company={LAB_TOUR.company} founder="Asha Verma" bp={LAB_TOUR.bp} pipelines={LAB_TOUR.pipelines} device="phone" />
       </div>
 
       {/* 2026-10-29 · DexBuilder — the forge as a head, building a workflow:

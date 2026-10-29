@@ -11,6 +11,7 @@
 import {
   Bell, Microphone, CheckCircle, Check, ShieldCheck, Sparkle, ListChecks, ArrowRight,
   Tray, Briefcase, Wallet, DotsThree, CalendarBlank, Play, ArrowsClockwise,
+  Kanban, AddressBook, UsersThree, Brain, BookOpenText, Gauge, SunHorizon, ChatCircleDots, PaperPlaneRight,
 } from "@phosphor-icons/react";
 import { span, lerp, SCREEN } from "./Player";
 
@@ -332,11 +333,13 @@ export function buildScenes(j, device) {
     ],
   });
 
-  /* 3 · Workflow */
-  const st = flow.stages;
+  /* 3 · One chapter per workflow (up to three; the last says how many more
+     are waiting in the summary above). */
+  const flowScene = (flow, fi, more) => {
+  const st = flow.stages.slice(0, phone ? 5 : 6);
   const n = st.length;
-  scenes.push({
-    key: "flow", chapter: "Workflow", ms: 9000,
+  return {
+    key: `flow-${fi}`, chapter: short(flow.label, 16), ms: 8000,
     title: `${flow.label}: every step, in order`,
     render: (p) => {
       const k = Math.min(n - 1, Math.floor(span(p, 0.12, 0.92, (x) => x) * n));
@@ -424,8 +427,12 @@ export function buildScenes(j, device) {
         title: s.gate ? "It waits for you" : `${short(s.team, 24)} takes it`,
         text: s.gate ? "This step needs your sign-off before work moves on." : short(s.label, 40),
       };
-    }),
-  });
+    }).concat(more > 0 ? [{ id: "more", target: `stage-${n - 1}`, at: [0.93, 1], side: "left",
+      title: `And ${more} more ${more === 1 ? "workflow" : "workflows"}`, text: "Every one is laid out in the summary above." }] : []),
+  };
+  };
+  const shownFlows = j.flows.length ? j.flows.slice(0, 3) : [flow];
+  shownFlows.forEach((f, fi) => scenes.push(flowScene(f, fi, fi === shownFlows.length - 1 ? Math.max(0, j.flows.length - 3) : 0)));
 
   /* 4 · My Work */
   scenes.push({
@@ -532,49 +539,186 @@ export function buildScenes(j, device) {
     ],
   });
 
-  /* 7 · Finished */
+  /* 0 · At a glance — the company as a picture, before any screen. */
   scenes.push({
-    key: "done", chapter: "Finished", ms: 6000,
-    title: "And you hear when work is done",
+    key: "glance", chapter: "At a glance", ms: 6500,
+    title: `${j.company}, as Dex built it`,
     render: (p) => {
-      const card = (
-        <div className="rounded-[1.75rem] bg-[linear-gradient(165deg,hsl(0_0%_96%),hsl(0_0%_91%))] p-5 shadow-[0_30px_80px_-20px_hsl(0_0%_0%/0.45)]" style={{ ...rise(p, 0.3, 0.45, 24), width: phone ? 340 : 420 }}>
-          <div className="flex items-center gap-3">
-            <span className={`grid h-11 w-11 place-items-center rounded-full ${INK}`}><CheckCircle size={20} weight="fill" /></span>
-            <div><p className="text-[19px] font-semibold text-slate-900">{plan.length} tasks finished</p><p className="text-[13px] text-slate-500">Since you last looked</p></div>
-          </div>
-          <div className="mt-3 space-y-1">
-            {plan.map((x, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-2xl px-2 py-2" style={rise(p, 0.45 + i * 0.06, 0.55 + i * 0.06)}>
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-[hsl(150_30%_90%)] text-[hsl(152_40%_28%)]"><CheckCircle size={15} weight="fill" /></span>
-                <span className="min-w-0 flex-1"><span className="block truncate text-[14px] font-medium text-slate-900">{x.task}</span><span className="block text-[12px] text-slate-500">{x.team}</span></span>
+      const teams = j.teams.slice(0, 8);
+      const cx = W / 2; const cy = phone ? 300 : 290; const R = phone ? 118 : 190;
+      return (
+        <Sky>
+          <svg className="absolute inset-0" width={W} height={H} aria-hidden="true">
+            <circle cx={cx} cy={cy} r={R} fill="none" stroke="hsl(230 20% 30% / .14)" strokeDasharray="3 5" />
+            {teams.map((t, i) => {
+              const a = -Math.PI / 2 + (i * 2 * Math.PI) / teams.length;
+              const k = span(p, 0.12 + i * 0.05, 0.3 + i * 0.05);
+              return <line key={t.key} x1={cx} y1={cy} x2={cx + R * Math.cos(a) * k} y2={cy + R * Math.sin(a) * k} stroke="hsl(230 20% 30% / .18)" />;
+            })}
+          </svg>
+          <span className={`absolute grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full font-display font-semibold ${INK} ${phone ? "h-20 w-20 text-2xl" : "h-28 w-28 text-4xl"}`}
+            style={{ left: cx, top: cy, ...rise(p, 0, 0.12, 0) }}>{initials(j.company)}</span>
+          {teams.map((t, i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / teams.length;
+            return (
+              <div key={t.key} className="absolute flex w-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center"
+                style={{ left: cx + R * Math.cos(a), top: cy + R * Math.sin(a), ...rise(p, 0.15 + i * 0.05, 0.3 + i * 0.05, 10) }}>
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-slate-800 shadow-[0_10px_24px_-12px_hsl(230_30%_18%/.5)]"><UsersThree size={20} weight="duotone" /></span>
+                <span className={`mt-1 line-clamp-2 font-medium leading-tight text-slate-700 ${phone ? "text-[10px]" : "text-[12px]"}`}>{t.label}</span>
+              </div>
+            );
+          })}
+          <div className={`absolute grid gap-2 ${phone ? "inset-x-4 top-[500px] grid-cols-3" : "left-[150px] top-[560px] w-[900px] grid-cols-6"}`} data-mock="counts">
+            {j.counts.map((c, i) => (
+              <div key={c.key} className={`rounded-2xl p-3 text-center ${GLASS}`} style={rise(p, 0.45 + i * 0.04, 0.58 + i * 0.04)}>
+                <p className="font-display text-[26px] font-semibold leading-none text-slate-900">{Math.round(c.n * span(p, 0.45 + i * 0.04, 0.7 + i * 0.04))}</p>
+                <p className="mt-1 text-[11px] text-slate-500">{c.label}</p>
               </div>
             ))}
           </div>
-        </div>
-      );
-      const push = (
-        <div data-mock="push" className="absolute left-1/2 flex w-[340px] -translate-x-1/2 items-center gap-3 rounded-2xl bg-white/95 px-4 py-3 shadow-[0_18px_40px_-16px_hsl(0_0%_0%/.5)]"
-          style={{ top: lerp(-80, phone ? 52 : 92, span(p, 0.05, 0.2)) }}>
-          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${INK}`}><Bell size={16} weight="fill" /></span>
-          <div className="min-w-0"><p className="text-[13px] font-semibold text-slate-900">DecisionOS</p><p className="truncate text-[12px] text-slate-600">{plan[0]?.team || j.memberTeam} finished “{short(plan[0]?.task || "a task", 32)}”</p></div>
-        </div>
-      );
-      return phone ? (
-        <PShell title="Desk" dim={span(p, 0.28, 0.4) * 0.5}>
-          <div className="absolute left-[25px] top-[220px]">{card}</div>{push}
-        </PShell>
-      ) : (
-        <DShell j={j} dim={span(p, 0.28, 0.4) * 0.6}>
-          <div className="absolute left-[390px] top-[200px]">{card}</div>{push}
-        </DShell>
+        </Sky>
       );
     },
     camera: [{ at: 0, ...C }, { at: 1, ...C }],
+    notes: [{ id: "counts", target: "counts", at: [0.72, 1], side: "top", title: "All from your interview", text: "Nothing here is a template — it is how you said you work." }],
+  });
+
+  /* Ask Dex — the company brain, answering from this company's own setup. */
+  const f0 = j.flows[0];
+  // Any workflow name reads in this sentence ("Wholesale Orders", "Raw Spice Buying").
+  const askQ = f0 ? `Who does what in ${f0.label}?` : "Who does what when an order comes in?";
+  const askA = f0
+    ? f0.stages.slice(0, 4).map((x, i) => `${i === 0 ? "First" : "Then"} ${x.gate ? "you sign off" : x.team} — ${x.label.toLowerCase()}`).join(". ") + "."
+    : `${j.memberTeam} picks it up, and anything over your limit comes to you.`;
+  scenes.push({
+    key: "ask", chapter: "Ask Dex", ms: 8000,
+    title: "Ask Dex anything about your company",
+    render: (p) => {
+      const q = typed(askQ, p, 0.08, 0.3);
+      const a = typed(askA, p, 0.42, 0.85);
+      const panel = (
+        <div className={`absolute flex flex-col rounded-[1.8rem] bg-[hsl(0_0%_7%/.96)] p-4 text-white shadow-[0_30px_70px_-24px_hsl(0_0%_0%/.8)] ${phone ? "inset-x-3 top-[110px] bottom-[118px]" : "left-[260px] top-[100px] h-[600px] w-[680px]"}`}>
+          <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-white/10"><Sparkle size={15} weight="fill" className="text-amber-300" /></span>
+            <div><p className="text-[14px] font-semibold">Ask Dex</p><p className="text-[11px] text-white/50">Knows {j.company}</p></div>
+          </div>
+          <div className="mt-4 flex-1 space-y-3 overflow-hidden">
+            {q && <div className="ml-auto max-w-[80%] rounded-2xl rounded-br-md bg-white px-3.5 py-2.5 text-[14px] text-slate-900" data-mock="ask-q">{q}</div>}
+            {p > 0.32 && p < 0.44 && <p className="animate-pulse text-[14px] font-medium text-white/80">Dex is thinking…</p>}
+            {a && (
+              <div className="max-w-[88%] rounded-2xl rounded-bl-md bg-white/[0.08] px-3.5 py-3 text-[14px] leading-relaxed text-white/90" data-mock="ask-a">
+                {a}
+                {p > 0.86 && f0 && <span className="mt-2 flex w-fit items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-white/70"><Kanban size={11} weight="bold" /> From: {f0.label}</span>}
+              </div>
+            )}
+          </div>
+          <div className="mt-3 flex items-center gap-2 rounded-full bg-white/[0.08] px-4 py-2.5 text-[13px] text-white/40">
+            <ChatCircleDots size={15} weight="bold" /> Ask about orders, people, money… <PaperPlaneRight size={14} weight="bold" className="ml-auto" />
+          </div>
+        </div>
+      );
+      return phone ? <PShell title="Desk" dim={0.5}>{panel}</PShell> : <DShell j={j} dim={0.55}>{panel}</DShell>;
+    },
+    camera: [{ at: 0, ...C }, { at: 1, ...C }],
+    notes: [{ id: "a", target: "ask-a", at: [0.86, 1], side: phone ? "top" : "right", title: "Answers from your own data", text: "Your workflows, tasks, people and decisions — it knows them all." }],
+  });
+
+  /* Everything else in DecisionOS, so nobody has to go looking for a guide. */
+  const ADDONS = [
+    { icon: Wallet, name: "Finance", line: "What's owed, what's paid, what's due" },
+    { icon: Kanban, name: "Ops", line: "Every workflow, step by step, on one board" },
+    { icon: AddressBook, name: "CRM", line: "Buyers and suppliers, every conversation" },
+    { icon: UsersThree, name: "Team", line: "People, roles, leave and requests" },
+    { icon: Brain, name: "Company Brain", line: `Everything Dex knows about ${j.company}` },
+    { icon: BookOpenText, name: "Journal", line: "Every decision, why, and how it went" },
+    { icon: CalendarBlank, name: "Calendar", line: "Due dates and routines in one place" },
+    { icon: Gauge, name: "Operating Score", line: "One number for how the company runs" },
+    { icon: SunHorizon, name: "Morning brief", line: "What changed, what needs you today" },
+  ];
+  scenes.push({
+    key: "addons", chapter: "Everything else", ms: 8000,
+    title: "And the rest of your company, in one place",
+    render: (p) => (
+      <Sky>
+        <div className={`absolute grid gap-3 ${phone ? "inset-x-4 top-[70px] grid-cols-2" : "left-[120px] top-[90px] w-[960px] grid-cols-3"}`}>
+          {ADDONS.map((m, i) => {
+            const Icon = m.icon;
+            return (
+              <div key={m.name} className={`rounded-[1.4rem] bg-white/85 ${phone ? "p-3" : "p-5"} shadow-[0_14px_30px_-20px_hsl(230_30%_18%/.55)] ring-1 ring-inset ring-white`}
+                style={rise(p, 0.04 + i * 0.05, 0.16 + i * 0.05, 16)} data-mock={`addon-${i}`}>
+                <span className={`grid place-items-center rounded-xl ${INK} ${phone ? "h-9 w-9" : "h-11 w-11"}`}><Icon size={phone ? 17 : 20} weight="duotone" /></span>
+                <p className={`mt-2.5 font-semibold text-slate-900 ${phone ? "text-[14px]" : "text-[17px]"}`}>{m.name}</p>
+                <p className={`mt-0.5 leading-snug text-slate-500 ${phone ? "text-[11.5px]" : "text-[13px]"}`}>{m.line}</p>
+              </div>
+            );
+          })}
+        </div>
+      </Sky>
+    ),
+    camera: [{ at: 0, ...C }, { at: 1, ...C }],
     notes: [
-      { id: "push", target: "push", at: [0.12, 0.3],  side: "bottom", title: "On your phone, as it happens", text: "When work you asked for is done.", },
+      { id: "fin", target: "addon-0", at: [0.6, 0.73], side: phone ? "bottom" : "right", title: "Finance", text: "Invoices and payments sit beside the work that earns them." },
+      { id: "brain", target: "addon-4", at: [0.74, 0.87], side: phone ? "top" : "right", title: "Company Brain", text: "Ask it anything — it answers from your company." },
+      { id: "jr", target: "addon-5", at: [0.88, 1], side: phone ? "top" : "left", title: "Journal", text: "Every decision you make, kept with its reason." },
     ],
   });
+
+  /* The full cycle — the loop the whole product runs on. */
+  const LOOP = [
+    { name: "You decide", sub: "Speak or type it" },
+    { name: "Dex plans", sub: "Tasks for each team" },
+    { name: "Teams do it", sub: "One next step each" },
+    { name: "You sign off", sub: "Only what you chose" },
+    { name: "Work is done", sub: "Proof kept" },
+    { name: "You're told", sub: "And decide again" },
+  ];
+  scenes.push({
+    key: "cycle", chapter: "The cycle", ms: 7500,
+    title: "How every day runs, start to finish",
+    render: (p) => {
+      const cx = W / 2; const cy = phone ? 360 : 360; const R = phone ? 132 : 230;
+      const lit = Math.floor(span(p, 0.08, 0.8, (x) => x) * LOOP.length);
+      const t = span(p, 0.08, 0.8, (x) => x) * 2 * Math.PI;
+      return (
+        <Sky>
+          <svg className="absolute inset-0" width={W} height={H} aria-hidden="true">
+            <circle cx={cx} cy={cy} r={R} fill="none" stroke="hsl(230 20% 30% / .16)" strokeWidth="2" />
+            <circle cx={cx} cy={cy} r={R} fill="none" stroke={GOLD} strokeWidth="3" strokeLinecap="round"
+              strokeDasharray={`${2 * Math.PI * R * span(p, 0.08, 0.8, (x) => x)} ${2 * Math.PI * R}`} transform={`rotate(-90 ${cx} ${cy})`} />
+            <circle cx={cx + R * Math.cos(t - Math.PI / 2)} cy={cy + R * Math.sin(t - Math.PI / 2)} r="7" fill={GOLD} opacity={p < 0.82 ? 1 : 0} />
+          </svg>
+          <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ left: cx, top: cy }}>
+            <p className={`font-display font-semibold text-slate-900 ${phone ? "text-[20px]" : "text-[28px]"}`}>{j.company}</p>
+            <p className="text-[13px] text-slate-500">on DecisionOS</p>
+            {p > 0.84 && <span className={`mt-3 inline-flex h-11 items-center gap-2 rounded-full px-5 text-[14px] font-semibold ${INK}`} style={rise(p, 0.84, 0.94)} data-mock="enter">Enter DecisionOS <ArrowRight size={14} weight="bold" /></span>}
+          </div>
+          {LOOP.map((x, i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / LOOP.length;
+            const on = i < lit || p > 0.8;
+            return (
+              <div key={x.name} className={`absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center ${phone ? "w-[6.5rem]" : "w-40"}`}
+                style={{ left: cx + R * Math.cos(a), top: cy + R * Math.sin(a) }}>
+                <span className={`grid place-items-center rounded-full text-[13px] font-semibold transition-colors ${phone ? "h-9 w-9" : "h-11 w-11"} ${on ? INK : "bg-white text-slate-500 ring-1 ring-slate-300"}`}
+                  style={{ boxShadow: i === lit && p < 0.8 ? `0 0 0 6px ${GOLD}55` : undefined }}>{i + 1}</span>
+                <p className={`mt-1.5 font-semibold ${on ? "text-slate-900" : "text-slate-500"} ${phone ? "text-[12px]" : "text-[14px]"}`}>{x.name}</p>
+                <p className={`text-slate-500 ${phone ? "text-[10.5px]" : "text-[12px]"}`}>{x.sub}</p>
+              </div>
+            );
+          })}
+        </Sky>
+      );
+    },
+    camera: [{ at: 0, ...C }, { at: 1, ...C }],
+    notes: [{ id: "enter", target: "enter", at: [0.9, 1], side: "bottom", title: "You're ready", text: "Everything you just saw is waiting inside." }],
+  });
+
+  /* The running order, and only what this company has: no sign-off chapter
+     without rules, no routines chapter without routines. */
+  const ORDER = ["glance", ...shownFlows.map((_, i) => `flow-${i}`), "desk", "decide", "mywork", "signoff", "routines", "ask", "addons", "cycle"];
+  const skip = new Set([!j.rules.length && "signoff", !j.routines.length && "routines"].filter(Boolean));
+  const ordered = ORDER.filter((k) => !skip.has(k)).map((k) => scenes.find((sc) => sc.key === k)).filter(Boolean);
+  scenes.length = 0;
+  scenes.push(...ordered);
 
   /* A phone screen has no width to spare, so its camera holds the whole
      screen and the spotlight does the focusing. */

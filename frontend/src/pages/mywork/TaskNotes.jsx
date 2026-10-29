@@ -50,18 +50,18 @@ export function TaskNotes({ taskId, userId }) {
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <p className={`${DRAWER_LABEL} mb-0`}>Your notes</p>
         <span className="flex items-center gap-1 text-[11px] text-slate-500">
-          <LockSimple size={11} weight="bold" aria-hidden="true" /> Only on this phone
+          <LockSimple size={11} weight="bold" aria-hidden="true" /> Only on this device
         </span>
       </div>
       <textarea ref={ref} value={text} onChange={(e) => setText(e.target.value)}
         aria-label="Your notes on this task" data-testid={`task-notes-text-${taskId}`}
-        placeholder="Jot anything down — numbers, a name to call, what to check tomorrow. It stays on this phone."
+        placeholder="Jot anything down — numbers, a name to call, what to check tomorrow. It stays on this device."
         className={`${DRAWER_FIELD} min-h-[11rem] resize-none leading-relaxed`} />
       <div className="mt-3 flex items-center gap-2">
         <MicDictateButton onText={dictated} title="Dictate a note"
           className={`h-12 w-12 shrink-0 rounded-full ${GLASS_PILL}`} />
         <span className="min-w-0 flex-1 text-[12px] text-slate-500" aria-live="polite">
-          {text ? (saved ? "Saved on this phone" : "Saving…") : "Tap the mic to speak a note"}
+          {text ? (saved ? "Saved on this device" : "Saving…") : "Tap the mic to speak a note"}
         </span>
         {text && (
           <button type="button" onClick={() => setText("")} data-testid={`task-notes-clear-${taskId}`}

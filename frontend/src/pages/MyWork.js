@@ -122,6 +122,11 @@ import { TaskNotes } from "./mywork/TaskNotes";
 // Selection should snap anyway — a state indicator that fades in over 150ms
 // is a worse indicator. .ng-pop keeps its own hover transition; this is only
 // about the selected/unselected swap.
+/* 2026-10-29 — the task drawer's pre-redesign desktop body, retired when
+   desktop took the phone's task view (see the drawer). Off; kept until the
+   new view has had a week on desktop, then delete the branch it guards. */
+const LEGACY_TASK_BODY = false;
+
 const SEG = "flex h-10 items-center justify-center gap-1.5 px-4 text-xs font-medium leading-tight lg:text-sm";
 const SEG_ON = "ng-pressed font-semibold text-foreground";
 const SEG_OFF = "ng-pop text-foreground/70";
@@ -2253,7 +2258,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
      (consent, never over a checklist, never on finished or locked work).
      The guide says Dex is drafting until the steps arrive. */
   const [autoAsked, setAutoAsked] = useState(false);
-  const needsDraft = expanded && isMobile && !(t.execution_plan?.steps || []).length && !isTerminal(t);
+  // 2026-10-29 (founder) — "reflect the phone's design changes on desktop":
+  // the checklist drafts itself on open at every width now.
+  const needsDraft = expanded && !(t.execution_plan?.steps || []).length && !isTerminal(t);
   useEffect(() => {
     if (!needsDraft || autoAsked) return undefined;
     setAutoAsked(true);
@@ -2741,6 +2748,19 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       toast.error(e.response?.data?.detail || "Dex couldn't draft the steps");
     } finally { setAskBusy(false); }
   };
+  /* The full-size proof photo. It lived in the desktop body only, so a photo
+     tapped in the phone's task view opened nothing; it is the view's own now. */
+  const lightboxDialog = (
+    <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
+      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
+        <DialogHeader>
+          <DialogTitle className="sr-only">Proof photo</DialogTitle>
+        </DialogHeader>
+        {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
+      </DialogContent>
+    </Dialog>
+  );
+
   const mobileTaskView = () => {
     const proofN = (t.attachments || []).length;
     const deptLabel = t.task_type ? (opModel(tenant).task_categories.find((c) => c.key === t.task_type)?.label || null) : null;
@@ -2772,7 +2792,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           data-testid={`task-view-bar-${t.id}`}>
           <SheetClose ref={closeRef} data-testid={`task-drawer-close-${t.id}`} aria-label="Back to My Work"
             className="flex h-11 items-center gap-2 rounded-pill bg-white/90 pl-2.5 pr-4 text-[15px] font-semibold text-slate-900 ring-1 ring-inset ring-slate-900/[0.06] shadow-[0_8px_22px_-12px_hsl(0_0%_0%/0.4)]">
-            <ArrowLeft size={18} weight="bold" aria-hidden="true" /> My Work
+            {isMobile ? <ArrowLeft size={18} weight="bold" aria-hidden="true" /> : <X size={16} weight="bold" aria-hidden="true" />}
+            {isMobile ? "My Work" : "Close"}
           </SheetClose>
           <span className="flex-1" />
           {t.created_by && t.created_by !== user?.id && (
@@ -2825,6 +2846,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                     data-testid={`wf-chip-full-${t.id}`} className={chip} title={`Open workflow: ${t.workflow_summary.title}`}>
                     <FlowArrow size={14} weight="bold" aria-hidden="true" className="shrink-0" />
                     <span className="truncate">{(t.workflow_summary.title || "Workflow").slice(0, 40)}</span>
+                    {t.workflow_summary.stage && (
+                      <span className="shrink-0 text-slate-500">· {String(t.workflow_summary.stage).replace(/_/g, " ")}</span>
+                    )}
                   </WorkflowLink>
                 )}
                 {t.recurrence?.every && (
@@ -2960,6 +2984,14 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                   })}
                 </div>
                 <div className="mt-3"><WaitingOn t={t} members={members} onPatched={onPeoplePatched} /></div>
+                {/* A mouse can set a percentage; a thumb has the slider. */}
+                {!isMobile && (
+                  <div className="mt-4">
+                    <ProgressControl value={checklist ? checklist.pct : (t.progress || 0)} onCommit={setProgress}
+                      checklist={checklist}
+                      testid={`progress-select-${t.id}`} valueTestid={`progress-bar-${t.id}`} />
+                  </div>
+                )}
               </section>
             )}
             {!terminal && !workLocked && !rights.work && t.status === "waiting" && (
@@ -3112,7 +3144,12 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
            open. Without this Radix focuses the stock close. */
         onOpenAutoFocus={(e) => { e.preventDefault(); closeRef.current?.focus(); }}>
         <div className="h-full overflow-y-auto">
-        {isMobile ? mobileTaskView() : (<>
+        {/* 2026-10-29 (founder) — "whatever design changes we made for the
+            task… reflect in the desktop version also": desktop opens the
+            same task view the phone does, in its side drawer. The older
+            desktop body is kept below for LEGACY_TASK_BODY only. */}
+        {lightboxDialog}
+        {!LEGACY_TASK_BODY ? mobileTaskView() : (<>
         {/* ASK-27 — the close is INSIDE the sheet now, at every width. It
             was a tab hanging off the left edge, which the founder read as
             detached from the card. It sits at the header's right as a
@@ -3497,14 +3534,6 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
 
     {attachmentBlocks("")}
 
-    <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
-      <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
-        <DialogHeader>
-          <DialogTitle className="sr-only">Proof photo</DialogTitle>
-        </DialogHeader>
-        {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
-      </DialogContent>
-    </Dialog>
 
     {/* 2026-09-14, founder — the approval step joins the drawer's glass: a
         DRAWER_CARD holding the ink Approve pill, with white glass pills for
@@ -4070,7 +4099,30 @@ function FilterChipGroup({ testid, label, value, options, counts, onSelect, load
    Mobile PWA (2026-09-14): no 2-up at sm — below lg the app is a 448px
    column, so `sm:` fired on landscape phones and tablets and squeezed two
    ~210px cards side by side. */
-function TaskGrid({ list, openId, setOpenId, cardProps }) {
+/* 2026-10-29 (founder) — "reflect the phone's design on desktop": with a
+   `deck`, a list cell is the phone's task card (status, due, title, people,
+   the numbered steps and the Next action) and opens the same drawer the
+   phone does; the bulk tick comes with it. */
+function TaskCell({ t, isOpen, setOpenId, cardProps, deck }) {
+  if (!deck) {
+    return <TaskCard t={t} open={isOpen} onToggleOpen={() => setOpenId(isOpen ? null : t.id)} {...cardProps(t)} />;
+  }
+  const cp = cardProps(t);
+  return (
+    <>
+      <TaskSummaryCard t={t} kit={deck.kit} members={cp.members} roleOptions={cp.roleOptions}
+        onOpen={(tabKey) => { deck.setOpenTab(tabKey || "steps"); setOpenId(t.id); }}
+        onPatched={deck.patchRow} onChange={cp.onChange}
+        selected={cp.selected} onToggleSelect={cp.onToggleSelect} />
+      {isOpen && (
+        <TaskCard t={t} drawerOnly open initialTab={deck.openTab}
+          onToggleOpen={() => setOpenId(null)} {...cp} />
+      )}
+    </>
+  );
+}
+
+function TaskGrid({ list, openId, setOpenId, cardProps, deck }) {
   return (
     /* 2026-09-15 — below lg this grid had no column definition, so the
        browser built one implicit `auto` column sized to the WIDEST card's
@@ -4084,12 +4136,7 @@ function TaskGrid({ list, openId, setOpenId, cardProps }) {
         const isOpen = openId === t.id;
         return (
           <div key={t.id} className="min-h-[112px] min-w-0">
-            <TaskCard
-              t={t}
-              open={isOpen}
-              onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
-              {...cardProps(t)}
-            />
+            <TaskCell t={t} isOpen={isOpen} setOpenId={setOpenId} cardProps={cardProps} deck={deck} />
           </div>
         );
       })}
@@ -4107,7 +4154,7 @@ const BANDS = [
   { key: "low", label: "Low" },
 ];
 
-function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high" }) {
+function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high", deck }) {
   const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
   return (
     <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
@@ -4124,18 +4171,9 @@ function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high"
                 <p className="text-center text-xs text-muted-foreground">Nothing here</p>
               </div>
             )}
-            {col.items.map((t) => {
-              const isOpen = openId === t.id;
-              return (
-                <TaskCard
-                  key={t.id}
-                  t={t}
-                  open={isOpen}
-                  onToggleOpen={() => setOpenId(isOpen ? null : t.id)}
-                  {...cardProps(t)}
-                />
-              );
-            })}
+            {col.items.map((t) => (
+              <TaskCell key={t.id} t={t} isOpen={openId === t.id} setOpenId={setOpenId} cardProps={cardProps} deck={deck} />
+            ))}
           </div>
         </section>
       ))}
@@ -4905,18 +4943,20 @@ export default function MyWork({ only = null }) {
      content, the page scrolling as usual (pages/mywork/WorkDeck).
      It is its own tree — the desktop below is untouched — and it covers the
      task views and My requests; the Approvals page keeps its own layout. */
+  // The deck card's kit and row patcher — the phone's list, and desktop's too.
+  const kit = { isOverdue, isDueToday, isTerminal, stageOf, lateness, latenessText, dueLabel,
+    STATUS_LABEL, STATUS_TONE, StatusRing, cardPeople };
+  // The patched row goes into this view's list at once (the refetch confirms).
+  const listKey = ["tasks", asked ? "asked" : team ? "team" : mine];
+  const patchRow = (row) => {
+    if (!row?.id) return;
+    qc.setQueryData(listKey, (rows) => (Array.isArray(rows) ? rows.map((r) => (r.id === row.id ? { ...r, ...row } : r)) : rows));
+    qc.setQueryData(["task", row.id], (prev) => ({ ...(prev || {}), ...row }));
+  };
+
   if (isMobile && !approvalsPage && view !== "approvals") {
     const bandsOn = aiPriority && !showingCompleted && view === "mywork";
     const deckList = bandsOn ? list.filter((tk) => TIER_OF(tk) === band) : list;
-    const kit = { isOverdue, isDueToday, isTerminal, stageOf, lateness, latenessText, dueLabel,
-      STATUS_LABEL, STATUS_TONE, StatusRing, cardPeople };
-    // The patched row goes into this view's list at once (the refetch confirms).
-    const listKey = ["tasks", asked ? "asked" : team ? "team" : mine];
-    const patchRow = (row) => {
-      if (!row?.id) return;
-      qc.setQueryData(listKey, (rows) => (Array.isArray(rows) ? rows.map((r) => (r.id === row.id ? { ...r, ...row } : r)) : rows));
-      qc.setQueryData(["task", row.id], (prev) => ({ ...(prev || {}), ...row }));
-    };
     const openRow = openId
       ? (all.find((tk) => tk.id === openId) || (openId === focusTaskId ? focusQ.data : openTaskQ.data) || null)
       : null;
@@ -5955,7 +5995,7 @@ export default function MyWork({ only = null }) {
               selected: selected.has(t.id),
               onToggleSelect: () => toggleSelected(t.id),
             });
-            const shared = { list, openId, setOpenId, cardProps };
+            const shared = { list, openId, setOpenId, cardProps, deck: { kit, patchRow, setOpenTab, openTab } };
             return aiOn && !showingCompleted
               ? <TaskPriorityColumns {...shared} band={band} />
               : <TaskGrid {...shared} />;

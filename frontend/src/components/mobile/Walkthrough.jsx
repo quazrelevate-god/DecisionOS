@@ -38,6 +38,7 @@ import { needsOwnerCredentials } from "@/components/auth/OwnerCredentialsGate";
 import { INK_PILL, GLASS_PILL } from "@/components/neuglass/glass";
 import { openGuide } from "@/lib/guide";
 import { cn } from "@/lib/utils";
+import { firstTourPending } from "@/lib/firstTour";
 
 export const TOUR_VERSION = 1;
 
@@ -155,7 +156,7 @@ function measure(selectors) {
 }
 
 /** Nothing else is asking for the person's attention. */
-function clearToStart(user) {
+export function clearToStart(user) {
   if (!user || user.welcome_pending || needsOwnerCredentials(user) || !termsAccepted(user)) return false;
   try { if (localStorage.getItem("dos_welcome")) return false; } catch { /* private mode */ }
   /* The demo workspace's banner sits fixed over the top of the Desk, on the
@@ -181,6 +182,8 @@ export default function Walkthrough() {
   React.useEffect(() => {
     if (steps || !isMobile || !user) return undefined;
     if ((seen || sessionDone.current) && !replay) return undefined;
+    // A founder fresh from signup gets their company's own tour (tour/FirstWeekTour) instead.
+    if (firstTourPending() && !replay) return undefined;
     const script = tourScript(user, location.pathname);
     if (!script) return undefined;
     let tries = 0;

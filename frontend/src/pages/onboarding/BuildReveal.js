@@ -15,9 +15,8 @@ import { currentDraft } from "../../lib/onboardingDraft";
 import { PipelineFlow, withRules } from "../../components/workflow/PipelineFlow";
 import { OsAssembly } from "./OsAssembly";
 import { OrgMap, Routines } from "./OsMap";
-import { FirstWeek } from "./walkthrough/FirstWeek";
+import { saveFirstTour } from "../../lib/firstTour";
 import { buildJourney } from "./walkthrough/journey";
-import { WaitStory } from "./WaitStory";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
@@ -540,6 +539,9 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
          open it. The routines that screen offered are not lost — My Work's
          RoutinesNudge asks for them in the app, where a founder can answer
          with their company in front of them. */
+      /* 2026-10-30 — the first-week tour plays over the real app the moment
+         they are in; its script is this company, filled from the draft. */
+      saveFirstTour(buildJourney({ company: payload.company_name, founder: payload.name, bp, pipelines: reviewPipelines }));
       onEnter();
     } catch (e) {
       const detail = e.response?.data?.detail;
@@ -991,19 +993,6 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               {activeTab === "routines" && <Routines tasks={bp?.operational_tasks} isNew={isNew} />}
             </section>
 
-            {/* ── BAND 3 · THEIR FIRST WEEK, PLAYED: where all of it lives in
-                the app, on the device they signed up on (with a switch). */}
-            <section aria-label="See it in DecisionOS" data-testid="build-tour">
-              <h2 className="mb-1 px-1 font-display text-2xl leading-tight text-slate-900">See it in DecisionOS</h2>
-              <p className="mb-5 px-1 text-sm text-muted-foreground">A minute with your own company, inside the app. Drag the slider to any moment.</p>
-              {!sessionId || flowState === "ready" || flowState === "failed" ? (
-                <FirstWeek company={payload.company_name} founder={payload.name} bp={bp}
-                  pipelines={reviewPipelines} device={isPhone ? "phone" : "desktop"} />
-              ) : (
-                <WaitStory title="Setting up your first week" expectMs={20000} testid="first-week-wait"
-                  lines={["Laying out how work moves", "Giving each step its team", "Putting your sign-offs in place", "Getting the tour ready"]} />
-              )}
-            </section>
 
             {/* Deliberately dead: WE-02 retired workflow_templates and the
                 blueprint stopped returning workflows. Kept because it is the

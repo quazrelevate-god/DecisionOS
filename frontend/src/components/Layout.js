@@ -29,6 +29,7 @@ import {
   Buildings,  // 2026-09-20: the founder's other companies, in the profile menu
   Plus,
   Lifebuoy,   // 2026-10-12: Help & guide, in the profile menu
+  Sparkle,    // 2026-10-30: Take the tour (the first-week tour), in the profile menu
 } from "@phosphor-icons/react";
 import { openGuide } from "../lib/guide";
 // KR-5/KR-8.2 — the Neu-glassmorphism shell pieces.
@@ -71,6 +72,8 @@ import { cn } from "../lib/utils";
 import { useDexCapture } from "../hooks/useDexCapture";
 import { BottomSheet } from "./mobile/BottomSheet";
 import { InstallPrompt } from "./mobile/InstallPrompt";
+import FirstWeekTour from "./tour/FirstWeekTour";
+import { hasFirstTour, replayFirstTour } from "../lib/firstTour";
 import { quickMode, leaveQuick } from "../lib/native/quick";
 
 // Epic 2 Sprint A (E2-01 / E2-02 / E2-15): People retired; CRM (customers +
@@ -809,6 +812,9 @@ export default function Layout({ children }) {
       <WelcomeMemberCard />
       {/* 2026-10-12 — the phone walkthrough, once per person, after all of the above. */}
       <Walkthrough />
+      {/* 2026-10-30 — the founder's first week, played over the real app
+          with their own company in it, once, right after signup. */}
+      <FirstWeekTour />
       {/* KR-5 — the Neu-glassmorphism header. Three tracks: logo · centred pill nav ·
           circular controls + the avatar block. The reference's shell exactly,
           which also KILLS two prior decisions on purpose:
@@ -984,6 +990,16 @@ export default function Layout({ children }) {
                     className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
                   >
                     <BookOpen size={15} /> {t("nav.journal", "Journal")}
+                  </button>
+                )}
+                {/* Their company's tour again — kept on this device since signup. */}
+                {hasFirstTour() && (
+                  <button
+                    onClick={() => { if (replayFirstTour()) navigate("/inbox"); }}
+                    data-testid="nav-first-tour"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-900/[0.06] hover:text-slate-900"
+                  >
+                    <Sparkle size={15} /> Take the tour
                   </button>
                 )}
                 {user?.role === "owner" && (

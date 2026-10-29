@@ -15,6 +15,8 @@ import { currentDraft } from "../../lib/onboardingDraft";
 import { PipelineFlow, withRules } from "../../components/workflow/PipelineFlow";
 import { OsAssembly } from "./OsAssembly";
 import { OrgMap, Routines } from "./OsMap";
+import { FirstWeek } from "./walkthrough/FirstWeek";
+import { WaitStory } from "./WaitStory";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
 // What Dex is "doing" while the real AI build runs (30-60s). Loops until done.
@@ -327,6 +329,7 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
   const [refineText, setRefineText] = useState("");
   const [refining, setRefining] = useState(false);
   const [showRefine, setShowRefine] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const ranRef = useRef(false);
 
   /* ── KM-66 choreography state ───────────────────────────────────────────
@@ -919,30 +922,49 @@ export function BuildReveal({ sessionId, languageCode, payload, register, onEnte
               )}
             </div>
 
-            {/* ── BAND 2 · the map (2026-10-29, founder: "analysed according
-                to its hierarchy and importance… illustrative and interactive,
-                not grids of cards and a form-like list"). In order of what a
-                founder needs to see: the teams and how work passes between
-                them (onboarding/OsMap), then how work moves step by step, then
-                what still comes to them, then the routines Dex keeps running. */}
-            <OrgMap company={payload.company_name} departments={bp?.departments}
-              pipelines={reviewPipelines} flowReady={flowState === "ready"} counts={glance} isNew={isNew} />
-            {sessionId && (
-              <WorkFlowSection flow={flow} state={flowState} teams={bp?.departments} still={still}
-                ruleNames={(bp?.approval_rules || []).map((r) => r.name)}
-                onRetry={() => setFlowTry((n) => n + 1)}
-                startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections} />
+            {/* ── BAND 2 · THEIR FIRST WEEK, PLAYED (2026-10-29, founder: "I
+                can't understand everything at once… show the entire journey
+                as a walkthrough inside the actual UI, a simpler mockup with
+                the new company's data, annotated, zoomed in, uncluttered").
+                The map, the routes, the sign-offs and the routines are still
+                here for anyone who wants every detail — one press away, under
+                the tour rather than in place of it. */}
+            {!sessionId || flowState === "ready" || flowState === "failed" ? (
+              <FirstWeek company={payload.company_name} founder={payload.name} bp={bp}
+                pipelines={reviewPipelines} device={isPhone ? "phone" : "desktop"} />
+            ) : (
+              <WaitStory title="Setting up your first week" expectMs={20000} testid="first-week-wait"
+                lines={["Laying out how work moves", "Giving each step its team", "Putting your sign-offs in place", "Getting the tour ready"]} />
             )}
+            <div>
+              <button type="button" onClick={() => setShowDetails((v) => !v)} data-testid="build-details-toggle"
+                aria-expanded={showDetails}
+                className="mx-auto flex h-11 items-center gap-2 rounded-pill bg-white/70 px-5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-white shadow-[0_8px_20px_-14px_hsl(230_30%_18%/.5)]">
+                {showDetails ? "Hide the details" : "See every detail Dex set up"}
+              </button>
+              {showDetails && (
+                <div className="mt-5 space-y-5 lg:space-y-7" data-testid="build-details">
+              <OrgMap company={payload.company_name} departments={bp?.departments}
+                pipelines={reviewPipelines} flowReady={flowState === "ready"} counts={glance} isNew={isNew} />
+              {sessionId && (
+                <WorkFlowSection flow={flow} state={flowState} teams={bp?.departments} still={still}
+                  ruleNames={(bp?.approval_rules || []).map((r) => r.name)}
+                  onRetry={() => setFlowTry((n) => n + 1)}
+                  startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections} />
+              )}
 
-            {/* Audit A-11 — the approval rules, before the founder enters. */}
-            <ApprovalRules rules={bp?.approval_rules} still={still}
-              startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections}
-              onRemove={stage === "preview" ? (i) => {
-                const next = { ...bp, approval_rules: (bp.approval_rules || []).filter((_, x) => x !== i) };
-                setBp(next);
-                onBlueprint?.(next);
-              } : undefined} />
-            <Routines tasks={bp?.operational_tasks} isNew={isNew} />
+              {/* Audit A-11 — the approval rules, before the founder enters. */}
+              <ApprovalRules rules={bp?.approval_rules} still={still}
+                startAt={CHOREO.sectionsAt + (deptItems.length + taskItems.length) * pillStagger + CHOREO.betweenSections}
+                onRemove={stage === "preview" ? (i) => {
+                  const next = { ...bp, approval_rules: (bp.approval_rules || []).filter((_, x) => x !== i) };
+                  setBp(next);
+                  onBlueprint?.(next);
+                } : undefined} />
+              <Routines tasks={bp?.operational_tasks} isNew={isNew} />
+                </div>
+              )}
+            </div>
 
             {/* Deliberately dead: WE-02 retired workflow_templates and the
                 blueprint stopped returning workflows. Kept because it is the

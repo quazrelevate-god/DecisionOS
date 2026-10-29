@@ -44,3 +44,19 @@ def test_the_answer_carries_what_it_built_and_the_page_draws_it():
     page = (FE / "pages" / "Signup.js").read_text(encoding="utf-8")
     assert "<OsAssembly" in page and "onBuilt={addBuilt}" in page
     assert "app-sky__art--aside" not in page, "the photograph is gone from signup"
+
+
+def test_the_last_screen_is_their_first_week_played():
+    """The founder (2026-10-29): "I can't understand everything all at once…
+    show the entire journey as a walkthrough inside the actual UI, populated
+    with the new company's data." The review opens on the tour; every detail
+    stays one press away beneath it."""
+    br = (FE / "pages" / "onboarding" / "BuildReveal.js").read_text(encoding="utf-8")
+    assert "<FirstWeek" in br and 'data-testid="build-details-toggle"' in br
+    assert br.index("<FirstWeek") < br.index("<OrgMap"), "the tour comes first, the details under it"
+    wt = FE / "pages" / "onboarding" / "walkthrough"
+    journey = (wt / "journey.js").read_text(encoding="utf-8")
+    assert "bp?.approval_rules" in journey and "pipelines" in journey, "built from the company's own draft"
+    player = (wt / "Player.jsx").read_text(encoding="utf-8")
+    assert 'type="range"' in player, "a slider scrubs it"
+    assert "--ui-scale" in player, "notes land on target through the app's page zoom"

@@ -78,6 +78,7 @@ import { ReportButton } from "../components/ReportButton";
 import { askBeforeMic } from "../lib/micNotice";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { WorkSplit, TaskSummaryCard, FilterTile, DeckNotice } from "./mywork/WorkDeck";
+import { StatusFence, WorkTree, Segments, TeamBoard, PersonBar, personStats } from "./mywork/WorkspaceHub";
 import { TaskActionSlider } from "./mywork/TaskActionSlider";
 import { TaskNotes } from "./mywork/TaskNotes";
 
@@ -4176,7 +4177,10 @@ function FilterChipGroup({ testid, label, value, options, counts, onSelect, load
 /* 2026-10-29 (founder) — "reflect the phone's design on desktop": with a
    `deck`, a list cell is the phone's task card (status, due, title, people,
    the numbered steps and the Next action) and opens the same drawer the
-   phone does; the bulk tick comes with it. */
+   phone does; the bulk tick comes with it.
+   2026-10-30 (founder) — `desk` trims it for the desktop list: no Next action
+   box or buttons (the whole card opens the task), the numbered steps become
+   one progress bar, and the priority is a glow along the card's bottom edge. */
 function TaskCell({ t, isOpen, setOpenId, cardProps, deck }) {
   if (!deck) {
     return <TaskCard t={t} open={isOpen} onToggleOpen={() => setOpenId(isOpen ? null : t.id)} {...cardProps(t)} />;
@@ -4184,7 +4188,7 @@ function TaskCell({ t, isOpen, setOpenId, cardProps, deck }) {
   const cp = cardProps(t);
   return (
     <>
-      <TaskSummaryCard t={t} kit={deck.kit} members={cp.members} roleOptions={cp.roleOptions}
+      <TaskSummaryCard t={t} kit={deck.kit} members={cp.members} roleOptions={cp.roleOptions} desk
         onOpen={(tabKey) => { deck.setOpenTab(tabKey || "steps"); setOpenId(t.id); }}
         onPatched={deck.patchRow} onChange={cp.onChange}
         selected={cp.selected} onToggleSelect={cp.onToggleSelect} />
@@ -4423,12 +4427,20 @@ export default function MyWork({ only = null }) {
   // ASK-28 TK-04 — ?view=mine and ?view=all are addresses too (All Tasks is
   // the owner's). They are also saved as the default, unlike asked and team.
   const scopeFromUrl = (v) => (URL_SCOPES.includes(v) || v === "mine" || (v === "all" && canSeeAll) ? v : null);
-  const [scope, setScope] = useState(scopeFromUrl(rawView) || savedScope);
+  const isMobile = useIsMobile();
+  /* 2026-10-30 (founder) — THE DESKTOP WORKSPACE (pages/mywork/WorkspaceHub):
+     a status fence, the reader's work tree and, for the owner, the team board
+     replace the desktop header's switcher and its three dropdowns. Not on a
+     phone, and not on the Approvals page, which keeps its own room. */
+  const deskHub = !isMobile && !approvalsPage;
+  // The owner's desktop opens on the team board (All Tasks) unless a link
+  // says otherwise; everyone else where they last were.
+  const [scope, setScope] = useState(scopeFromUrl(rawView)
+    || (deskHub && isOwner && canSeeAll && !rawView ? "all" : savedScope));
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   /* 2026-10-29, founder — ON A PHONE THE PRIORITY BANDS ARE THE DEFAULT VIEW
      (High / Medium / Low over the deck); the sparkle turns them off and on.
      Its own saved setting, so the desktop's choice is not changed by it. */
-  const isMobile = useIsMobile();
   const [aiPriority, setAiPriority] = useState(() => (isMobile
     ? (loadedPrefs.aiPriorityM ?? true) : Boolean(loadedPrefs.aiPriority)));
   /* KM-30 — ONE progress lens, and no priority lens at all.
@@ -4502,6 +4514,8 @@ export default function MyWork({ only = null }) {
   // list. Cleared when the tab / scope / view changes so a stale selection
   // can't apply to a different filter's tasks.
   const [selected, setSelected] = useState(() => new Set());
+  // The team board's order (WorkspaceHub RANKS): who delivered most, first.
+  const [rank, setRank] = useState("delivered");
   useEffect(() => { setSelected(new Set()); }, [scope, tab, view, personFilter, statusFilter]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkReassignOpen, setBulkReassignOpen] = useState(false);
@@ -4810,8 +4824,13 @@ export default function MyWork({ only = null }) {
   // ASK-24 — Department x Person x Status, all through one
   // predicate. countWith() swaps one dimension for the option being counted,
   // so every menu's numbers reflect the filters set in the others.
+  // The desktop Workspace offers Department on All Tasks only (the board's
+  // segment bar); elsewhere a department saved earlier must not narrow a list
+  // with no control on screen to say so.
+  const onAll = canSeeAll && scope === "all";
+  const deptTab = deskHub && !onAll ? "all" : tab;
   const filters = {
-    tab: urlFilter === "completed" ? "completed" : tab,
+    tab: urlFilter === "completed" ? "completed" : deptTab,
     person: personFilter,
     status: statusFilter || (STATUS_LENSES.has(urlFilter) && urlFilter !== "completed" ? urlFilter : ""),
   };
@@ -5000,7 +5019,7 @@ export default function MyWork({ only = null }) {
   // no-match empty state both say it.
   const labelIn = (opts, key) => opts.find((o) => o.key === key)?.label;
   const filterParts = [
-    tab !== "all" && tab !== "completed" ? labelIn(WORK_TABS, tab) : null,
+    deptTab !== "all" && deptTab !== "completed" ? labelIn(WORK_TABS, deptTab) : null,
     personFilter ? (labelIn(personOptions, personFilter) || "One person") : null,
     filters.status ? labelIn(STATUS_FILTER_OPTIONS, filters.status) : null,
   ].filter(Boolean);
@@ -5014,6 +5033,75 @@ export default function MyWork({ only = null }) {
   };
   const tasksLoading = tasksQ.isLoading && !tasksQ.data;
 
+  /* ─── THE DESKTOP WORKSPACE (pages/mywork/WorkspaceHub) ─────────────── */
+  // The owner's All Tasks, with no person or status chosen, is the team
+  // board rather than a grid of everybody's cards.
+  const boardOn = deskHub && isOwner && onAll && view === "mywork" && !personFilter && !filters.status && !showingCompleted;
+  const hubFx = { isOverdue, isTerminal, statusMatches };
+  // The board counts open AND finished work, within the department chosen.
+  const boardTasks = onAll ? all.filter((tk) => deptTab === "all" || tk.task_type === deptTab) : [];
+  const meCard = members.find((m) => m.id === user?.id) || { name: user?.name || "You", avatar_url: user?.avatar_url };
+  // Back to the board: All Tasks with nothing narrowed but the department.
+  const goBoard = () => {
+    setScope("all");
+    setView("mywork");
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("view", "all");
+      ["person", "status", "filter"].forEach((k) => next.delete(k));
+      return next;
+    });
+  };
+  // A status tile. From My requests or Approvals it means the task list again,
+  // in one address change (two would race and keep only the last).
+  const pickStatus = (key) => {
+    if (view === "mywork") { setStatusFilter(key); return; }
+    setView("mywork");
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("view", onAll ? "all" : URL_SCOPES.includes(scope) ? scope : "mine");
+      if (key) next.set("status", key); else next.delete("status");
+      return next;
+    });
+  };
+  const mineActive = view === "mywork" && !URL_SCOPES.includes(scope) && !onAll;
+  const deskBranches = [
+    { key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine", active: mineActive, onClick: () => goView("mine") },
+    { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
+      active: view === "mywork" && scope === "asked", onClick: () => goView("asked") },
+    ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
+      active: view === "mywork" && scope === "team", onClick: () => goView("team") }] : []),
+    // The owner's All Tasks always opens on the board, whatever was narrowed.
+    ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), testid: "work-scope-all",
+      active: view === "mywork" && onAll, onClick: () => (isOwner ? goBoard() : goView("all")) }] : []),
+    { key: "requests", label: t("mywork.my_requests", "My requests"), testid: "work-view-requests",
+      active: view === "requests", onClick: () => goView(null, "requests") },
+    ...(showApprovalsView ? [{ key: "approvals", label: t("mywork.view_approvals"), testid: "work-view-approvals",
+      count: waitingOnMe, active: view === "approvals", onClick: () => goView(null, "approvals") }] : []),
+  ];
+  // Department, as a segment bar on All Tasks (the board and its lists).
+  const deptBar = {
+    narrowed: deptTab !== "all",
+    node: onAll && departmentOptions.length > 1 ? (
+      <Segments options={departmentOptions} value={deptTab} onPick={setTab} label="Department" testid="work-dept"
+        counts={(k) => countWith({ tab: k })} />
+    ) : null,
+  };
+  // Open work held by a team (a role) or by nobody: no face for a card.
+  const looseWork = (() => {
+    if (!boardOn) return [];
+    const open = boardTasks.filter((tk) => !isTerminal(tk) && !tk.assignee_id);
+    const byRole = {};
+    open.forEach((tk) => { if (tk.assignee_role) byRole[tk.assignee_role] = (byRole[tk.assignee_role] || 0) + 1; });
+    const nobody = open.filter((tk) => !tk.assignee_role).length;
+    return [
+      ...Object.entries(byRole).sort((a, b) => b[1] - a[1])
+        .map(([r, n]) => ({ key: `role:${r}`, label: `${roleLabel(r, roleOptions)} team`, n })),
+      ...(nobody ? [{ key: "unassigned", label: "Unassigned", n: nobody }] : []),
+    ];
+  })();
+  const drilledPerson = onAll && personFilter ? members.find((m) => m.id === personFilter) : null;
+
   /* ─── THE PHONE (2026-10-29, founder) ─────────────────────────────────────
      Below lg My Work is the Desk's shape: the filters as KPI tiles on the sky,
      and the work in a black sheet, every task a card the height of its own
@@ -5022,7 +5110,7 @@ export default function MyWork({ only = null }) {
      task views and My requests; the Approvals page keeps its own layout. */
   // The deck card's kit and row patcher — the phone's list, and desktop's too.
   const kit = { isOverdue, isDueToday, isTerminal, stageOf, lateness, latenessText, dueLabel,
-    STATUS_LABEL, STATUS_TONE, StatusRing, cardPeople };
+    STATUS_LABEL, STATUS_TONE, StatusRing, cardPeople, tierOf: TIER_OF, PRIO_LABEL };
   // The patched row goes into this view's list at once (the refetch confirms).
   const listKey = ["tasks", asked ? "asked" : team ? "team" : mine];
   const patchRow = (row) => {
@@ -5447,164 +5535,59 @@ export default function MyWork({ only = null }) {
       </StickyHeader>
 
       {/* ─── DESKTOP HEADER (lg and up) ─────────────────────────────────── */}
-      <header className="mb-7 hidden shrink-0 gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
+      {/* 2026-10-30 (founder) — THE WORKSPACE. The title, and the two things
+          that act on the whole page: Smart priority and + New. The switcher
+          that sat here is the work tree now, and the Department / Person /
+          Status dropdowns are the status fence and the team board
+          (pages/mywork/WorkspaceHub), all in the one scroll below. */}
+      <header className="mb-5 hidden shrink-0 items-end justify-between gap-4 lg:flex" data-testid="mywork-header">
         <div>
-          {/* MW-14 fix: eyebrow + title track the active view instead of
-              staying pinned to "MY WORK / Your day, simplified" while
-              the body is entirely leave requests or delivery pipelines.
-              The toggle pill below is small; the page header needs to
-              say what you are looking at above the fold. */}
-          {/* 2026-09-14, founder — no eyebrow in Workflows view: it only
-              repeated the title ("WORKFLOWS" over "Workflows"). Approvals
-              (ASK-25) had the same echo, so it goes there too; the task
-              views keep "Your day, simplified". */}
-          {view !== "approvals" && (
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {t("mywork.eyebrow")}
-            </p>
-          )}
-          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl">
-            {view === "approvals" ? t("mywork.view_approvals") : t("mywork.title")}
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            {t("mywork.eyebrow")}
+          </p>
+          <h1 className="mt-1.5 font-display text-3xl sm:text-4xl" data-testid="workspace-title">
+            {t("mywork.workspace", "Workspace")}
           </h1>
         </div>
-        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:items-center" data-testid="mywork-controls">
-          {/* ASK-14 (2026-09-13): My Tasks / All Tasks / Workflows collapse
-              into ONE segmented slider — same SEG/SEG_ON/SEG_OFF grammar the
-              mobile row already uses, so all three top-level places sit on
-              one control. AI Priority is a lens on the task list only, so it
-              rides to the LEFT of the slider and hides in Workflows view. */}
-          {(() => {
-            const segments = [];
-            // ASK-28 TK-01 — Asked by me is a place you can link to, so it
-            // lives in the URL; every other segment clears it.
-            // ASK-28 TK-04 — every segment now writes its own ?view= (goView).
-            const go = goView;
-            const askedSegment = {
-              key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
-              active: view === "mywork" && scope === "asked",
-              onClick: () => go("asked"),
-            };
-            // ASK-28 TK-08 — the owner and anyone given "See all tasks" get
-            // All Tasks (a non-owner with reports keeps My team beside it).
-            if (canSeeAll) {
-              segments.push({
-                key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine",
-                active: view === "mywork" && scope === "mine",
-                onClick: () => go("mine"),
-              });
-              segments.push(askedSegment);
-              if (hasReports) {
-                segments.push({
-                  key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
-                  active: view === "mywork" && scope === "team",
-                  onClick: () => go("team"),
-                });
-              }
-              segments.push({
-                key: "all", label: t("mywork.all_tasks"), testid: "work-scope-all",
-                active: view === "mywork" && scope === "all",
-                onClick: () => go("all"),
-              });
-            } else {
-              segments.push({
-                key: "tasks", label: t("mywork.view_mywork"), testid: "work-view-mywork",
-                active: view === "mywork" && !URL_SCOPES.includes(scope),
-                onClick: () => go("mine"),
-              });
-              segments.push(askedSegment);
-              // ASK-28 TK-03 — a manager's lens on their reports' work. The
-              // owner has All Tasks, which already covers it.
-              if (hasReports) {
-                segments.push({
-                  key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
-                  active: view === "mywork" && scope === "team",
-                  onClick: () => go("team"),
-                });
-              }
-            }
-            // 2026-10-21 — what I have asked for. A request is mine the way my
-            // tasks are, so it sits with the lenses on my own work.
-            segments.push({
-              key: "requests", label: t("mywork.my_requests", "My requests"), testid: "work-view-requests",
-              active: view === "requests",
-              onClick: () => go(null, "requests"),
-            });
-            // ASK-25 — Approvals sits between the task lenses and Workflows:
-            // it is about tasks (and leave), not pipelines.
-            // ASK-28 TK-02 — also for a named approver without approval
-            // access, and it carries how many task approvals wait on you.
-            if (showApprovalsView) {
-              segments.push({
-                key: "approvals", label: t("mywork.view_approvals"), testid: "work-view-approvals",
-                count: waitingOnMe,
-                active: view === "approvals",
-                onClick: () => go(null, "approvals"),
-              });
-            }
-            /* ASK-38 — WORKFLOWS COMES OUT OF THE SEGMENT and back to being a
-               control of its own, beside the AI-priority circle in this same
-               row. KM-31 had moved it out of My Work entirely, into the More
-               panel, on the argument that a pipeline board is a destination
-               rather than a lens on the task list. The founder's call is that
-               it is both, and that the board belongs beside the filters it
-               shares a page with. As a segment it sat in a group whose other
-               members are all views of TASKS — "My tasks", "My team",
-               "Approvals" — and a pipeline board is not one of those, so it
-               read as a fourth task filter that then replaced the whole page.
-               A circle says "another surface" the way the segment could not,
-               and it is the row's existing vocabulary: same 40px .ng-pop /
-               .ng-pressed pair as the AI toggle beside it. The route, the deep
-               links and the view itself are untouched. */
-            return (
-              <div className="flex flex-wrap items-center gap-2.5" data-testid="mywork-lens-group">
-                {/* ASK-52 — AND IT GOES AGAIN, on the founder's call: the way
-                    into the boards from a working screen is the Desk's
-                    Workflows card now (pages/desk/WorkflowsTile), which says
-                    what needs attention rather than only where the boards are.
-                    The phone keeps its entry in the view menu above — there is
-                    no KPI grid on a phone to carry the card. */}
-                {view === "mywork" && !asked && !team && canPrioritize && (
-                  <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
-                    aria-pressed={aiPriority}
-                    aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-                    title={scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
-                    <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
-                      className={scoring ? "animate-pulse" : ""} />
-                  </button>
-                )}
-                {segments.length > 0 && (
-                  <div className="flex items-center" role="group" aria-label="View" data-testid="work-view-segment">
-                    {segments.map((seg, i) => {
-                      const first = i === 0;
-                      const last = i === segments.length - 1;
-                      return (
-                        <Fragment key={seg.key}>
-                          {!first && <span aria-hidden="true" className="h-6 w-px shrink-0 bg-ng-ink/15" />}
-                          <button type="button" onClick={seg.onClick} data-testid={seg.testid}
-                            aria-pressed={seg.active}
-                            className={`${SEG} ${first ? "rounded-l-pill" : ""} ${last ? "rounded-r-pill" : ""} ${seg.active ? SEG_ON : SEG_OFF}`}>
-                            {seg.label}
-                            {/* ASK-28 TK-02 — how many are waiting on you. */}
-                            {seg.count > 0 && (
-                              <span data-testid={`${seg.testid}-count`}
-                                className="ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-ng-ink px-1.5 text-[11px] font-semibold tabular-nums leading-none text-white">
-                                {seg.count}
-                              </span>
-                            )}
-                          </button>
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+        <div className="flex items-center gap-2.5" data-testid="mywork-controls">
+          {view === "mywork" && !asked && !team && canPrioritize && !boardOn && (
+            <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
+              aria-pressed={aiPriority}
+              aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+              title={scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
+              <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
+                className={scoring ? "animate-pulse" : ""} />
+            </button>
+          )}
+          {view !== "approvals" && (
+            /* 2026-10-21 — "+ New" asks: a task, or a request. */
+            <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={deptTab}
+              onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
+              onRequestCreated={() => { if (view !== "requests") goView(null, "requests"); }}
+              triggerChildren={<><Plus size={16} weight="bold" aria-hidden="true" /> New <CaretDown size={12} weight="bold" aria-hidden="true" className="opacity-70" /></>}
+              triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
+          )}
         </div>
       </header>
       </>}
 
+      {/* 2026-10-30 — THE WORKSPACE'S ONE SCROLL (desktop). ASK-20 kept the
+          header and filters still and scrolled only the cards; the fence and
+          the work tree are too tall to hold still above a list, so they scroll
+          away with it and only the title stays. Elsewhere (the phone's
+          Approvals, the Approvals page) the wrapper is not a box at all. */}
+      <div className={deskHub ? "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1" : "contents"}
+        data-testid={deskHub ? "workspace-scroll" : undefined}>
+      {deskHub && (
+        <div className="mb-8 flex flex-col gap-7" data-testid="workspace-hub">
+          <StatusFence options={STATUS_FILTER_OPTIONS} value={filters.status} onPick={pickStatus}
+            counts={(k) => countWith({ status: k })} loading={tasksLoading} dim={view !== "mywork"}
+            /* routers/tasks.py FINISHED_TASKS_MAX: the list carries the 500 newest finished. */
+            capped={{ completed: 500 }} />
+          <WorkTree person={meCard} branches={deskBranches} />
+        </div>
+      )}
       {/* 2026-09-21 — sign-up routines still waiting for the owner's answer. */}
       {isOwner && !approvalsPage && <RoutinesNudge />}
 
@@ -5640,7 +5623,7 @@ export default function MyWork({ only = null }) {
         <div data-testid="mywork-requests" className="lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
           {/* Desktop: the "+ New" of the task views lives in their filter row,
               which this view does not have — so it gets its own. */}
-          <div className="mb-4 hidden shrink-0 justify-end lg:flex">
+          <div className={`mb-4 hidden shrink-0 justify-end ${deskHub ? "" : "lg:flex"}`}>
             <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
               onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
               testid="new-work-button-requests"
@@ -5886,71 +5869,62 @@ export default function MyWork({ only = null }) {
               through the AI-priority view switch), and Status (new, was mobile-only
               inside the AI-priority row). All three read the same state the
               filters already used; New Task keeps its right-end position. */}
-          <div className="mb-5 hidden shrink-0 items-end justify-between gap-4 border-b border-nm-edge/40 pb-4 lg:flex">
-            <div className="flex flex-wrap items-center gap-2.5" data-testid="work-filters">
-              {/* MW-19 — departments only, and only ones with work in them.
-                  Listing every category meant six of nine options read 0, and
-                  picking one was silently undone: the U7-05.9 effect snaps an
-                  empty tab back to 'all', so the trigger still said
-                  'Department: All 26' with nothing explaining why. The old
-                  chip strip already hid empty categories on a founder ask;
-                  the dropdown just forgot to. 'Completed' moved to Status. */}
-              <FilterDropdown
-                testid="work-filter-department"
-                label="Department"
-                value={tab}
-                options={departmentOptions}
-                counts={(k) => countWith({ tab: k })}
-                onSelect={setTab}
-                loading={tasksLoading}
-              />
-              {/* ASK-24 — Person, on All Tasks only. */}
-              {personOptions.length > 0 && (
-                <FilterDropdown
-                  testid="work-filter-person"
-                  label="Person"
-                  value={personFilter}
-                  options={personOptions}
-                  counts={(k) => countWith({ person: k })}
-                  onSelect={setPersonFilter}
-                  loading={tasksLoading}
-                  searchable={peopleSearchable}
-                />
-              )}
-              <FilterDropdown
-                testid="work-filter-status"
-                label="Status"
-                value={filters.status}
-                options={STATUS_FILTER_OPTIONS}
-                counts={(k) => countWith({ status: k })}
-                onSelect={setStatusFilter}
-                loading={tasksLoading}
-              />
-              {filtersActive && (
-                <button type="button" onClick={clearFilters} data-testid="work-filters-clear"
-                  className="h-9 rounded-pill px-2 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-                  Clear filters
-                </button>
-              )}
+          {/* 2026-10-30 — THE LIST'S HEAD (desktop). The Department, Person and
+              Status dropdowns that sat here are the Workspace's now: Status is
+              the fence above, Department the segment bar on All Tasks, and a
+              person is picked on the owner's team board. What is left here is
+              where the list came from — the way back to the board and whose
+              work this is — and Person for the views that have no board. */}
+          {deskHub && !boardOn && (
+            <div className="mb-5 flex shrink-0 flex-wrap items-center justify-between gap-3" data-testid="work-filters">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
+                {isOwner && onAll && (personFilter || filters.status) && (
+                  <PersonBar person={drilledPerson}
+                    stats={drilledPerson ? personStats(drilledPerson.id, boardTasks, hubFx) : null}
+                    roleOptions={roleOptions} onBack={goBoard} />
+                )}
+                {isOwner && onAll && personFilter && !drilledPerson && (
+                  <span className="text-[15px] font-semibold text-slate-900" data-testid="workspace-loose-title">
+                    {labelIn(personOptions, personFilter) || "Not on a person"}
+                  </span>
+                )}
+                {!(isOwner && onAll) && personOptions.length > 0 && (
+                  <FilterDropdown testid="work-filter-person" label="Person" value={personFilter} options={personOptions}
+                    counts={(k) => countWith({ person: k })} onSelect={setPersonFilter} loading={tasksLoading}
+                    searchable={peopleSearchable} />
+                )}
+                {/* On the owner's All Tasks, "← Team" already clears them. */}
+                {filtersActive && !(isOwner && onAll) && (
+                  <button type="button" onClick={clearFilters} data-testid="work-filters-clear"
+                    className="h-9 rounded-pill px-2 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                    Clear filters
+                  </button>
+                )}
+              </div>
+              {deptBar.node}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {/* 2026-09-21 — Mark Leave moved to the Team page (beside Add
-                  member). New task is My Work's only header action now. */}
-              {/* 2026-10-21 — "+ New" asks: a task, or a request. */}
-              <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
-                onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
-                onRequestCreated={() => goView(null, "requests")}
-                /* 2026-09-14, founder — the same black ink pill as the drawer's
-                   Complete and Log update or hand off. */
-                triggerChildren={<><Plus size={16} weight="bold" aria-hidden="true" /> New <CaretDown size={12} weight="bold" aria-hidden="true" className="opacity-70" /></>}
-                triggerClassName={`${SECTION_BTN} ${INK_PILL}`} />
-            </div>
-          </div>
+          )}
           {/* ASK-20 (2026-09-13): THE ONLY SCROLLER on desktop. Everything
               above this — page header, lens slider, filter row — is a fixed
               block child of the flex column, so it cannot move at all and
               needs no sticky offset. */}
           <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+          {boardOn ? (
+            tasksLoading ? (
+              <div className="space-y-3" aria-hidden="true">
+                {[0, 1, 2].map((i) => <div key={i} className="ds-skeleton h-28 rounded-[1.5rem]" />)}
+              </div>
+            ) : tasksQ.isError && !tasksQ.data ? (
+              <LoadFailed what="the team's work" onRetry={() => tasksQ.refetch()} testid="team-board-failed" />
+            ) : (
+              <>
+                <TeamBoard tasks={boardTasks} members={members} me={user} roleOptions={roleOptions} fx={hubFx}
+                  onPick={setPersonFilter} deptBar={deptBar} rank={rank} onRank={setRank}
+                  loose={looseWork} onLoose={setPersonFilter} />
+                {focusDrawer([], tasksQ.isSuccess)}
+              </>
+            )
+          ) : (<>
           {/* E2-14: skeleton on first load so the tab strip doesn't
               jump when tasks land. */}
           {tasksQ.isLoading && !tasksQ.data && (
@@ -6078,6 +6052,7 @@ export default function MyWork({ only = null }) {
               : <TaskGrid {...shared} />;
           })()}
           {focusDrawer(list.map((tk) => tk.id), tasksQ.isSuccess)}
+          </>)}
           </div>
 
           {/* U7-05.3 dialog: bulk-reassign target picker. 2026-09-14, founder —
@@ -6163,6 +6138,7 @@ export default function MyWork({ only = null }) {
         </div>
       </div>
       )}
+      </div>
     </div>
   );
 }

@@ -285,6 +285,35 @@ function StepDots({ t, steps, current, sel, onPick }) {
   );
 }
 
+/* 2026-10-30 (founder) — ON DESKTOP THE STEPS ARE ONE LINE: how many are
+   done out of how many, and a bar that fills to match, in place of the
+   numbered row. Clicking it opens the task on its Steps. */
+/* `auto` — the company has Dex draft every task's steps (NF-4.18). */
+function StepProgress({ t, steps, terminal, onOpen, auto }) {
+  const done = steps.filter((s) => s.done).length;
+  const waiting = !steps.length && !terminal && drafting(t, auto);
+  return (
+    <button type="button" onClick={onOpen} data-testid={`deck-progress-${t.id}`} className="block w-full text-left">
+      <span className="flex items-baseline justify-between gap-3 text-[12px] font-medium">
+        <span className={waiting ? "animate-pulse text-slate-500 motion-reduce:animate-none" : "text-slate-500"}>
+          {steps.length ? "Steps" : waiting ? "Dex is drafting the steps…" : "No steps yet"}
+        </span>
+        {steps.length > 0 && (
+          <span className="font-semibold tabular-nums text-slate-900" data-testid={`deck-progress-count-${t.id}`}>
+            {done} of {steps.length}
+          </span>
+        )}
+      </span>
+      <span role="progressbar" aria-label={`${done} of ${steps.length} steps done`}
+        aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done}
+        className="mt-2 block h-1.5 w-full overflow-hidden rounded-full bg-slate-900/[0.08]">
+        <span className="block h-full rounded-full bg-neutral-900 transition-[width] duration-500 ease-out"
+          style={{ width: steps.length ? `${(done / steps.length) * 100}%` : 0 }} />
+      </span>
+    </button>
+  );
+}
+
 /* What the checklist says to do next: the first step not yet ticked. */
 function nextStep(t) {
   const steps = t.execution_plan?.steps || [];
@@ -299,9 +328,23 @@ function nextStep(t) {
    steps; otherwise a card with no steps asks for its first one. */
 const drafting = (t, auto) => !!auto && !t.execution_plan?.steps?.length && Number(t.plan_auto_tries || 0) < 3;
 
+/* 2026-10-30 (founder, from users) — PRIORITY IS A GLOW, NOT A STRIPE. The
+   stripe beside the title did not convince; the desktop card now carries its
+   priority as a soft light along the inside of its bottom edge, following
+   the corners: red high, orange medium, grey low. HSL, for the alphas below. */
+const PRIO_GLOW = {
+  high: { hue: "0 84% 58%", glow: 0.24, edge: 0.34 },
+  medium: { hue: "28 95% 54%", glow: 0.24, edge: 0.34 },
+  low: { hue: "220 9% 46%", glow: 0.16, edge: 0.22 },
+};
+
 /* `onToggleSelect` / `selected` — desktop's bulk selection (the card is the
-   desktop's list card too since 2026-10-29); left out, there is no tick box. */
-export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen, onPatched, onChange, selected = false, onToggleSelect }) {
+   desktop's list card too since 2026-10-29); left out, there is no tick box.
+   `desk` — the desktop list's cut (2026-10-30, founder): no Next action box,
+   no Mark as Doing / Open task (a click anywhere on the card opens it), the
+   numbered steps as one progress bar, every card the same shape, and the
+   priority glow above. The phone never passes it. */
+export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen, onPatched, onChange, selected = false, onToggleSelect, desk = false }) {
   const { user, tenant } = useAuth();
   const auto = !!tenant?.auto_plan_steps;
   const [busy, setBusy] = useState(false);
@@ -357,10 +400,28 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
     };
   })();
 
+  const prio = desk && kit.tierOf ? kit.tierOf(t) : null;
+  const glow = prio && PRIO_GLOW[prio];
+
   return (
-    <article data-testid={`deck-card-${t.id}`} data-stage={stage}
-      className={`flex flex-col rounded-[1.75rem] bg-[linear-gradient(180deg,#fff,hsl(220_14%_97%))] p-5 text-slate-900 shadow-[0_30px_60px_-30px_hsl(0_0%_0%/0.8)] lg:shadow-[0_18px_40px_-26px_hsl(220_30%_20%/0.5)] lg:ring-1 lg:ring-inset ${selected ? "lg:ring-2 lg:ring-ng-ink" : "lg:ring-slate-900/[0.05]"}`}>
-      <div className="flex shrink-0 items-start justify-between gap-3">
+    <article data-testid={`deck-card-${t.id}`} data-stage={stage} data-priority={prio || undefined}
+      // On desktop the card is the way in: a click that did not land on one
+      // of its own controls opens the task. (Keyboard: the title is a button.)
+      onClick={desk ? (e) => { if (!e.target.closest("button, a, input, label")) onOpen?.(); } : undefined}
+      className={`flex flex-col rounded-[1.75rem] bg-[linear-gradient(180deg,#fff,hsl(220_14%_97%))] p-5 text-slate-900 shadow-[0_30px_60px_-30px_hsl(0_0%_0%/0.8)] lg:shadow-[0_18px_40px_-26px_hsl(220_30%_20%/0.5)] lg:ring-1 lg:ring-inset ${selected ? "lg:ring-2 lg:ring-ng-ink" : "lg:ring-slate-900/[0.05]"} ${
+        desk ? "relative h-full cursor-pointer transition-shadow duration-200 hover:shadow-[0_24px_48px_-24px_hsl(220_30%_20%/0.6)]" : ""}`}>
+      {glow && (
+        <>
+          {/* Inside the card, under the content's padding: the rounded box
+              inherits the card's corners, so the light bends round them. */}
+          <span aria-hidden="true" data-testid={`priority-glow-${t.id}`} data-priority={prio}
+            className="pointer-events-none absolute inset-0 rounded-[inherit]"
+            style={{ boxShadow: `inset 0 -22px 28px -18px hsl(${glow.hue} / ${glow.glow}), inset 0 -1px 0 hsl(${glow.hue} / ${glow.edge})` }} />
+          <span className="sr-only">{kit.PRIO_LABEL[prio]} priority.</span>
+        </>
+      )}
+      {/* Desktop: room for the due pill and its "Assigned … ago" line on every card. */}
+      <div className={`flex shrink-0 items-start justify-between gap-3 ${desk ? "min-h-[58px]" : ""}`}>
         {onToggleSelect && (
           <label className="-ml-1 mt-1.5 grid shrink-0 cursor-pointer place-items-center" title={selected ? "Deselect" : "Select for bulk action"}>
             <input type="checkbox" checked={selected} onChange={onToggleSelect} data-testid={`bulk-select-${t.id}`}
@@ -384,24 +445,54 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
         <DueBlock t={t} kit={kit} />
       </div>
 
-      <button type="button" onClick={() => onOpen?.()} className="mt-3 shrink-0 text-left" data-testid={`deck-title-${t.id}`}>
-        <h2 className="line-clamp-3 text-[24px] font-bold leading-[1.15] tracking-tight text-slate-900 lg:text-[20px]">{t.title}</h2>
-      </button>
-      {t.description && (
-        <p className="mt-2 line-clamp-3 shrink-0 text-[15px] leading-relaxed text-slate-500">{t.description}</p>
-      )}
+      <div className="mt-3 flex shrink-0 flex-col">
+        {(() => {
+          const title = (
+            <div className="flex flex-col">
+              <button type="button" onClick={() => onOpen?.()} className="text-left" data-testid={`deck-title-${t.id}`}
+                title={desk ? t.title : undefined}>
+                <h2 className={`${desk ? "line-clamp-2" : "line-clamp-3"} text-[24px] font-bold leading-[1.15] tracking-tight text-slate-900 lg:text-[20px]`}>{t.title}</h2>
+              </button>
+            </div>
+          );
+          // 2026-10-30 (founder) — EVERY DESKTOP CARD THE SAME SHAPE: the title
+          // takes two lines' room (2 × 23px at 20px / 1.15) whether it needs
+          // one or two, and anything longer ends in "…".
+          return desk ? <div className="min-h-[46px]">{title}</div> : title;
+        })()}
+        {desk ? (
+          /* The description in a shallow glass well, two lines' room, always
+             there — "No description" holds the place, as "No attachments"
+             does — so every card's rows line up. */
+          <div data-testid={`deck-desc-${t.id}`}
+            className="mt-3 rounded-2xl border border-white/80 bg-[linear-gradient(160deg,hsl(220_22%_95%/0.9),hsl(220_22%_97%/0.6))] px-3.5 py-2.5 shadow-[inset_0_2px_6px_hsl(230_24%_30%/0.07),inset_0_-1px_0_hsl(0_0%_100%/0.85)] backdrop-blur-md">
+            <p className={`line-clamp-2 min-h-[3.25em] text-[15px] leading-relaxed ${t.description ? "text-slate-500" : "text-slate-400"}`}
+              title={t.description || undefined}>
+              {t.description || "No description"}
+            </p>
+          </div>
+        ) : t.description && (
+          <p className="mt-2 line-clamp-3 text-[15px] leading-relaxed text-slate-500">{t.description}</p>
+        )}
 
-
-      <div className="mt-4 grid shrink-0 grid-cols-[auto_1px_minmax(0,1fr)] items-start gap-4">
-        <div className="flex min-w-0 flex-col gap-2">
-          <span className="text-[13px] font-medium text-slate-600">Assigned to</span>
-          {people.length ? <AvatarStack people={people} max={3} size={40} testid={`deck-people-${t.id}`} />
-            : <span className="text-[13px] text-slate-400">Nobody yet</span>}
+        {/* Desktop: the row's tallest case (label + 44px thumbnails), so a card
+            with files is no taller than one without. */}
+        <div className={`mt-4 grid grid-cols-[auto_1px_minmax(0,1fr)] items-start gap-4 ${desk ? "min-h-[73px]" : ""}`}>
+          <div className="flex min-w-0 flex-col gap-2">
+            <span className="text-[13px] font-medium text-slate-600">Assigned to</span>
+            {people.length ? <AvatarStack people={people} max={3} size={40} testid={`deck-people-${t.id}`} />
+              : <span className="text-[13px] text-slate-400">Nobody yet</span>}
+          </div>
+          <span aria-hidden="true" className="h-full w-px bg-slate-900/[0.08]" />
+          <Attachments t={t} onOpen={() => onOpen?.("documents")} />
         </div>
-        <span aria-hidden="true" className="h-full w-px bg-slate-900/[0.08]" />
-        <Attachments t={t} onOpen={() => onOpen?.("documents")} />
       </div>
 
+      {desk ? (
+        <div className="mt-auto shrink-0 pt-5">
+          <StepProgress t={t} steps={steps} terminal={terminal} auto={auto} onOpen={() => onOpen?.("steps")} />
+        </div>
+      ) : (
       <div className="shrink-0 pt-4">
         {steps.length > 0 && <StepDots t={t} steps={steps} current={i} sel={sel} onPick={setSel} />}
         <button type="button" onClick={() => onOpen?.("steps")} data-testid={`deck-next-${t.id}`}
@@ -447,6 +538,7 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
           </button>
         </div>
       </div>
+      )}
     </article>
   );
 }

@@ -295,12 +295,15 @@ function nextStep(t) {
    asks for every card on screen that has none (POST /tasks/auto-plan), so the
    line says so until the steps land. Only after three failed tries does it
    fall back to asking the person for a first step. */
-const drafting = (t) => !t.execution_plan?.steps?.length && Number(t.plan_auto_tries || 0) < 3;
+/* NF-4.18 (2026-10-30) — only when the company has Dex draft every task's
+   steps; otherwise a card with no steps asks for its first one. */
+const drafting = (t, auto) => !!auto && !t.execution_plan?.steps?.length && Number(t.plan_auto_tries || 0) < 3;
 
 /* `onToggleSelect` / `selected` — desktop's bulk selection (the card is the
    desktop's list card too since 2026-10-29); left out, there is no tick box. */
 export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen, onPatched, onChange, selected = false, onToggleSelect }) {
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
+  const auto = !!tenant?.auto_plan_steps;
   const [busy, setBusy] = useState(false);
   const rights = taskEditRights(user, t, members);
   const stage = kit.stageOf(t.status);
@@ -404,7 +407,7 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
         <button type="button" onClick={() => onOpen?.("steps")} data-testid={`deck-next-${t.id}`}
           className="flex w-full items-center gap-3 rounded-2xl bg-[linear-gradient(180deg,hsl(220_10%_95%),hsl(220_10%_93.5%))] p-3.5 text-left ring-1 ring-inset ring-slate-900/[0.04]">
           <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${INK_PLATE} text-amber-300`}>
-            {drafting(t) ? <Sparkle size={18} weight="fill" aria-hidden="true" className="animate-pulse" />
+            {drafting(t, auto) ? <Sparkle size={18} weight="fill" aria-hidden="true" className="animate-pulse" />
               : <ListChecks size={19} weight="bold" aria-hidden="true" />}
           </span>
           <span className="min-w-0 flex-1">
@@ -415,13 +418,13 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
             </span>
             {/* The whole step, however long — never cut short. */}
             <span className={`mt-0.5 block whitespace-pre-line break-words text-[16px] font-semibold leading-snug ${
-              !steps.length && !terminal && drafting(t) ? "animate-pulse text-slate-500 motion-reduce:animate-none"
+              !steps.length && !terminal && drafting(t, auto) ? "animate-pulse text-slate-500 motion-reduce:animate-none"
                 : shownStep?.done && !showingNext ? "text-slate-500" : "text-slate-900"}`}
               data-testid={`deck-next-text-${t.id}`}>
               {shownStep && (!showingNext || step) ? shownStep.text
                 : steps.length ? "Every step is done — mark it complete"
                 : terminal ? "Done"
-                : drafting(t) ? "Dex is drafting the steps…"
+                : drafting(t, auto) ? "Dex is drafting the steps…"
                 : "Add the first step"}
             </span>
           </span>

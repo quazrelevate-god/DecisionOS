@@ -146,16 +146,19 @@ def _score_execution(tasks, now):
 
 
 def _score_sales(decisions):
-    """Decision-approval score; returns (sales, total_dec, approved).
+    """Decisions score; returns (sales, total_dec, approved).
 
-    PILOT-1 D: no decisions yet is None (left out), not an invented 70. (What
-    this category measures, and what it is called, is a recommendation in the
-    PILOT-1 report — the name "Sales" is unchanged here.)"""
+    NF-4.19 (2026-10-30): the share of decisions raised that have been DECIDED
+    — approved or rejected. It was approved ÷ all, which scored a rejection as
+    a failure: turning a proposal down is a decision made, and what slows a
+    company is the one nobody has answered. PILOT-1 D: none yet is None. The
+    stored key stays "sales"."""
     total_dec = len(decisions)
     approved = sum(1 for d in decisions if d.get("status") == "approved")
+    decided = sum(1 for d in decisions if d.get("status") in ("approved", "rejected"))
     if not total_dec:
         return None, total_dec, approved
-    return _clamp100(approved / total_dec * 100), total_dec, approved
+    return _clamp100(decided / total_dec * 100), total_dec, approved
 
 
 def _score_employees(tasks, members, now):
@@ -197,51 +200,70 @@ async def _company_operating_view(tid: str, viewer: dict, now: str, window: Opti
         logger.warning(f"operating_score cache read failed: {e}")
 
     start = _window_start(window)
-    tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).to_list(2000)
+    tasks = await db.tasks.find({"tenant_id": tid}, {"_id": 0}).to_list(20000)
     tasks = [t for t in tasks if _task_in_window(t, start)]
-    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1, "created_at": 1}).to_list(2000)
+    decisions = await db.decisions.find({"tenant_id": tid}, {"_id": 0, "status": 1, "created_at": 1}).to_list(20000)
     decisions = [d for d in decisions if _decision_in_window(d, start)]
     complaints = await db.complaints.find({"tenant_id": tid}, {"_id": 0, "status": 1}).to_list(500)
 
     execution, done, open_tasks, overdue, actionable = _score_execution(tasks, now)
 
-    total_billed = total_paid = due_billed = 0.0
+    due_billed = due_received = outstanding = unmatched_in = 0.0
     overdue_inv = 0
     inv_count = 0
     if can_finance:
-        invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "amount": 1, "type": 1, "status": 1, "due_date": 1}).to_list(2000)
-        # T10-07.4: only INBOUND payments count as money "collected". Without the
-        # direction filter, outbound supplier payments (direction="out", which live
-        # in the same payments collection) inflated total_paid -> the finance score's
-        # `collected` ratio and `outstanding` were both wrong.
-        pays = await db.payments.find({"tenant_id": tid, "direction": "in"}, {"_id": 0, "amount": 1}).to_list(2000)
+        invs = await db.invoices.find({"tenant_id": tid}, {"_id": 0, "amount": 1, "amount_paid": 1, "type": 1,
+                                                           "status": 1, "due_date": 1}).to_list(5000)
         inv_count = len(invs)
-        total_billed = sum(_amt(i.get("amount")) for i in invs if i.get("type") == "sales_invoice")
-        total_paid = sum(_amt(p.get("amount")) for p in pays)
-        overdue_inv = sum(1 for i in invs if i.get("type") == "sales_invoice" and i.get("status") != "paid"
-                          and is_overdue(i.get("due_date"), now))
-        # Audit G-02 (2026-10-09) -- A NEW COMPANY IS NOT BEHIND. Day one, with
-        # its first invoice raised and not yet due, read "Finance 0/100": the
-        # score asked how much had come in before anything was owed. Only money
-        # that is DUE (its date has come, or it was paid) is measured now; with
+        sales = [i for i in invs if i.get("type") == "sales_invoice"]
+        overdue_inv = sum(1 for i in sales if i.get("status") != "paid" and is_overdue(i.get("due_date"), now))
+        # Audit G-02 (2026-10-09) -- A NEW COMPANY IS NOT BEHIND. Only money
+        # that is DUE (its date has come, or it was paid) is measured; with
         # nothing due yet Finance is left out ("Nothing to score yet").
         _today = today_ist(as_instant(now))   # `now` arrives as an ISO string here
-        due_billed = sum(_amt(i.get("amount")) for i in invs if i.get("type") == "sales_invoice" and (
-            i.get("status") == "paid" or not isinstance(i.get("due_date"), str) or not i.get("due_date")
-            or i["due_date"].strip()[:10] <= _today))
+        due = [i for i in sales if i.get("status") == "paid" or not isinstance(i.get("due_date"), str)
+               or not i.get("due_date") or i["due_date"].strip()[:10] <= _today]
+        due_billed = sum(_amt(i.get("amount")) for i in due)
+        # NF-4.19 (2026-10-30) — what has come in is read off the INVOICES, the
+        # same way Finance's own Outstanding is (amount less amount paid). It
+        # summed every incoming payment instead — advances, standalone income,
+        # payments nobody had matched to an invoice — so Ops and Finance gave
+        # the same company two different answers; and it then took 5 points per
+        # overdue invoice, a COUNT, so a company with 20 late invoices read 0
+        # however much it had collected. Collected share of what is due, that
+        # is all: the overdue money is already the part not collected.
+        def _received(i):
+            amount = _amt(i.get("amount"))
+            return amount if i.get("status") == "paid" else min(_amt(i.get("amount_paid")), amount)
+        due_received = sum(_received(i) for i in due)
+        outstanding = sum(_amt(i.get("amount")) - _received(i) for i in sales if i.get("status") != "paid")
+        # Money that came in but is on no invoice: the screen says so, so a low
+        # Finance score from unmatched books is not mistaken for unpaid ones.
+        unmatched_in = sum(_amt(p.get("amount")) for p in await db.payments.find(
+            {"tenant_id": tid, "direction": "in", "match_status": "unmatched"},
+            {"_id": 0, "amount": 1}).to_list(5000))
     # PILOT-1 D: nothing billed yet is nothing to score — left out, not 70.
     finance = None
     if can_finance and due_billed:
-        collected = min(total_paid, due_billed) / due_billed
-        finance = _clamp100(collected * 100 - overdue_inv * 5)
+        finance = _clamp100(due_received / due_billed * 100)
 
     sales, total_dec, approved = _score_sales(decisions)
 
     open_complaints = sum(1 for c in complaints if c.get("status") != "resolved")
-    # PILOT-1 D: a company with no complaints on record and no open work has no
-    # loops to close — Responsiveness is left out rather than a free 100.
-    responsiveness = (_clamp100(100 - open_complaints * 12 - overdue * 3)
-                      if (complaints or open_tasks) else None)
+    # NF-4.19 (2026-10-30) — Responsiveness was 100 − open complaints × 12 −
+    # overdue tasks × 3: COUNTS, so any company of real size read 0 for good
+    # (Tracole: 54 of 605 open tasks late, 9%, scored 0). Now it is how often
+    # the work lands by its date — the on-time rate of every task whose date
+    # has come (open work past its date counts as late) — blended 70 / 30
+    # with the share of complaints resolved, when there are any. Nothing yet
+    # judged and no complaints: nothing to score (PILOT-1 D), not a free 100.
+    timing = timing_of(tasks, now)
+    parts = []
+    if timing.get("on_time_rate") is not None:
+        parts.append((timing["on_time_rate"], 0.7))
+    if complaints:
+        parts.append(((len(complaints) - open_complaints) / len(complaints) * 100, 0.3))
+    responsiveness = _clamp100(sum(v * w for v, w in parts) / sum(w for _, w in parts)) if parts else None
 
     categories = {"execution": execution, "finance": finance, "sales": sales, "responsiveness": responsiveness}
     # Why a category has no number: the viewer may not see money, or there is
@@ -279,8 +301,11 @@ async def _company_operating_view(tid: str, viewer: dict, now: str, window: Opti
                   # each person's (2026-09-29): typical days to close, the
                   # share that landed by its date, and the age of the oldest
                   # thing still waiting.
-                  "timing": timing_of(tasks, now),
-                  "outstanding": round(total_billed - total_paid, 2) if can_finance else None},
+                  "timing": timing,
+                  # NF-4.19: Finance's own definition (amount less paid, per invoice).
+                  "outstanding": round(outstanding, 2) if can_finance else None,
+                  "overdue_invoices": overdue_inv if can_finance else None,
+                  "unmatched_received": round(unmatched_in, 2) if can_finance else None},
         "employees": employees,
         "bottlenecks": jams,
         "can_finance": can_finance,

@@ -105,6 +105,9 @@ class TenantSettingsInput(BaseModel):
     # Epic 11 S11 (2026-10-30): work nobody has climbs the team's reporting
     # tree one level per step, the owner last — the days in each step.
     pickup_step_days: Optional[int] = None
+    # NF-4.18 (2026-10-30): Dex drafts every new task's steps — off unless an
+    # owner turns it on (it is an AI call per task).
+    auto_plan_steps: Optional[bool] = None
     owner_alert_email: Optional[bool] = None
 
 

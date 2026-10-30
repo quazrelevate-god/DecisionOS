@@ -739,6 +739,7 @@ function StepRow({
 }
 
 function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [], flow = false }) {
+  const { tenant } = useAuth();
   const plan = t.execution_plan;
   const [steps, setSteps] = useState(plan?.steps || []);
   const [editing, setEditing] = useState(!plan || plan.status === "draft");
@@ -857,7 +858,8 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [],
        weight, "or" between), on the drawer's glass under the guide's name. */
     /* 2026-10-29 — on the phone a task made minutes ago is still with Dex
        (services/auto_plan drafts it); say so above the two ways in. */
-    const drafting = flow && !t.plan_auto_at && t.created_at && Date.now() - new Date(t.created_at).getTime() < 3 * 60 * 1000;
+    const drafting = flow && !!tenant?.auto_plan_steps && !t.plan_auto_at && t.created_at
+      && Date.now() - new Date(t.created_at).getTime() < 3 * 60 * 1000;
     return (
       <div className={`${DRAWER_CARD} p-4`} data-testid={`exec-plan-empty-${t.id}`}>
         {drafting && (
@@ -2316,7 +2318,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
   const [autoAsked, setAutoAsked] = useState(false);
   // 2026-10-29 (founder) — "reflect the phone's design changes on desktop":
   // the checklist drafts itself on open at every width now.
-  const needsDraft = expanded && !(t.execution_plan?.steps || []).length && !isTerminal(t);
+  // NF-4.18 — and only when the company has Dex draft every task's steps.
+  const autoSteps = !!tenant?.auto_plan_steps;
+  const needsDraft = autoSteps && expanded && !(t.execution_plan?.steps || []).length && !isTerminal(t);
   useEffect(() => {
     if (!needsDraft || autoAsked) return undefined;
     setAutoAsked(true);
@@ -2929,7 +2933,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
               className={`rounded-[1.4rem] p-4 text-white ${INK_PLATE}`}>
               <div className="flex items-center gap-2.5">
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-amber-300">
-                  <Sparkle size={17} weight="fill" aria-hidden="true" className={!planSteps.length && !isTerminal(t) ? "animate-pulse motion-reduce:animate-none" : ""} />
+                  <Sparkle size={17} weight="fill" aria-hidden="true" className={autoSteps && !planSteps.length && !isTerminal(t) ? "animate-pulse motion-reduce:animate-none" : ""} />
                 </span>
                 <p className="min-w-0 flex-1 text-[16px] font-semibold">AI Execution Guide</p>
                 {planSteps.length > 0 && (
@@ -2945,8 +2949,17 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                     ? (planDone === planSteps.length
                       ? "Every step is ticked. Mark the task complete when the work is in."
                       : `${t.execution_plan?.auto ? "I drafted" : "There are"} ${planSteps.length} steps for this task — ${planDone} done. Change any of them in Steps.`)
-                    : "Drafting the steps for this task — they'll appear in Steps in a moment."}
+                    : autoSteps ? "Drafting the steps for this task — they'll appear in Steps in a moment."
+                    : "No steps yet. Add your own in Steps, or let Dex draft them."}
                 </p>
+                {!planSteps.length && !autoSteps && !isTerminal(t) && (
+                  /* NF-4.18 — Dex drafts only when asked: one AI call, on this tap. */
+                  <button type="button" onClick={askDex} disabled={askBusy} data-testid={`task-ask-dex-first-${t.id}`}
+                    className="flex h-11 shrink-0 items-center gap-2 rounded-pill bg-white/12 px-4 text-[14px] font-semibold text-white ring-1 ring-inset ring-white/20 disabled:opacity-60">
+                    <Sparkle size={15} weight="fill" aria-hidden="true" className="text-amber-300" />
+                    {askBusy ? "Thinking…" : "Ask Dex"}
+                  </button>
+                )}
                 {planSteps.length > 0 && (
                   <button type="button" onClick={askDex} disabled={askBusy} data-testid={`task-ask-dex-${t.id}`}
                     className={`flex h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-[14px] font-semibold disabled:opacity-60 ${
@@ -4535,6 +4548,9 @@ export default function MyWork({ only = null }) {
   const planTimersRef = useRef([]);
   useEffect(() => () => planTimersRef.current.forEach(clearTimeout), []);
   useEffect(() => {
+    /* NF-4.18 (founder 2026-10-30) — only when the company turned on "Dex
+       drafts steps for every new task": each draft is an AI call. */
+    if (!tenant?.auto_plan_steps) return;
     const rows = Array.isArray(tasksQ.data) ? tasksQ.data : [];
     const want = rows.filter((tk) => !isTerminal(tk) && !(tk.execution_plan?.steps || []).length
       && Number(tk.plan_auto_tries || 0) < 3 && !planAskedRef.current.has(tk.id)

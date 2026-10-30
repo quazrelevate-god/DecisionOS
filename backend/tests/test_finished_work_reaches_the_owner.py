@@ -86,6 +86,7 @@ def test_a_placeholder_answer_is_tried_again(with_test_db):
         import services.ai.extraction as ex
         from services import auto_plan
         await seed_tenant_and_users(db)
+        await db.tenants.update_one({}, {"$set": {"auto_plan_steps": True}})  # NF-4.18: opted in
         await db.tasks.insert_one(_task("k1"))
         saved = ex.ai_execution_plan
         try:
@@ -108,6 +109,7 @@ def test_my_work_can_ask_for_the_missing_checklists(with_test_db):
         import services.ai.extraction as ex
         from services import auto_plan
         await seed_tenant_and_users(db)
+        await db.tenants.update_one({}, {"$set": {"auto_plan_steps": True}})  # NF-4.18: opted in
         await db.tasks.insert_many([
             _task("stale", assignee_id="u-sales", plan_auto_at="2000-01-01T00:00:00+00:00", plan_auto_tries=1),
             _task("spent", assignee_id="u-sales", plan_auto_at="2000-01-01T00:00:00+00:00", plan_auto_tries=3),

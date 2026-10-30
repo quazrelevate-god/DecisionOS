@@ -128,16 +128,17 @@ def test_a_company_with_only_tasks_is_scored_on_its_tasks(with_test_db):
     cats = out["company"]["categories"]
     assert cats["execution"] == 50
     assert cats["finance"] is None and cats["sales"] is None
-    assert cats["responsiveness"] == 100, "open work with nothing late: its loops are closed"
-    # 0.35·50 + 0.20·100 over the 0.55 of weight that has data
-    assert out["company"]["overall"] == round((0.35 * 50 + 0.2 * 100) / 0.55)
+    # NF-4.19: nothing has reached its date yet and there are no complaints -
+    # nothing to judge responsiveness on, so it is left out, not a free 100.
+    assert cats["responsiveness"] is None
+    assert out["company"]["overall"] == 50, "the overall IS the execution score"
     assert out["stats"]["overdue"] == 0, "the task due today is not late"
 
 
 def test_the_screen_is_told_why_a_category_has_no_number(with_test_db):
     tasks = [_task(1, status="done"), _task(2, status="todo", due_date=TOMORROW), _task(3, status="done")]
     owner = _view(with_test_db, tasks=tasks)
-    assert owner["company"]["unscored"] == {"finance": "no_data", "sales": "no_data"}
+    assert owner["company"]["unscored"] == {"finance": "no_data", "sales": "no_data", "responsiveness": "no_data"}
     member = _view(with_test_db, tasks=tasks, viewer=MEMBER)
     assert member["company"]["unscored"]["finance"] == "no_access"
 
@@ -145,9 +146,10 @@ def test_the_screen_is_told_why_a_category_has_no_number(with_test_db):
 def test_an_invoice_due_today_is_not_overdue(with_test_db):
     out = _view(with_test_db,
                 tasks=[_task(1, status="done"), _task(2, status="done"), _task(3, status="done")],
-                invoices=[{"id": "i1", "type": "sales_invoice", "amount": 100000, "status": "unpaid", "due_date": TODAY}],
+                invoices=[{"id": "i1", "type": "sales_invoice", "amount": 100000, "amount_paid": 50000,
+                           "status": "partial", "due_date": TODAY}],
                 payments=[{"id": "p1", "direction": "in", "amount": 50000}])
-    assert out["company"]["categories"]["finance"] == 50, "half collected, nothing late: 50, not 45"
+    assert out["company"]["categories"]["finance"] == 50, "half collected: 50"
 
 
 def test_nothing_to_measure_anywhere_is_no_score(with_test_db):
@@ -177,3 +179,47 @@ def test_the_desks_delayed_count_uses_the_same_rule(with_test_db):
                 due.as_instant = real
 
     assert with_test_db(scenario) == 2
+
+
+# ---------------------------------------------------------------------------
+# NF-4.19 (2026-10-30, founder: "Responsiveness is still zero — how are we
+# calculating it? Are the other KPIs right?"). Every KPI is a RATE now: a
+# count-based penalty pinned any company of real size to 0 for good.
+# ---------------------------------------------------------------------------
+def test_responsiveness_is_how_often_work_lands_by_its_date_not_a_count(with_test_db):
+    """Tracole's shape: lots of work, 10% of it late. It used to read 0."""
+    tasks = ([_task(i, status="done", due_date=YESTERDAY, completed_at=f"{YESTERDAY}T09:00:00+00:00")
+              for i in range(90)]
+             + [_task(100 + i, status="todo", due_date=YESTERDAY) for i in range(10)])
+    out = _view(with_test_db, tasks=tasks)
+    assert out["stats"]["overdue"] == 10
+    assert out["company"]["categories"]["responsiveness"] == 90, "90 of 100 dated tasks landed by their date"
+
+
+def test_complaints_resolved_are_thirty_percent_of_responsiveness(with_test_db):
+    tasks = [_task(i, status="done", due_date=YESTERDAY, completed_at=f"{YESTERDAY}T09:00:00+00:00") for i in range(4)]
+    complaints = [{"id": "c1", "status": "resolved"}, {"id": "c2", "status": "open"}]
+    out = _view(with_test_db, tasks=tasks, complaints=complaints)
+    assert out["company"]["categories"]["responsiveness"] == round(100 * 0.7 + 50 * 0.3)
+
+
+def test_finance_is_what_came_in_on_due_invoices_and_late_invoices_are_not_a_count(with_test_db):
+    invoices = ([{"id": f"p{i}", "type": "sales_invoice", "amount": 10000, "amount_paid": 10000, "status": "paid",
+                  "due_date": YESTERDAY} for i in range(15)]
+                + [{"id": f"u{i}", "type": "sales_invoice", "amount": 1000, "amount_paid": 0, "status": "unpaid",
+                    "due_date": YESTERDAY} for i in range(20)]
+                + [{"id": "later", "type": "sales_invoice", "amount": 99999, "status": "unpaid", "due_date": TOMORROW}])
+    payments = [{"id": "adv", "direction": "in", "amount": 500000, "match_status": "unmatched"}]
+    out = _view(with_test_db, tasks=[_task(1, status="done")], invoices=invoices, payments=payments)
+    # 150,000 of 170,000 due came in: 88. The old rule took 5 per late invoice (-100): 0.
+    assert out["company"]["categories"]["finance"] == round(150000 / 170000 * 100)
+    assert out["stats"]["outstanding"] == 20000 + 99999, "Finance's own Outstanding: amount less paid, per invoice"
+    assert out["stats"]["unmatched_received"] == 500000, "money on no invoice is named, not counted as collected"
+
+
+def test_a_rejected_decision_is_a_decision_made(with_test_db):
+    decisions = [{"id": "d1", "status": "approved"}, {"id": "d2", "status": "rejected"},
+                 {"id": "d3", "status": "pending_approval"}, {"id": "d4", "status": "approved"}]
+    out = _view(with_test_db, tasks=[_task(1, status="done")], decisions=decisions)
+    assert out["company"]["categories"]["sales"] == 75, "3 of 4 answered; the rejection is not a failure"
+    assert out["stats"]["approved"] == 2

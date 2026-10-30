@@ -385,6 +385,8 @@ async def update_tenant_settings(inp: TenantSettingsInput, user: dict = Depends(
         updates["followup_manager_days"], updates["followup_owner_days"] = int(manager), int(owner)
     # Epic 11 S11 (2026-10-30): work nobody has climbs the team's reporting
     # tree one level per step, the owner last — how many days each step is.
+    if inp.auto_plan_steps is not None:
+        updates["auto_plan_steps"] = bool(inp.auto_plan_steps)   # NF-4.18
     if inp.pickup_step_days is not None:
         if not (1 <= inp.pickup_step_days <= 14):
             raise HTTPException(status_code=400, detail="Use 1 to 14 days between one manager and the next")

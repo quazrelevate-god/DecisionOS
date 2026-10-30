@@ -59,17 +59,22 @@ const CATS = [
   { key: "execution", label: "Execution", icon: ListChecks, weight: 35,
     formula: "(tasks done ÷ total actionable) × 100  −  (overdue ÷ open) × 40",
     plain: "How much of what you started is finished on time." },
+  /* NF-4.19 (2026-10-30) — read off the invoices, as Finance's Outstanding
+     is; the count-based "− overdue × 5" pinned real companies to 0. */
   { key: "finance", label: "Finance", icon: Coins, weight: 25,
-    formula: "(paid ÷ billed and due) × 100  −  overdue invoices × 5",
+    formula: "money received on invoices that are due  ÷  money due  × 100",
     plain: "How much of the money already due has come in. Invoices not yet due don't count." },
   // Audit G-02 (2026-10-09) — this measures approvals, so it is called that.
   // The stored key stays "sales" (services/operating_score.py).
+  // NF-4.19 — a rejection is a decision made; what slows a company is the unanswered one.
   { key: "sales", label: "Decisions", icon: ChartBar, weight: 20,
-    formula: "approved decisions ÷ total decisions × 100",
-    plain: "How many of the decisions raised get approved." },
+    formula: "decided (approved or rejected) ÷ decisions raised × 100",
+    plain: "How many of the decisions raised have been answered." },
+  /* NF-4.19 — it subtracted COUNTS (open complaints × 12, overdue tasks × 3),
+     so any company of real size sat at 0 for good. */
   { key: "responsiveness", label: "Responsiveness", icon: Timer, weight: 20,
-    formula: "100  −  (open complaints × 12)  −  (overdue tasks × 3)",
-    plain: "How fast the team is closing loops — complaints and missed dates." },
+    formula: "on-time rate × 70%  +  complaints resolved × 30%  (on-time rate alone when there are no complaints)",
+    plain: "How often work lands by its date, and how many complaints get closed." },
 ];
 
 // KR-9 — below 40 is the one place a score raises its voice (orange); above
@@ -665,6 +670,15 @@ function OwnerView({ data, windowKey, onWindow }) {
                   canDrill={demo} onOpen={() => setDrillCat(c.key)}
                   to={c.key === "finance" && data.can_finance ? "/finance" : null} />
               ))}
+              {/* NF-4.19 — a low Finance score can be books, not customers:
+                  money received that no invoice records yet. */}
+              {data.can_finance && Number(stats.unmatched_received) > 0 && (
+                <Link to="/finance" data-testid="ops-unmatched-received"
+                  className="col-span-2 rounded-2xl bg-amber-50 px-4 py-2.5 text-xs leading-relaxed text-amber-900 ring-1 ring-inset ring-amber-200">
+                  ₹{Math.round(Number(stats.unmatched_received)).toLocaleString("en-IN")} received isn&rsquo;t matched to any
+                  invoice yet, so Finance counts those invoices as unpaid. Match the payments in Finance to bring the score up.
+                </Link>
+              )}
             </div>
             <DoTheseFirst actions={actions} onDrill={setDrillCat} note={demo ? demoDex.explainer : null} className="lg:col-span-2 xl:col-span-1" />
           </div>

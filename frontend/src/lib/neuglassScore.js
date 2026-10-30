@@ -39,9 +39,10 @@ export function scoreBand(score) {
  */
 const WEAKEST_AREA = {
   execution: { name: "Execution", to: "/my-work", why: "Finish or re-date what is open — late and unfinished work pulls it down." },
-  finance: { name: "Finance", to: "/finance", why: "Chase the invoices that are due — money owed and not in is what pulls it down." },
-  sales: { name: "Decisions", to: "/inbox", why: "Decide what is waiting on the Desk — decisions left unapproved pull it down." },
-  responsiveness: { name: "Responsiveness", to: "/crm", why: "Close open complaints and missed dates — they count against it directly." },
+  // NF-4.19 (2026-10-30) — each hint says what the category now measures.
+  finance: { name: "Finance", to: "/finance", why: "Chase the invoices that are due, and match payments that came in to their invoices." },
+  sales: { name: "Decisions", to: "/inbox", why: "Approve or turn down what is waiting on the Desk — unanswered decisions pull it down." },
+  responsiveness: { name: "Responsiveness", to: "/my-work?filter=overdue", why: "Get work done by its date, and close open complaints — late work pulls it down." },
 };
 
 export function scoreActions(stats, categories = null) {

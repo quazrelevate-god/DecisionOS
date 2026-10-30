@@ -39,19 +39,25 @@ def test_operating_score_collected_excludes_out_payments(with_test_db):
             tid = "t-s7-4"
             await db.invoices.insert_one({
                 "id": "inv1", "tenant_id": tid, "type": "sales_invoice",
-                "amount": 1000, "status": "unpaid"})
+                "amount": 1000, "amount_paid": 600, "status": "partial"})
+            # NF-4.19: what came in is read off the invoice (as Finance's Outstanding
+            # is) -- the inbound 600 matched to it; an unmatched inbound and an
+            # outbound payment are not collected.
             await db.payments.insert_many([
-                {"id": "p-in", "tenant_id": tid, "amount": 600, "direction": "in"},
-                {"id": "p-out", "tenant_id": tid, "amount": 500, "direction": "out"},
+                {"id": "p-in", "tenant_id": tid, "amount": 600, "direction": "in", "match_status": "matched"},
+                {"id": "p-in2", "tenant_id": tid, "amount": 300, "direction": "in", "match_status": "unmatched"},
+                {"id": "p-out", "tenant_id": tid, "amount": 500, "direction": "out", "match_status": "unmatched"},
             ])
             payload = await ops._company_operating_view(tid, {"role": "owner"}, now_iso())
-            return payload["stats"]["outstanding"]
+            return payload["stats"]["outstanding"], payload["stats"]["unmatched_received"]
         finally:
             restore()
 
     # billed 1000, only the inbound 600 is "collected" -> outstanding 400.
     # Before the fix the outbound 500 inflated total_paid to 1100 -> outstanding -100.
-    assert with_test_db(scenario) == 400
+    outstanding, unmatched = with_test_db(scenario)
+    assert outstanding == 400
+    assert unmatched == 300, "only INBOUND money on no invoice is named; the outbound 500 is not"
 
 
 # ---------------------------------------------------------------------------

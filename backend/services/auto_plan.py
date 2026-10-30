@@ -1,5 +1,14 @@
 """The checklist Dex drafts by itself when a task is made (founder, 2026-10-29).
 
+NF-4.18 (founder 2026-10-30): NOW OFF UNLESS THE COMPANY TURNS IT ON. "I don't
+want that automatically creating of execution steps. It should be an optional
+thing — we can't spend much on AI. When they need it, they can click it." Every
+task got an AI call on creation, a background sweep drafted the rest, and My
+Work asked for every card on screen without steps. Now none of that runs unless
+an owner switches on Settings > AI processing > "Dex drafts steps for every new
+task" (tenant.auto_plan_steps, default off). Ask Dex in the task
+(POST /tasks/{id}/execution-plan/generate) and Add manually are unchanged.
+
 Until now the AI Execution Guide waited for someone to press "Ask Dex" in the
 task. The redesigned My Work shows each task's NEXT ACTION on its card — the
 first step of its checklist not yet ticked — so every task needs a checklist
@@ -42,6 +51,11 @@ def _enabled() -> bool:
     return (os.environ.get("AUTO_PLAN") or "on").strip().lower() not in ("off", "0", "false", "no")
 
 
+def auto_on(tenant: dict | None) -> bool:
+    """The company chose to have every new task's steps drafted by Dex."""
+    return bool((tenant or {}).get("auto_plan_steps"))
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -73,8 +87,9 @@ async def draft_plan(db, tenant_id: str, task_id: str) -> bool:
         if not _eligible(t):
             return False
         tenant = await db.tenants.find_one({"id": tenant_id},
-                                           {"_id": 0, "ai_consent": 1, "industry": 1, "currency": 1}) or {}
-        if not has_active_consent(tenant):
+                                           {"_id": 0, "ai_consent": 1, "industry": 1, "currency": 1,
+                                            "auto_plan_steps": 1}) or {}
+        if not has_active_consent(tenant) or not auto_on(tenant):
             return False
         # Claim it first: only the caller that flips the stamp drafts.
         claim = await db.tasks.update_one(
@@ -147,6 +162,8 @@ async def request(db, user: dict, task_ids: list, may_read, wait: bool = False) 
     Returns the ids it asked for."""
     tid = user["tenant_id"]
     asked = []
+    if not auto_on(await db.tenants.find_one({"id": tid}, {"_id": 0, "auto_plan_steps": 1})):
+        return asked   # off: steps come from Ask Dex or by hand
     stale = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
     for task_id in task_ids[:10]:
         t = await db.tasks.find_one({"id": task_id, "tenant_id": tid}, {"_id": 0})
@@ -187,8 +204,8 @@ async def sweep(db, tenant_id: str, limit: int = 8) -> int:
     if not _enabled():
         return 0
     from services.ai_consent import has_active_consent
-    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "ai_consent": 1})
-    if not has_active_consent(tenant or {}):
+    tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0, "ai_consent": 1, "auto_plan_steps": 1})
+    if not has_active_consent(tenant or {}) or not auto_on(tenant):
         return 0
     since = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     cur = db.tasks.find(

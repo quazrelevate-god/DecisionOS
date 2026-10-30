@@ -41,9 +41,12 @@ def _run(with_test_db, body, steps=STEPS):
     return with_test_db(runner)
 
 
-async def _tenant(db, consent=True):
+async def _tenant(db, consent=True, auto=True):
+    # NF-4.18 (2026-10-30): drafting by itself is something a company turns on
+    # (Settings > Task steps from Dex); these tests are about a company that has.
     await db.tenants.insert_one({"id": "t1", "name": "Sharma Textiles", "industry": "textiles",
-                                 "currency": "INR", **({"ai_consent": CONSENT} if consent else {})})
+                                 "currency": "INR", **({"ai_consent": CONSENT} if consent else {}),
+                                 **({"auto_plan_steps": True} if auto else {})})
 
 
 def _task(tid="k1", **kw):
@@ -197,3 +200,45 @@ def test_a_checklist_never_moves_a_task_to_doing(with_test_db):
         return go()
     t = with_test_db(runner)
     assert t["status"] == "todo" and t["progress"] == 50, "a ticked step moves the bar, not the status"
+
+
+
+# ---------------------------------------------------------------------------
+# NF-4.18 (founder 2026-10-30): "I don't want that automatically creating of
+# execution steps. It should be an optional thing — we can't spend much on AI.
+# When they need it, they can click it."
+# ---------------------------------------------------------------------------
+def test_unless_the_company_turns_it_on_nothing_is_drafted_by_itself(with_test_db):
+    async def body(db, calls):
+        import os
+        from services import auto_plan
+        await _tenant(db, auto=False)
+        await db.tasks.insert_many([_task("a"), _task("b")])
+        user = {"id": "u1", "tenant_id": "t1", "role": "owner"}
+
+        async def may_read(u, t):
+            return True
+        os.environ["AUTO_PLAN"] = "on"
+        try:
+            made = await auto_plan.draft_plan(db, "t1", "a")
+            asked = await auto_plan.request(db, user, ["a", "b"], may_read, wait=True)
+            swept = await auto_plan.sweep(db, "t1")
+        finally:
+            os.environ["AUTO_PLAN"] = "off"
+        rows = await db.tasks.find({"tenant_id": "t1"}, {"_id": 0}).to_list(10)
+        assert made is False and asked == [] and swept == 0, \
+            "no draft on creation, on opening My Work, or by the sweep"
+        assert calls == [], "not one AI call"
+        assert not any(r.get("execution_plan") or r.get("plan_auto_at") for r in rows), "nothing written or stamped"
+    _run(with_test_db, body)
+
+
+def test_ask_dex_in_the_task_still_drafts_on_a_tap():
+    src = (ROOT / "routers" / "tasks.py").read_text(encoding="utf-8")
+    assert '@router.post("/tasks/{task_id}/execution-plan/generate")' in src, "the button's own route is untouched"
+    mw = (ROOT.parent / "frontend" / "src" / "pages" / "MyWork.js").read_text(encoding="utf-8")
+    assert "if (!tenant?.auto_plan_steps) return;" in mw, "My Work asks for nothing by itself"
+    assert "const needsDraft = autoSteps && expanded" in mw, "opening a task asks for nothing by itself"
+    assert 'data-testid={`task-ask-dex-first-${t.id}`}' in mw, "a task with no steps offers Ask Dex"
+    st = (ROOT.parent / "frontend" / "src" / "pages" / "Settings.js").read_text(encoding="utf-8")
+    assert 'data-testid="auto-steps-toggle"' in st and 'auto_plan_steps: !on' in st

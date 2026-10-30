@@ -303,6 +303,50 @@ function AiConsentCard() {
   );
 }
 
+/* NF-4.18 (founder 2026-10-30) — "I don't want that automatically creating of
+   execution steps. It should be an optional thing — we can't spend much on AI."
+   Off unless an owner turns it on: then Dex drafts the steps of every new task
+   (one AI call each). Off, a task's steps come from Ask Dex in the task (one
+   call, when someone taps it) or are added by hand. */
+function AutoStepsCard() {
+  const { user, tenant, refreshTenant } = useAuth();
+  const isOwner = user?.role === "owner";
+  const on = !!tenant?.auto_plan_steps;
+  const [busy, setBusy] = useState(false);
+  const flip = async () => {
+    setBusy(true);
+    try {
+      await api.patch("/tenant/settings", { auto_plan_steps: !on });
+      if (refreshTenant) await refreshTenant();
+      toast.success(on ? "Dex drafts steps only when someone asks" : "Dex will draft steps for every new task");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't change it");
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="ng-bento p-5 sm:p-6" data-testid="settings-auto-steps-card">
+      <h2 className="text-base font-medium">Task steps from Dex</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Anyone can tap <strong className="font-semibold text-foreground">Ask Dex</strong> in a task to have its steps
+        drafted, or add the steps themselves. Turn this on to have Dex draft the steps of every new task by itself
+        &mdash; each one uses AI credits.
+      </p>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-semibold" data-testid="auto-steps-status">
+          {on ? "On — every new task gets steps from Dex" : "Off — steps only when someone asks Dex"}
+        </p>
+        {isOwner ? (
+          <button type="button" onClick={flip} disabled={busy} data-testid="auto-steps-toggle" className={on ? PILL : INK}>
+            {busy ? "Saving…" : on ? "Turn off" : "Turn on"}
+          </button>
+        ) : (
+          <p className="text-xs text-muted-foreground">Only an owner can change this.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const PILL = "ng-pop flex h-11 shrink-0 items-center justify-center rounded-pill px-4 text-sm font-medium text-foreground disabled:opacity-50";
 const INK = "flex h-11 shrink-0 items-center justify-center rounded-pill bg-ng-ink px-4 text-sm font-medium text-white disabled:opacity-50";
 const FIELD = "w-full rounded-2xl bg-white/80 px-4 py-2.5 text-sm text-slate-800 ring-1 ring-inset ring-slate-900/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/25";
@@ -1212,6 +1256,7 @@ export default function Settings() {
         {tab === "business" && (
           <>
             <Section id="settings-s-ai" label="AI processing"><AiConsentCard /></Section>
+            <Section id="settings-s-auto-steps" label="Task steps from Dex"><AutoStepsCard /></Section>
             <Section id="settings-s-company" label="Company details"><CompanyDetails /></Section>
             <Section id="settings-s-vocabulary" label="Business vocabulary"><BusinessVocabulary /></Section>
           </>

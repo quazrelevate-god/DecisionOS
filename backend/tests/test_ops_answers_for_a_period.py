@@ -21,6 +21,7 @@ everything still open counts however old it is. Open work is never filtered —
 hiding a March task that is still not done would be the same flattering lie.
 """
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -123,7 +124,10 @@ async def _seed(db):
          "created_at": "2026-01-02T04:00:00+00:00", "completed_at": "2026-01-03T04:00:00+00:00"},
         # finished this week
         {"id": "new1", "tenant_id": T, "assignee_id": "u-priya", "status": "done",
-         "created_at": "2026-09-24T04:00:00+00:00", "completed_at": "2026-09-25T04:00:00+00:00"},
+         # relative to today: the fixed 25 Sep date had aged out of the
+         # 30-day window it stands for (2026-10-30)
+         "created_at": (datetime.now(timezone.utc) - timedelta(days=5)).isoformat(),
+         "completed_at": (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()},
         # open since March, and still open
         {"id": "stale", "tenant_id": T, "assignee_id": "u-priya", "status": "todo",
          "created_at": "2026-03-01T04:00:00+00:00", "due_date": "2026-03-10"},

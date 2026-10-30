@@ -612,7 +612,9 @@ def test_a_task_can_be_made_to_repeat_and_says_so():
     assert 'testid="task-repeat-every"' in form
     assert "repeat_every: form.repeat_every || null" in form
     work = _fe("pages", "MyWork.js")
-    assert "function repeatLabel(" in work
+    # NF-4.22 (2026-10-31): the words moved to lib/repeat so the Desk says them too.
+    assert "function repeatLabel(" in _fe("lib", "repeat.js")
+    assert "repeatLabel" in work
     assert 'data-testid={`repeat-pill-${t.id}`}' in work
     assert 'api.patch(`/tasks/${task.id}`, { stop_repeating: true })' in work
 

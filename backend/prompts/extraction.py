@@ -26,7 +26,10 @@ EXTRACT = register(Prompt(
     # the gap. Today's date now rides with every transcript, the task carries
     # the date itself ("due_on") beside the day count, and a task with no
     # deadline stays undated for the reviewer instead of being guessed.
-    version="1.3",
+    # 1.4 (2026-10-31, NF-4.22) — work that comes back. "Check the stock every
+    # Monday" became a one-off task: the schema had no way to say a task
+    # repeats. Each task now carries "repeat" and "repeat_interval".
+    version="1.4",
     intent="Convert a founder's spoken/written directive into structured decisions/tasks/workflow_events/reminders/meeting_events/memory_notes JSON.",
     template=(
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
@@ -39,7 +42,10 @@ EXTRACT = register(Prompt(
         '"assignee_name": string (a specific team member\'s name if one is explicitly mentioned, else empty), '
         '"task_category": one of [${cat_keys_str}] (the department this task belongs to), '
         '"priority": one of [low,medium,high], "due_in_days": integer or null, '
-        '"due_on": "YYYY-MM-DD" or null}], '
+        '"due_on": "YYYY-MM-DD" or null, '
+        '"repeat": one of [day,week,month] or null (ONLY when the work comes back on a cadence: daily, every Monday, weekly, '
+        'on the 5th of every month, quarterly; null for one-off work, and "on Monday" alone is one-off), '
+        '"repeat_interval": integer or null (2 for every 2 weeks / fortnightly / every other Friday, 3 for quarterly)}], '
         '"workflow_events": [{"type": one of [${pipe_keys_str}], "title": string, "detail": string, "counterparty": string, "amount": number or null}], '
         '"reminders": [{"title": string, "due_in_days": integer or null}], '
         '"meeting_events": [{"title": string, "when": string, "due_in_days": integer or null}], '

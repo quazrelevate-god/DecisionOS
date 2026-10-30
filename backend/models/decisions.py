@@ -43,6 +43,10 @@ class DecisionProposalTaskInput(BaseModel):
     description: Optional[str] = Field(None, max_length=2000)
     tags: Optional[List[str]] = Field(None, max_length=12)
     depends_on: Optional[List[str]] = Field(None, max_length=20)
+    # NF-4.22 (2026-10-31) — how often it comes back: "day" | "week" | "month",
+    # "" = just once; repeat_interval is how many of them (every 2 weeks).
+    repeat_every: Optional[str] = Field(None, max_length=10)
+    repeat_interval: Optional[int] = None
 
 
 class DecisionProposalTaskAddInput(BaseModel):

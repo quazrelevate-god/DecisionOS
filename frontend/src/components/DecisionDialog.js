@@ -64,6 +64,7 @@ import {
   ChatCircleText, User, WhatsappLogo, Microphone, PaperPlaneTilt,
   CheckCircle, ArrowRight, LinkSimple, Check, X, WarningCircle, Play, PencilSimple,
 } from "@phosphor-icons/react";
+import { proposalRepeat, repeatLabel, repeatOptions, repeatValue, parseRepeatValue } from "../lib/repeat";
 import { Link } from "react-router-dom";
 import {
   CHIP, QUIET_CHIP, DRAWER_CARD, DRAWER_FIELD, DRAWER_LABEL,
@@ -1116,6 +1117,17 @@ export function DecisionPanel({
                                     No date yet — set one
                                   </span>
                                 )}
+                                {/* NF-4.22 — how often it comes back ("every Monday" said to Dex). */}
+                                <div className="w-36">
+                                  <GlassSelect value={repeatValue(proposalRepeat(t))} disabled={editBusy}
+                                    onChange={(v) => {
+                                      const r = parseRepeatValue(v);
+                                      editTask(t.key, r ? { repeat_every: r.every, repeat_interval: r.interval } : { repeat_every: "" });
+                                    }}
+                                    ariaLabel={`How often ${t.title} repeats`} testid={`decision-task-repeat-${t.key}`}
+                                    variant="field" options={repeatOptions(proposalRepeat(t))}
+                                    triggerClassName={`h-9 rounded-pill px-3 text-xs text-slate-700 ${GLASS_PILL}`} />
+                                </div>
                                 <button type="button" onClick={() => removeItem("tasks", t.key)} disabled={editBusy}
                                   aria-label={`Remove ${t.title}`} data-testid={`decision-task-remove-${t.key}`}
                                   className={GLASS_ICON_BTN}>
@@ -1137,6 +1149,7 @@ export function DecisionPanel({
                                   : t.assignee_role ? `Goes to the ${deptName(tenant, t.assignee_role)} team`
                                   : "Unassigned"}
                                 {t.due_date ? ` · due ${new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : proposing ? " · no date yet" : ""}
+                                {proposalRepeat(t) ? ` · ${repeatLabel(proposalRepeat(t)).toLowerCase()}` : ""}
                                 {t.priority && t.priority !== "medium" ? ` · ${t.priority} priority` : ""}
                               </p>
                             )}

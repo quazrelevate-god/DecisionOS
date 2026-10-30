@@ -54,7 +54,7 @@ export const OP_CATEGORIES = [
 const EMPTY_FORM = {
   title: "", description: "", task_type: "",
   // ASK-29 — one "Assign to" control: "u:<userId>" for a person, "r:<roleKey>"
-  // for a team (the server hands a team task to its least busy member).
+  // for a team (Epic 11 S11: its one person, else the team's queue).
   assign: "",
   co_assignee_ids: [],   // ASK-26 — helpers alongside the person doing it
   priority: "medium",
@@ -178,6 +178,23 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
     // of listing them twice; a team or nobody has no helpers.
     setForm({ ...form, assign: v, co_assignee_ids: pid ? form.co_assignee_ids.filter((id) => id !== pid) : [] });
   };
+
+  // NF-4.20 — where a task given to a team goes, before it is created: the
+  // team's one person; nobody in it, the owner is asked; else the queue (high
+  // priority asks its managers at once). Invitees who have not joined do not
+  // count, as on the server.
+  const teamHint = (() => {
+    if (!teamKey) return "";
+    const team = roleLabel(teamKey, roleOptions);
+    // The people list still loading (a company always has its owner): say
+    // nothing it cannot back up yet, not "nobody is in Sales".
+    if (!(members || []).length) return `Goes to the ${team} team.`;
+    const inTeam = (members || []).filter((m) => m.role === teamKey && m.invite_status !== "pending");
+    if (inTeam.length === 1) return `Goes straight to ${inTeam[0].name}, the only one in ${team}.`;
+    if (inTeam.length === 0) return `Nobody is in ${team} yet, so the owner is asked to assign it.`;
+    if (form.priority === "high") return `High priority: the ${team} managers are asked to assign it straight away.`;
+    return `Waits in the ${team} queue. Anyone in ${team} can take it; if nobody does, their manager is reminded.`;
+  })();
 
   const pendingPick = (() => {
     const pid = (form.assign || "").startsWith("u:") ? form.assign.slice(2) : "";
@@ -456,7 +473,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                       : `${m.name} · ${roleLabel(m.role, roleOptions)}${m.invite_status === "pending" ? " · not joined yet" : ""}`,
                   })) },
                   ...(teams.length > 0
-                    ? [{ label: "A team (least busy person)", options: teams.map((r) => ({ value: `r:${r.key}`, label: `${r.label} team` })) }]
+                    ? [{ label: "A team (its queue)", options: teams.map((r) => ({ value: `r:${r.key}`, label: `${r.label} team` })) }]
                     : []),
                 ]} />
             </div>
@@ -468,9 +485,12 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
               {pendingPick.name} hasn&rsquo;t joined yet — they&rsquo;ll see this once they do.
             </p>
           )}
+          {/* NF-4.20 (2026-10-31) — said the way the server routes it (Epic 11
+              S11, services/task_pickup): never "whoever has the least open
+              work", which the form kept promising after that rule was gone. */}
           {teamKey && (
             <p className="-mt-2 text-xs text-muted-foreground" data-testid="task-team-hint">
-              Goes to whoever in {roleLabel(teamKey, roleOptions)} has the least open work.
+              {teamHint}
             </p>
           )}
 
@@ -505,9 +525,11 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                 scratch every cycle, and the "recurring tasks" collected during
                 onboarding were stored and read by nothing at all. Offered only
                 once there IS a date, because the date is what repeats — which
-                also keeps this out of the way of the ordinary one-off task. */}
-            {dueDate && (
-              <div className="mt-2.5" data-testid="task-repeat">
+                also keeps this out of the way of the ordinary one-off task.
+                NF-4.23 (2026-10-31): shown from the start — hidden until a date
+                was picked, nobody knew a task could repeat. The date is still
+                required, and asked for on Create. */}
+            <div className="mt-2.5" data-testid="task-repeat">
                 <label className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span>Repeats</span>
                   {/* The app's own glass list, not the OS picker (founder rule). */}
@@ -541,8 +563,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
                     The next one appears when this one is marked done, so there is only ever one live.
                   </p>
                 )}
-              </div>
-            )}
+            </div>
             {dueDate && form.due_preset !== "pick" && (
               <p className="mt-1.5 text-xs text-muted-foreground" data-testid="task-due-summary">
                 Due {new Date(`${dueDate}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}

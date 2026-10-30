@@ -103,6 +103,12 @@ class TaskUpdateInput(BaseModel):
     # D1: stop a routine without cancelling the piece of work in hand. Closing
     # this task then brings nothing after it.
     stop_repeating: Optional[bool] = None
+    # NF-4.23 (2026-10-31) — make a task repeat, or change how often, after it
+    # was made: there was only "Stop repeating". "" in repeat_every makes it a
+    # one-off again; repeat_until "" keeps it going.
+    repeat_every: Optional[str] = None
+    repeat_interval: Optional[int] = None
+    repeat_until: Optional[str] = None
 
 
 class TaskReassignInput(BaseModel):

@@ -44,7 +44,8 @@ def test_impossible_dates_are_not_kept():
 
 
 def test_the_model_is_told_the_date_and_asked_for_it():
-    assert get("extraction.extract").version == "1.3"
+    # 1.3 told it the date; 1.4 (NF-4.22, 2026-10-31) added the repeat — the date rule stands.
+    assert get("extraction.extract").version == "1.4"
     text = render("extraction.extract", roles_str="sales", cat_keys_str="sales", pipe_keys_str="sales_orders",
                   members_line="", pipe_desc="", cat_desc="")
     assert '"due_on": "YYYY-MM-DD" or null' in text

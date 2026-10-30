@@ -26,7 +26,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  ArrowLeft, CalendarBlank, Camera, CaretDown, CaretRight, Check, CheckCircle, Flag, LinkSimple,
+  ArrowLeft, ArrowsClockwise, CalendarBlank, Camera, CaretDown, CaretRight, Check, CheckCircle, Flag, LinkSimple,
   ListChecks, Plus, SealCheck, Tag, Trash, UserCircle, UserPlus, Users, WarningCircle, X,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
@@ -49,6 +49,7 @@ import {
   MAROON_PILL, QUIET_CHIP,
 } from "../../components/neuglass/glass";
 import { cn } from "../../lib/utils";
+import { proposalRepeat, repeatLabel, repeatOptions, repeatValue, parseRepeatValue } from "../../lib/repeat";
 
 /* The priority's own hues — the same three the priority bar's thumb wears
    (index.css .ng-prio-thumb--*): green, amber, red. Never the app's blue. */
@@ -663,6 +664,12 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
                   <span className={cn("min-w-0 flex-1 truncate text-[13px]", t.due_date ? "text-slate-600" : "font-medium text-[hsl(30_70%_32%)]")}
                     data-testid={t.due_date ? undefined : `decision-task-no-date-${t.key}`}>
                     {t.due_date ? `Due ${shortDay(t.due_date)}` : "No date yet — set one"}
+                    {/* NF-4.22 — a routine says so before it is approved. */}
+                    {proposalRepeat(t) && (
+                      <span className="text-slate-500" data-testid={`dex-review-task-repeats-${t.key}`}>
+                        {" · "}<ArrowsClockwise size={12} weight="bold" aria-hidden="true" className="inline -mt-0.5" /> {repeatLabel(proposalRepeat(t)).toLowerCase()}
+                      </span>
+                    )}
                     {after.length > 0 && <span className="text-slate-500"> · after {after.map((n) => `#${n}`).join(", ")}</span>}
                   </span>
                   <CaretRight size={15} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400" />
@@ -792,6 +799,29 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
               ) : (
                 <span className="text-[14px] text-slate-600">{t.due_date ? shortDay(t.due_date) : "No date"}</span>
               )}
+            </div>
+            {/* NF-4.22 (2026-10-31) — how often it comes back. Dex fills it from
+                "every Monday" / "monthly"; the reviewer can change it, or make it
+                a one-off. Approving makes a repeating task like New Task's. */}
+            <div className="flex min-h-[4.25rem] items-center gap-3.5 px-4 py-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-900/[0.05] text-slate-700">
+                <ArrowsClockwise size={18} weight="bold" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-medium text-slate-900">Repeats</span>
+                {proposalRepeat(t) && <span className="block text-[12px] text-slate-500">The next one appears when this one is done</span>}
+              </span>
+              {editable ? (
+                <div className="w-[11.5rem] shrink-0">
+                  <GlassSelect value={repeatValue(proposalRepeat(t))} disabled={ro} testid={`dex-review-task-repeat-${t.key}`}
+                    ariaLabel="How often it repeats" align="end" triggerClassName="h-10 px-4 text-[14px]"
+                    onChange={(v) => {
+                      const r = parseRepeatValue(v);
+                      editTask(t.key, r ? { repeat_every: r.every, repeat_interval: r.interval } : { repeat_every: "" });
+                    }}
+                    options={repeatOptions(proposalRepeat(t))} />
+                </div>
+              ) : <span className="text-[14px] text-slate-600">{repeatLabel(proposalRepeat(t)) || "Just once"}</span>}
             </div>
             <div className="flex min-h-[4.25rem] items-center gap-3.5 px-4 py-3">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-900/[0.05] text-slate-700">

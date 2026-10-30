@@ -70,6 +70,7 @@ import {
 // 2026-09-14, founder — every dropdown on this page is the app's own glass
 // list; none of them opens the operating system's picker.
 import { GlassSelect } from "../components/neuglass/GlassSelect";
+import { repeatLabel, repeatOptions, repeatValue, parseRepeatValue, isRepeating } from "../lib/repeat";
 import { RoutinesNudge } from "../components/routines/RoutinesSetup";
 import { DraftNote } from "../components/neuglass/DraftNote";
 import { useDraft } from "../hooks/useDraft";
@@ -166,13 +167,8 @@ const STATUS_OPTIONS = [
 const STATUS_LABEL = TASK_STATUS_LABELS;
 const STAGE_OF = { todo: "todo", blocked: "todo", in_progress: "in_progress", waiting: "in_progress", review: "in_progress", done: "done", cancelled: "cancelled" };
 const stageOf = (status) => STAGE_OF[status] || "todo";
-/* D1 — how a cadence reads on screen. Mirrors services/recurrence.describe so
-   the app and the server say the same words about the same routine. */
-function repeatLabel(rec) {
-  if (!rec || !rec.every) return "";
-  const n = parseInt(rec.interval, 10) || 1;
-  return n === 1 ? `Every ${rec.every}` : `Every ${n} ${rec.every}s`;
-}
+/* D1 — how a cadence reads on screen: lib/repeat (NF-4.22 moved it there so
+   the Decision Desk's review says the same words). */
 
 // Whole days a task has been waiting (0 on the day it started), or null.
 const waitDays = (t) => {
@@ -1738,8 +1734,34 @@ function NoDateChip({ t: task, canSet, onSaved }) {
    the piece of work in hand: this task stays open and doing it simply brings
    nothing after it, which is what "we don't do this any more" actually means
    when you are halfway through the last one. */
-function RepeatLine({ t: task, canStop, onSaved, className = "" }) {
+function RepeatLine({ t: task, canStop, onSaved, className = "", picker = false }) {
   const [busy, setBusy] = useState(false);
+  /* NF-4.23 (2026-10-31) — the drawer can START a routine on a task that
+     exists, or change how often, not only stop one: a picker for whoever may
+     move its date (the server's rule), on a task that is open and dated. */
+  const canEdit = canStop && !isTerminal(task) && !!task.due_date;
+  if (picker && canEdit) {
+    const change = async (v) => {
+      const r = parseRepeatValue(v);
+      if (repeatValue(r) === repeatValue(task.recurrence)) return;
+      setBusy(true);
+      try {
+        await api.patch(`/tasks/${task.id}`, r ? { repeat_every: r.every, repeat_interval: r.interval } : { repeat_every: "" });
+        toast.success(r ? `${repeatLabel(r)}. The next one appears when this one is done.` : "This won't come back after it's done");
+        onSaved?.();
+      } catch (e) {
+        toast.error(e.response?.data?.detail || "Could not change how often it repeats.");
+      } finally { setBusy(false); }
+    };
+    return (
+      <span className={`inline-block w-40 ${className}`}>
+        <GlassSelect value={repeatValue(task.recurrence)} onChange={change} disabled={busy}
+          ariaLabel="How often this task repeats" testid={`task-repeat-pick-${task.id}`} align="end"
+          variant="field" triggerClassName="h-8 rounded-pill px-3 text-xs text-slate-700"
+          options={repeatOptions(task.recurrence?.every ? task.recurrence : null)} />
+      </span>
+    );
+  }
   if (!task.recurrence?.every) return null;
   const stop = async () => {
     setBusy(true);
@@ -2845,6 +2867,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       { key: "notes", label: "Notes", icon: NotePencil, n: null },
     ];
     const chip = "inline-flex max-w-full items-center gap-1.5 rounded-pill bg-slate-900/[0.05] px-3 py-1.5 text-[13px] font-medium text-slate-700";
+    const canRepeat = rights.priority && !terminal && !!t.due_date;   // NF-4.23
     return (
       /* A column at least the screen tall, so the action bar sits at the foot
          even on a short tab, and sticks there on a long one. */
@@ -2895,7 +2918,20 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             {t.description && (
               <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-slate-600" data-testid={`task-context-m-${t.id}`}>{t.description}</p>
             )}
-            {(chips.length > 0 || t.workflow_summary?.id || t.recurrence?.every) && (
+            {/* NF-4.23 (2026-10-31) — whoever may move the date sets how often it
+                comes back, right under it: start a routine, change it, or make
+                it a one-off. Everyone else sees the chip below. */}
+            {canRepeat && (
+              <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-900/[0.06] pt-3 text-[13px] font-medium text-slate-600"
+                data-testid={`task-hero-repeat-${t.id}`}>
+                <span className="inline-flex items-center gap-1.5">
+                  <ArrowsClockwise size={14} weight="bold" aria-hidden="true" /> Repeats
+                  {t.recurrence?.every && <span className="font-normal text-slate-500">· the next one appears when this is done</span>}
+                </span>
+                <RepeatLine picker t={t} canStop={rights.priority} onSaved={onChange} />
+              </div>
+            )}
+            {(chips.length > 0 || t.workflow_summary?.id || (t.recurrence?.every && !canRepeat)) && (
               <div className="mt-4 flex flex-wrap gap-2" data-testid={`task-chips-${t.id}`}>
                 {chips.map((c) => (
                   <span key={c.key} className={chip}><c.icon size={14} weight="bold" aria-hidden="true" className="shrink-0" />
@@ -2912,7 +2948,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                     )}
                   </WorkflowLink>
                 )}
-                {t.recurrence?.every && (
+                {t.recurrence?.every && !canRepeat && (
                   <span className={chip}><ArrowsClockwise size={14} weight="bold" aria-hidden="true" /> {repeatLabel(t.recurrence)}</span>
                 )}
               </div>
@@ -3343,9 +3379,11 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 )}
               </div>
             )}
-            {t.recurrence?.every && (
-              <div className="mt-3 border-t border-slate-900/[0.06] pt-2 text-xs text-slate-600">
-                <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} />
+            {(t.recurrence?.every || (rights.priority && !isTerminal(t) && t.due_date)) && (
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-900/[0.06] pt-2 text-xs text-slate-600"
+                data-testid={`task-repeat-row-m-${t.id}`}>
+                <span>Repeats</span>
+                <RepeatLine picker t={t} canStop={rights.priority} onSaved={onChange} />
               </div>
             )}
             {t.created_at && (
@@ -4278,6 +4316,9 @@ const STATUS_FILTER_OPTIONS = [
   { key: "due_today", label: "Due today" },
   // PILOT-1 C — the tasks made before dates were required, found in one place.
   { key: "no_date", label: "No due date" },
+  // NF-4.24 (2026-10-31) — every routine in one place: there was no way to
+  // see what comes back (the GST filing, the Monday stock count).
+  { key: "repeating", label: "Repeating" },
   { key: "completed", label: "Done" },
 ];
 // Links made before the stages keep working: Pending Approval and Under
@@ -4285,14 +4326,14 @@ const STATUS_FILTER_OPTIONS = [
 const STATUS_ALIASES = { blocked: "approval", review: "approval" };
 // Everything but a stage is a LENS or a FLAG: the card's stage chip still
 // says something under it, so it stays on the cards (see hideStatus).
-const STATUS_LENSES = new Set(["overdue", "due_today", "no_date", "completed", "waiting", "approval"]);
+const STATUS_LENSES = new Set(["overdue", "due_today", "no_date", "repeating", "completed", "waiting", "approval"]);
 function statusMatches(t, status) {
   if (status === "todo" || status === "in_progress") return stageOf(t.status) === status;
   if (status === "waiting") return t.status === "waiting";
   // Yokesh 2026-09-15: task approvals only. A task waiting for its decision is
   // blocked too, but decisions are approved on the Desk, not here.
   if (status === "approval") return !!t.approval_required && (t.status === "blocked" || t.approval_status === "pending");
-  return true; // overdue / due_today / completed are checked on their own
+  return true; // overdue / due_today / no_date / repeating / completed are checked on their own
 }
 // ASK-28 TK-01 — My Work task lenses you reach by link (?view=…) and never
 // save as the default. Approvals is its own view (ASK-25), not a lens here.
@@ -4312,6 +4353,7 @@ function matchesFilters(t, { tab, person, status }) {
   if (status === "overdue" && !isOverdue(t)) return false;
   if (status === "due_today" && !isDueToday(t)) return false;
   if (status === "no_date" && t.due_date) return false;
+  if (status === "repeating" && !isRepeating(t)) return false;
   if (status && !statusMatches(t, status)) return false;
   if (person === "unassigned") return !t.assignee_id && !t.assignee_role;
   if (person && person.startsWith("role:")) return !t.assignee_id && t.assignee_role === person.slice(5);

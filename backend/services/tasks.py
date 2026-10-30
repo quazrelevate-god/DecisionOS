@@ -450,6 +450,11 @@ def edit_refusal(t: dict, changes: dict, rights: dict) -> Optional[str]:
     # task ("waiting on", a note) rather than quietly moving the date.
     if "due_date" in changes and changes["due_date"] != t.get("due_date") and not rights["priority"]:
         return "Only the person who asked for it, the manager or the owner can move the due date."
+    # NF-4.23 — how often a task comes back is part of the promise, like its
+    # date: the same people (stopping a routine included).
+    if ("recurrence" in changes and (changes["recurrence"] or None) != (t.get("recurrence") or None)
+            and not rights["priority"]):
+        return "Only the person who asked for it, the manager or the owner can change how often this task repeats."
     if "evidence_required" in changes and bool(changes["evidence_required"]) != bool(t.get("evidence_required")) \
             and not rights["proof"]:
         return "Only the person who asked for it or the owner can change whether proof is needed."

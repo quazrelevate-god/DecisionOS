@@ -892,6 +892,32 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     # hand: this task stays open and closing it simply brings nothing after it.
     if updates.pop("stop_repeating", None):
         updates["recurrence"] = None
+    # NF-4.23 (2026-10-31) — start a routine on a task that exists, or change
+    # its cadence. The series keeps its id, so its history stays one thread.
+    if any(k in updates for k in ("repeat_every", "repeat_interval", "repeat_until")):
+        from services import recurrence as recurrence_svc
+        cur = t.get("recurrence") or {}
+        every = updates.pop("repeat_every", None)
+        n = updates.pop("repeat_interval", None)
+        until = updates.pop("repeat_until", None)
+        every = cur.get("every") if every is None else every
+        n = n if n is not None else (cur.get("interval") or 1)
+        until = cur.get("until") if until is None else until
+        try:
+            rec = recurrence_svc.normalise(every, n, until)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        if rec:
+            if t.get("status") in ("done", "cancelled"):
+                raise HTTPException(status_code=400, detail=(
+                    "This task is finished, so there is nothing to repeat from. Reopen it, or make a new task repeat."))
+            if not updates.get("due_date", t.get("due_date")):
+                raise HTTPException(status_code=400, detail=(
+                    "Give the task a due date first — the date is what repeats."))
+            series = cur.get("series_id") or t.get("series_id") or t["id"]
+            rec = {**rec, "series_id": series}
+            updates["series_id"] = series
+        updates["recurrence"] = rec
     # ASK-28 item 7 (plan 6.7): changing a task is held to the people who run it
     # (services/tasks.task_edit_rights) — before, any member of the company could.
     if user.get("role") != "owner":

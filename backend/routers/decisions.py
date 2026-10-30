@@ -300,7 +300,8 @@ async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionP
                                  priority=inp.priority, evidence_required=inp.evidence_required,
                                  approval_required=inp.approval_required, approval_stage=inp.approval_stage,
                                  approver_id=inp.approver_id, description=inp.description,
-                                 tags=inp.tags, depends_on=inp.depends_on)
+                                 tags=inp.tags, depends_on=inp.depends_on,
+                                 repeat_every=inp.repeat_every, repeat_interval=inp.repeat_interval)
     return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 

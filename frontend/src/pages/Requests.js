@@ -3,18 +3,21 @@
  * Reached from the phone's More panel and from every request notification.
  * Laid out like Leave: the title pinned on a phone with the action under it,
  * the desktop header carrying it beside. The tab lives in the address
- * (?tab=approvals|fulfil|all) so a notification can open the right list, and
+ * (?tab=fulfil|all) so a notification can open the right list, and
  * ?request=<id> brings the one it is about into view.
+ *
+ * NF-4.21 (2026-10-31) — approving is the Approvals hub's job only; an old
+ * ?tab=approvals link (a notification already sent) is taken there.
  */
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { Plus } from "@phosphor-icons/react";
 import { PageHeader, StickyHeader } from "../components/common";
 import { RequestsPanel } from "../components/requests/RequestsPanel";
 import { NewRequestDialog } from "../components/requests/NewRequestDialog";
 import { INK_PILL } from "../components/neuglass/glass";
 
-const TABS = ["mine", "approvals", "fulfil", "all"];
+const TABS = ["mine", "fulfil", "all"];
 
 export default function Requests() {
   const [params, setParams] = useSearchParams();
@@ -26,6 +29,11 @@ export default function Requests() {
     next.delete("request");
     return next;
   });
+
+  if (params.get("tab") === "approvals") {
+    const req = params.get("request");
+    return <Navigate replace to={`/approvals?sub=requests${req ? `&request=${encodeURIComponent(req)}` : ""}`} />;
+  }
 
   const action = (
     <button type="button" onClick={() => setNewOpen(true)} data-testid="requests-new"
@@ -41,7 +49,7 @@ export default function Requests() {
         <div className="flex">{action}</div>
       </StickyHeader>
       <div className="hidden lg:block">
-        <PageHeader eyebrow="Ask, approve, pay" title="Requests">{action}</PageHeader>
+        <PageHeader eyebrow="What you have asked for" title="Requests">{action}</PageHeader>
       </div>
       <RequestsPanel tab={tab} onTabChange={setTab} highlightId={params.get("request")} />
       <NewRequestDialog open={newOpen} onOpenChange={setNewOpen}

@@ -62,6 +62,27 @@ def task_due_date(t: dict, now=None):
     return None
 
 
+def task_repeat(t: dict, now=None) -> Optional[dict]:
+    """NF-4.22 — how often a proposed task comes back, or None for a one-off.
+
+    The model's own "repeat" (extraction.extract 1.4) when it gave one, else
+    the cadence in the task's words (services.recurrence.from_words). The words
+    also name the first day ("every Monday" -> the next Monday) when they say
+    one, which is the date the series runs from."""
+    from services import recurrence
+    from shared.due import IST
+    today = (now or datetime.now(timezone.utc)).astimezone(IST).date()
+    words = recurrence.from_words(f"{t.get('title') or ''} {t.get('description') or ''}", today)
+    every = str(t.get("repeat") or "").strip().lower()
+    if every in recurrence.EVERY:
+        n = t.get("repeat_interval")
+        n = n if isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= recurrence.MAX_INTERVAL else (
+            words["interval"] if words and words["every"] == every else 1)
+        first = words["first"] if words and words["every"] == every else None
+        return {"every": every, "interval": n, "first": first}
+    return words
+
+
 _WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
 
 
@@ -302,6 +323,12 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
             only = task_pickup.route(company, role, None).get("assignee_id")
             assignee_id, how = (only, "only_member") if only else (None, "team")
         due = task_due_date(t, now)
+        # NF-4.22 — work that comes back. A routine needs a date (the date is
+        # what repeats): the day its words name, else the one said, else today.
+        rep = task_repeat(t, now)
+        if rep:
+            from shared.due import IST
+            due = rep.get("first") or due or now.astimezone(IST).date().isoformat()
         tasks.append({
             "key": new_id(), "title": t.get("title") or "Untitled task",
             "description": t.get("description", ""), "assignee_id": assignee_id,
@@ -309,6 +336,7 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
             "priority": t.get("priority") if t.get("priority") in ("low", "medium", "high") else "medium",
             "due_date": due,
             "task_type": t.get("task_category") if t.get("task_category") in cat_keys else None,
+            **({"repeat_every": rep["every"], "repeat_interval": rep["interval"]} if rep else {}),
         })
     pmap = {p["key"]: p for p in (pipelines or [])}
     # ASK-32 Phase 4.1 — look at what is already on the board first, so a
@@ -531,6 +559,22 @@ async def _reuse_existing_task(tenant_id, decision, t) -> str:
         sets["due_date"] = t["due_date"]
         sets.pop("due_from_stage", None)
         changed.append("due date")
+    # NF-4.22 — "every Monday" said about work that is already there makes THAT
+    # task the routine. Silence about a cadence never stops one it already has.
+    if t.get("repeat_every"):
+        from services import recurrence
+        try:
+            rec = recurrence.normalise(t["repeat_every"], t.get("repeat_interval"), None)
+        except ValueError:
+            rec = None
+        old = cur.get("recurrence") or {}
+        if rec and (rec["every"], rec["interval"]) != (old.get("every"), old.get("interval")):
+            series = old.get("series_id") or cur.get("series_id") or ex
+            sets.update({"recurrence": {**rec, "until": old.get("until"), "series_id": series}, "series_id": series})
+            if not (sets.get("due_date") or cur.get("due_date")):
+                from shared.due import IST
+                sets["due_date"] = datetime.now(timezone.utc).astimezone(IST).date().isoformat()
+            changed.append("repeat")
     await db.tasks.update_one({"id": ex, "tenant_id": tenant_id},
                               {"$set": sets, "$addToSet": {"decision_ids": decision["id"]}})
     await log_activity(tenant_id, decision.get("created_by"), "task_updated_by_decision",
@@ -559,6 +603,20 @@ async def _create_decision_tasks(tenant_id, decision, items, reused=None):
                     used[t["key"]] = ex   # a task after it may wait for it
                 continue
         tid = new_id()
+        # NF-4.22 — a routine from the Desk is a repeating task like one made in
+        # New Task: the next appears when this one is closed (services.recurrence).
+        rec = None
+        if t.get("repeat_every"):
+            from services import recurrence
+            try:
+                rec = recurrence.normalise(t["repeat_every"], t.get("repeat_interval"), None)
+            except ValueError:
+                rec = None
+        if rec:
+            from shared.due import IST
+            rec = {**rec, "series_id": tid}
+            if not t.get("due_date"):
+                t = {**t, "due_date": datetime.now(timezone.utc).astimezone(IST).date().isoformat()}
         default_approver = None
         if t.get("approval_required") and not t.get("approver_id"):
             default_approver = await _default_approver_for(
@@ -577,6 +635,7 @@ async def _create_decision_tasks(tenant_id, decision, items, reused=None):
             "workflow_id": t.get("workflow_id"), "stage_key": t.get("stage_key"),
             "updated_at": now_iso(), "last_action": "Created",
             **({"tags": list(t["tags"])} if t.get("tags") else {}),
+            **({"recurrence": rec, "series_id": tid} if rec else {}),
         })
         task_ids.append(tid)
         if t.get("key"):

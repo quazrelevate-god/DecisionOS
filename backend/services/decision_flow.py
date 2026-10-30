@@ -408,7 +408,8 @@ async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=No
                              assignee_id=None, due_date=None,
                              priority=None, evidence_required=None, approval_required=None,
                              approval_stage=None, approver_id=None,
-                             description=None, tags=None, depends_on=None) -> dict:
+                             description=None, tags=None, depends_on=None,
+                             repeat_every=None, repeat_interval=None) -> dict:
     """assignee_id: who does it (held to the same rule as giving anyone a task);
     due_date: "YYYY-MM-DD", or "" for no due date.
     ASK-50 — priority, evidence_required, approval_required / approval_stage and
@@ -486,6 +487,30 @@ async def edit_proposal_task(user: dict, decision_id: str, key: str, *, title=No
         if (due_date or None) != task.get("due_date"):
             task["due_date"] = due_date or None
             changes.append(f"due {due_date}" if due_date else "no due date")
+    # NF-4.22 (2026-10-31) — how often it comes back. "" makes it a one-off; a
+    # cadence without a date takes today, since the date is what repeats.
+    if repeat_every is not None or repeat_interval is not None:
+        from services import recurrence
+        every = task.get("repeat_every") if repeat_every is None else (repeat_every or None)
+        n = repeat_interval if repeat_interval is not None else (task.get("repeat_interval") or 1)
+        try:
+            rec = recurrence.normalise(every, n, None)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        was = (task.get("repeat_every"), task.get("repeat_interval") or 1) if task.get("repeat_every") else None
+        now_ = (rec["every"], rec["interval"]) if rec else None
+        if now_ != was:
+            if rec:
+                task.update({"repeat_every": rec["every"], "repeat_interval": rec["interval"]})
+                if not task.get("due_date"):
+                    from shared.due import IST
+                    from datetime import datetime as _dt, timezone as _tz
+                    task["due_date"] = _dt.now(_tz.utc).astimezone(IST).date().isoformat()
+                changes.append(recurrence.describe(rec).lower())
+            else:
+                task.pop("repeat_every", None)
+                task.pop("repeat_interval", None)
+                changes.append("just once")
     # ASK-50 — the settings New Task has and a proposal did not.
     from services.proposal_task_settings import apply_settings
     approver = None

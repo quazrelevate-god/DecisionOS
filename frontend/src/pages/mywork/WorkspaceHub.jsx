@@ -44,6 +44,7 @@ const DAY = 86400000;
 const DOT = {
   "": "bg-slate-400", todo: "bg-slate-400", in_progress: "bg-sky-500", waiting: "bg-amber-400",
   approval: "bg-violet-400", overdue: "bg-ng-accent", due_today: "bg-orange-400", no_date: "bg-slate-300",
+  repeating: "bg-teal-500",   // NF-4.24
   completed: "bg-emerald-500",
 };
 

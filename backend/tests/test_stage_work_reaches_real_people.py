@@ -83,12 +83,8 @@ def test_the_owner_never_absorbs_a_department_word():
 # ═══════════════════ 1 · the engine gives the work to a person ══════════════
 def test_a_stage_that_says_sales_hands_its_work_to_the_mills_sales_people(with_test_db):
     """The bug itself, end to end: before the fix these tasks spawned with no
-    department and nobody to do them."""
-    picked = []
-
-    async def pick(tenant_id, role, *a, **k):
-        picked.append(role)
-        return "u-priya" if role == "sales_&_exporter_relations" else None
+    department and nobody to do them. Epic 11 S11 (2026-10-30): the mill's
+    sales team is Priya alone, so the work is hers — nobody is picked by load."""
 
     async def om(tenant_id, *a, **k):
         return {"pipelines": [{"key": "orders", "label": "Orders", "stages": [
@@ -105,8 +101,9 @@ def test_a_stage_that_says_sales_hands_its_work_to_the_mills_sales_people(with_t
         with e2e_env(db, stubs={
             "services.ai.generators.tenant_operating_model": om,
             "services.workflow_engine.tenant_role_keys": keys,
-            "services.voice.pick_least_loaded_member": pick,
         }):
+            await db.users.insert_one({"id": "u-priya", "tenant_id": "t1", "role": "sales_&_exporter_relations",
+                                       "name": "Priya"})
             await db.workflows.insert_one({"id": "wf1", "tenant_id": "t1", "type": "orders",
                                            "title": "Kumar Exports", "stage": "inquiry",
                                            "stages": ["inquiry", "made"]})
@@ -119,7 +116,7 @@ def test_a_stage_that_says_sales_hands_its_work_to_the_mills_sales_people(with_t
     proforma = next(r for r in rows if r["title"] == "Raise the proforma")
     assert proforma["assignee_role"] is None and proforma["assignee_id"] is None, \
         "no finance department: left visibly unassigned"
-    assert "sales_&_exporter_relations" in picked
+    assert proforma["pickup_route"] == "owner", "...and the owner is asked to assign it"
 
 
 def test_a_decision_task_finds_the_stage_its_real_department_owns():

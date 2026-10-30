@@ -307,9 +307,11 @@ def test_files_and_checklist_follow_the_task_rules(with_test_db):
 
             # Checklist: a same-department colleague is refused.
             await _refused(tasks.save_execution_plan(t["id"], all_done, user=ops2))
-            # The doer ticks everything without proof: stays in progress at 100%.
+            # The doer ticks everything without proof: 100%, not closed. And it
+            # stays in To do — since c35ff4d0 (founder 2026-10-29) only the
+            # person moves a task to Doing, never a ticked step.
             await tasks.save_execution_plan(t["id"], all_done, user=OPS)
-            assert await _status(db, t["id"]) == ("in_progress", None, 100)
+            assert await _status(db, t["id"]) == ("todo", None, 100)
             # With proof, ticking everything completes it.
             await tasks.upload_task_attachment(t["id"], file=None, kind="photo", background=None, user=OPS)
             assert len((await db.tasks.find_one({"id": t["id"]}))["attachments"]) == 1
@@ -319,7 +321,7 @@ def test_files_and_checklist_follow_the_task_rules(with_test_db):
             # A helper may tick steps but not close the task.
             t2 = await _create(OWNER, title="Pack the Kapoor order", assignee_id="u-ops", co_assignee_ids=["u-prod"])
             await tasks.save_execution_plan(t2["id"], all_done, user=PROD)
-            assert await _status(db, t2["id"]) == ("in_progress", None, 100)
+            assert await _status(db, t2["id"]) == ("todo", None, 100)   # c35ff4d0: ticks never move it to Doing
             await tasks.save_execution_plan(t2["id"], all_done, user=OPS)
             assert (await _status(db, t2["id"]))[0] == "done"
             return True
@@ -421,7 +423,8 @@ def test_team_task_says_who_it_went_to_until_someone_reassigns(with_test_db):
         with e2e_env(db, stubs=STUBS, keep=KEEP):
             # (the owner routes it: sales may route only to its own team since TK-08)
             t = await _create(OWNER, title="Count the yarn cones", assignee_role="operations")
-            assert (t["assignee_id"], t["auto_assigned"]) == ("u-ops", {"role": "operations", "rule": "fewest_open_tasks"})
+            # Epic 11 S11 (2026-10-30): never by load — Operations is one person, so it is theirs.
+            assert (t["assignee_id"], t.get("assignee_how"), t["auto_assigned"]) == ("u-ops", "only_member", None)
             assert t["created_by_name"] == OWNER["name"]
             # A person chooses the doer now -> the automatic note no longer holds.
             out = await tasks.update_task(t["id"], TaskUpdateInput(assignee_id="u-fin"), user=OWNER)

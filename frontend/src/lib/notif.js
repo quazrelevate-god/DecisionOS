@@ -10,6 +10,9 @@ export const NOTIF_TYPE_META = {
   reminder: { label: "Reminder", cls: "bg-black/10 text-black" },
   request_rejected: { label: "Request Declined", cls: "bg-danger-600 text-white" },
   request_withdrawn: { label: "Request Withdrawn", cls: "bg-black/10 text-black" },
+  // 2026-10-30 (Epic 11 S11) — work nobody has yet (services/task_pickup.py).
+  queue: { label: "In Your Team's Queue", cls: "bg-brand-ink text-white" },
+  needs_person: { label: "Needs a Person", cls: "bg-orange-500 text-black" },
 };
 
 export function notifMeta(n) {
@@ -21,6 +24,9 @@ export function notifLink(n) {
   // ASK-28 TK-02: an approval request opens the approver's own list, where
   // the task is guaranteed to be — My Tasks only holds tasks you do.
   if (n?.entity_type === "task" && n?.entity_id && n?.type === "approval") return `/approvals?task=${n.entity_id}`;
+  // 2026-10-30 — "assign it to someone" opens the Desk's Needs a person list,
+  // which holds every task waiting on you whether or not it is in My Work.
+  if (n?.type === "needs_person") return "/inbox?needs=person";
   if (n?.entity_type === "task" && n?.entity_id) return `/my-work?task=${n.entity_id}`;
   // ASK-32 1.7 — straight to the Desk, which opens the decision from ?decision=.
   // "/" redirected to /inbox and dropped the parameter, so nothing opened.

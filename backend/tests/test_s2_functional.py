@@ -394,7 +394,8 @@ def test_task_gates_smart_route_and_auto_invoice(with_test_db):
             owner = _u("owner", "o1")
             r = {}
 
-            # --- smart-route: a role task with no assignee -> least-loaded member ---
+            # --- a role task with no assignee -> the team's queue, never by load
+            #     (Epic 11 S11, founder 2026-10-30: s2 having fewer tasks is no reason) ---
             await db.tenants.insert_one({"id": tid, "roles": [{"key": "sales"}, {"key": "finance"},
                                                               {"key": "operations"}]})
             await db.users.insert_many([
@@ -411,6 +412,7 @@ def test_task_gates_smart_route_and_auto_invoice(with_test_db):
                                                               due_date="2026-10-01"),  # PILOT-1 C
                                               background=BackgroundTasks(), user=owner)
             r["routed_to"] = created.get("assignee_id")
+            r["route"] = created.get("pickup_route")
 
             # --- evidence gate: evidence_required + no proof -> done is 400 ---
             await db.tasks.insert_one({"id": "ev", "tenant_id": tid, "status": "todo", "title": "Upload proof",
@@ -464,7 +466,7 @@ def test_task_gates_smart_route_and_auto_invoice(with_test_db):
             restore()
 
     r = with_test_db(scenario)
-    assert r["routed_to"] == "s2", "a role task auto-routes to the least-loaded member"
+    assert r["routed_to"] is None and r["route"] == "queue",         "a role task waits in the team's queue — nobody is picked by how few tasks they have"
     assert r["evidence_gate"] == 400, "evidence_required blocks done without proof"
     assert r["approval_gate"] == 403, "an unapproved task cannot be started"
     assert r["done_status"] == "done" and r["done_progress"] == 100

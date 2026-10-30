@@ -29,7 +29,7 @@ Owns 17 endpoints across the entire task lifecycle:
 
 Server-level helpers (defined in `server.py`, deferred-imported inside handlers
 to avoid the server↔router import cycle):
-  `pick_least_loaded_member`, `_owner_ids`, `_approver_ids`, `push_notification`,
+  `_owner_ids`, `_approver_ids`, `push_notification`,
   `_store_file`, `_file_public`, `_analyze_reference_file`, `_tenant_currency`,
   `ai_execution_plan`, `ai_step_assist`, `ai_score_tasks`.
 
@@ -374,6 +374,16 @@ OPEN_TASKS_MAX = 2000
 FINISHED_TASKS_MAX = 500
 
 
+# Epic 11 S11 — declared before /tasks/{task_id}, which would otherwise take the path.
+@router.get("/tasks/needs-person")
+async def tasks_needing_a_person(user: dict = Depends(get_current_user)):
+    """Every open task with nobody, oldest first — the company's for an owner,
+    their own team's for its managers (by Team > Reports to); nothing for
+    anyone else, whose team's queue is in My Work."""
+    from services import task_pickup
+    return await task_pickup.needs_person(db, user)
+
+
 @router.get("/tasks/{task_id}")
 async def get_task(task_id: str, user: dict = Depends(get_current_user)):
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]}, {"_id": 0})
@@ -594,12 +604,55 @@ async def delete_task(task_id: str, user: dict = Depends(require_role("owner")))
 
 
 # ---------------------------------------------------------------------------
+# Epic 11 S11 (founder 2026-10-30) — work nobody has yet: the team's queue,
+# Take it, and the Desk's "Needs a person". The rule is services.task_pickup.
+# ---------------------------------------------------------------------------
+async def _heads_its_queue(user: dict, t: dict) -> bool:
+    """Any of a team's managers (the reminder ladder asks each in turn) may
+    give a task nobody has in their team to someone."""
+    from services import task_pickup
+    if t.get("assignee_id") or not t.get("assignee_role") or t.get("assignee_role") != user.get("role"):
+        return False
+    return (await task_pickup.company(db, user["tenant_id"])).is_manager(user, t["assignee_role"])
+
+
+async def _after_people_change(user: dict, t: dict, updates: dict) -> None:
+    """A task that found a person stops waiting; one moved to another team
+    with nobody on it waits in that team's queue instead, and they are told."""
+    from services import task_pickup
+    if updates.get("assignee_id"):
+        if any(t.get(f) is not None for f in task_pickup.PICKUP_FIELDS):
+            await db.tasks.update_one(tenant_filter(t["id"], user["tenant_id"]), {"$unset": task_pickup.UNSET})
+        return
+    if "assignee_role" in updates and not t.get("assignee_id") and updates.get("assignee_role") != t.get("assignee_role"):
+        await db.tasks.update_one(tenant_filter(t["id"], user["tenant_id"]), {"$unset": task_pickup.UNSET})
+        await task_pickup.place_and_announce(db, user["tenant_id"], [t["id"]], user["id"], user.get("name"))
+
+
+@router.post("/tasks/{task_id}/take")
+async def take_task(task_id: str, user: dict = Depends(get_current_user)):
+    """Take it: a task in my team's queue becomes mine. The first person to
+    take it gets it; anyone after is told who has it (409)."""
+    from services import task_pickup
+    if "tasks" not in user_perms(user):
+        raise HTTPException(status_code=403, detail="You don't have access to tasks.")
+    t = await task_pickup.take(db, user, task_id)
+    if t.get("assignee_how") == "took" and t.get("assignee_id") == user["id"]:
+        await _log_task_event(user, task_id, "task_assigned", f"Took '{t.get('title')}' from the team's queue",
+                              "Took it from the team's queue")
+        if t.get("decision_id"):
+            await add_decision_event(t["decision_id"], f"{user.get('name')} took '{t.get('title')}'",
+                                     user.get("name") or "", "assigned")
+    return await enrich_task(t)
+
+
+# ---------------------------------------------------------------------------
 # Create + patch
 # ---------------------------------------------------------------------------
 @router.post("/tasks")
 async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: dict = Depends(get_current_user)):
     from services.notifications import _approver_ids, push_notification
-    from services.voice import pick_least_loaded_member
+    from services import task_pickup                           # Epic 11 S11
     from services.workflows import derive_task_workflow_link  # WE-01
     from services import recurrence as recurrence_svc          # D1
     # ASK-28 TK-08 (plan 6.2): creating a task needs the Tasks permission (on for
@@ -660,12 +713,15 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         elif not role:
             role = member["role"]
     auto_assigned = None
+    only_member = False
     if not assignee_id and role:
-        # Smart assignment: route a role-level task to the least-loaded member of that role.
-        assignee_id = await pick_least_loaded_member(user["tenant_id"], role)
-        # ASK-28 TK-06: say where it went and why, instead of a silent pick.
-        if assignee_id:
-            auto_assigned = {"role": role, "rule": "fewest_open_tasks"}
+        # Epic 11 S11 (founder 2026-10-30): a task given to a team is never
+        # handed to whoever has the fewest tasks. A team of one is that person;
+        # otherwise it waits in the team's queue (placed below, once it exists).
+        only = task_pickup.route(await task_pickup.company(db, user["tenant_id"]), role,
+                                 inp.priority).get("assignee_id")
+        if only:
+            assignee_id, only_member = only, True
     # ASK-26: the people alongside the lead. With neither a lead nor a role to
     # route by, the first of them becomes the lead, so a task with people on
     # it always has someone accountable for it.
@@ -677,7 +733,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     task_type = (inp.task_type or "").strip() or None
     # ASK-28 TK-08 (plan 6.3): checked on what the person chose — a doer, a team
     # to route to, helpers — not the member the least-busy rule then picks.
-    chosen_lead = assignee_id if (assignee_id and not auto_assigned) else None
+    chosen_lead = assignee_id if (assignee_id and not only_member) else None
     routed_team = role if (inp.assignee_role and role == inp.assignee_role and not chosen_lead) else None
     await _check_assignable(user, chosen_lead, routed_team, co_ids)
     # Plan 4.3: a named approver must be able to approve. Someone outside the
@@ -721,6 +777,7 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         "id": tid, "tenant_id": user["tenant_id"], "title": inp.title, "description": inp.description or "",
         "assignee_role": role, "assignee_id": assignee_id, "priority": inp.priority or "medium",
         "co_assignee_ids": co_ids, "auto_assigned": auto_assigned,
+        **({"assignee_how": "only_member"} if only_member else {}),
         "status": "blocked" if (lock_now or blocked_by_work) else "todo",
         "depends_on": depends_on,
         "due_date": due, "decision_id": None,
@@ -760,6 +817,10 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
             await push_notification(user["tenant_id"], to_notify, 1,
                                     f"New work assigned: '{inp.title}'", "task", tid,
                                     ntype="assigned", title=inp.title, sender=user["name"])
+    if not assignee_id:
+        # Epic 11 S11 — nobody has it: the team's queue (its head when high
+        # priority), or the owner when there is no team; they are told.
+        await task_pickup.place_and_announce(db, user["tenant_id"], [tid], user["id"], user["name"])
     await _log_task_event(user, tid, "task_created", f"Created task '{inp.title}'", "Created the task")
     # 2026-10-29 — Dex drafts its checklist straight away, so the card can name
     # the next action. A task locked until approved gets it when it is approved.
@@ -964,6 +1025,7 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
         updates.update(completion_stamp(t, updates, updates["updated_at"]))
         updates.update(approval_stamp(t, updates, updates["updated_at"]))
         await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
+        await _after_people_change(user, t, updates)   # Epic 11 S11
         if updates.get("assignee_id") and updates["assignee_id"] != user["id"]:
             await push_notification(user["tenant_id"], [updates["assignee_id"]], 1,
                                     f"Work assigned to you: '{t['title']}'", "task", task_id,
@@ -1280,7 +1342,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
     t = await db.tasks.find_one({"id": task_id, "tenant_id": user["tenant_id"]})
     if not t:
         raise HTTPException(status_code=404, detail="Not found")
-    if user.get("role") != "owner" and not task_edit_rights(user, t, await _team_ids(user), user_perms(user))["people"]:
+    if user.get("role") != "owner" and not task_edit_rights(user, t, await _team_ids(user), user_perms(user))["people"]             and not await _heads_its_queue(user, t):
         raise HTTPException(status_code=403, detail=(
             "Only the person who asked for it, the manager, someone with Manage Team or the owner "
             "can change who is on this task."))
@@ -1310,6 +1372,7 @@ async def reassign_task(task_id: str, inp: TaskReassignInput, user: dict = Depen
     else:
         raise HTTPException(status_code=400, detail="Pick a member or a role")
     await db.tasks.update_one(tenant_filter(task_id, user["tenant_id"]), {"$set": updates})  # FIX-001-C
+    await _after_people_change(user, t, updates)   # Epic 11 S11
     if new_assignee_id and new_assignee_id != user["id"]:
         await push_notification(user["tenant_id"], [new_assignee_id], 1,
                                 f"Work assigned to you: '{t['title']}'", "task", task_id,

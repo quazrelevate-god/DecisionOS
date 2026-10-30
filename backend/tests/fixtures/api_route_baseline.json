@@ -1,6 +1,6 @@
 {
-  "count": 439,
-  "sha": "4fb5f355ac413f9e63a2d8a1c5f622f81567fbb357b211036d369195585a8f33",
+  "count": 441,
+  "sha": "f249a647698e9f31d2bf2a8b10d1430ebd3468853f2755343e44b97116868a59",
   "middleware": [
     "CSRFMiddleware",
     "CORSMiddleware",
@@ -174,6 +174,7 @@
     "GET /api/support/tickets",
     "GET /api/support/tickets/{ticket_id}",
     "GET /api/tasks",
+    "GET /api/tasks/needs-person",
     "GET /api/tasks/{task_id}",
     "GET /api/tasks/{task_id}/activity",
     "GET /api/tenant/ai-consent",
@@ -416,6 +417,7 @@
     "POST /api/tasks/{task_id}/reject",
     "POST /api/tasks/{task_id}/respond",
     "POST /api/tasks/{task_id}/steps/ask",
+    "POST /api/tasks/{task_id}/take",
     "POST /api/tasks/{task_id}/updates",
     "POST /api/tenant/ai-consent",
     "POST /api/tenant/ai-setup/retry",

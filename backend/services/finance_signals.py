@@ -12,7 +12,6 @@ from datetime import datetime, timezone, timedelta
 
 from core import db, logger, new_id, now_iso, tenant_role_keys
 from services.notifications import push_notification, dispatch_owner_alert, _owner_ids, _approver_ids
-from services.voice import pick_least_loaded_member
 
 
 _followup_last_run: dict = {}
@@ -106,6 +105,13 @@ async def run_followup(tenant_id: str):
         await warn_stuck_workflows(tenant_id, now)
     except Exception as e:
         logger.warning(f"[stage-days] stuck-card warning failed for tenant {tenant_id[:8]}...: {e}")
+    # Epic 11 S11 (2026-10-30) — work nobody has yet: a day in the team's queue
+    # asks the team's head, two days the owner (services.task_pickup).
+    try:
+        from services.task_pickup import warn_unpicked
+        await warn_unpicked(db, tenant_id, now)
+    except Exception as e:
+        logger.warning(f"[pickup] unpicked-work sweep failed for tenant {tenant_id[:8]}...: {e}")
     # ASK-28 Phase 7 (plan 7.1–7.3): every open stage counts — Waiting on and
     # waiting for approval too — and the ladder and who hears at each step
     # live in services/tasks (followup_level, stuck_on, escalation_manager_id).
@@ -269,14 +275,14 @@ async def _unmatched_payments(tenant_id: str) -> list:
 
 
 async def _finance_assignee(tenant_id: str):
-    """Route finance action tasks to the Finance/Accounts department; if none exists, to the owner."""
+    """The Finance/Accounts department that finance action tasks belong to.
+    Epic 11 S11 (founder 2026-10-30): nobody is picked by how few tasks they
+    have — the task goes to that team (its one person, else its queue) and,
+    with no such team, the owner is asked (services.task_pickup)."""
     from services.captures import _finance_role_key
     troles = await tenant_role_keys(tenant_id)
     fin_role = await _finance_role_key(tenant_id, troles)
-    if fin_role:
-        return await pick_least_loaded_member(tenant_id, fin_role), fin_role
-    owners = await _owner_ids(tenant_id)
-    return (owners[0] if owners else None), "owner"
+    return None, (fin_role or None)
 
 
 async def run_finance_actions(tenant_id: str):
@@ -294,7 +300,7 @@ async def run_finance_actions(tenant_id: str):
             "source": "finance",
             # Audit B-02: filed under the team doing it (Accounts), not a
             # built-in "finance" key no AI-built company has as a team.
-            "task_type": assignee_role if assignee_role and assignee_role != "owner" else "finance",
+            "task_type": assignee_role or "finance",
             "op_category": None,
             "finance_ref": {"invoice_id": inv["id"], "invoice_type": inv.get("type")},
             "progress": 0, "created_by": "system", "created_at": now_iso(),
@@ -302,8 +308,12 @@ async def run_finance_actions(tenant_id: str):
         })
         await db.invoices.update_one({"id": inv["id"], "tenant_id": tenant_id},
                                      {"$set": {"action_task_id": tid}})
-        if assignee_id:
-            await push_notification(tenant_id, [assignee_id], 2, title, "task", tid,
+        # Epic 11 S11 — the team's one person (told it is theirs), else the
+        # Finance queue / its managers / the owner, and the ladder after.
+        from services import task_pickup
+        placed = await task_pickup.place_and_announce(db, tenant_id, [tid], sender="Finance")
+        for who in placed["assigned"]:
+            await push_notification(tenant_id, [who], 2, title, "task", tid,
                                     ntype="assigned", title=title, sender="Finance")
 
     # A1: chase overdue customer invoices (7+ days overdue)

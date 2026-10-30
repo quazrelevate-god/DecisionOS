@@ -119,7 +119,6 @@ async def on_stage_enter(
     Returns:
       {task_ids: [...], side_effects_fired: [kind, ...], stage_key: str}
     """
-    from services.voice import pick_least_loaded_member
     wf = await db.workflows.find_one(
         {"id": workflow_id, "tenant_id": tenant_id}, {"_id": 0})
     if not wf:
@@ -161,9 +160,10 @@ async def on_stage_enter(
         )
         if existing:
             continue
+        # Epic 11 S11 (founder 2026-10-30): nobody is picked by load. The
+        # stage's work goes to its team's one person or waits in the team's
+        # queue — services.task_pickup, below, once every task exists.
         assignee_id = None
-        if role:
-            assignee_id = await pick_least_loaded_member(tenant_id, role)
         tid = new_id()
         try:
             await db.tasks.insert_one({
@@ -212,6 +212,15 @@ async def on_stage_enter(
             "task_ids": created_task_ids,
         }}},
     )
+
+    # Epic 11 S11 — the stage's work finds its person: the team's one person,
+    # else the team's queue (its head when high priority, the owner when the
+    # team has nobody), and they are told. Never blocks the transition.
+    try:
+        from services import task_pickup
+        await task_pickup.place_and_announce(db, tenant_id, created_task_ids, actor_id, actor_name)
+    except Exception as e:
+        logger.warning(f"[pickup] could not place stage work on {workflow_id}: {e}")
 
     # 2026-09-22 — the stage's work gets the stage's deadline. It used to be
     # created with no date, so nothing on a workflow was ever due, overdue or

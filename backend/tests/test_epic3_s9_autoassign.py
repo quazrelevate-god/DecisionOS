@@ -76,3 +76,28 @@ def test_auto_assign_edge_cases(with_test_db):
         finally:
             _voice.db = _prev
     with_test_db(go)
+
+
+def test_older_members_without_a_membership_row_still_count(with_test_db):
+    """NF-4.16 (2026-10-30, found on the demo company): an older company's people
+    have no membership rows. Inviting ONE new person used to make the rule
+    "only active rows count", and everyone from before dropped out — a finance
+    task then went to the newcomer or to nobody. Judged per person now."""
+    async def go(db):
+        _prev = _voice.db
+        _voice.db = db
+        try:
+            await db.users.insert_many([
+                {"id": "old-1", "tenant_id": _T, "name": "From Before", "role": "finance"},
+                {"id": "new-1", "tenant_id": _T, "name": "Just Invited", "role": "finance"},
+                {"id": "gone-1", "tenant_id": _T, "name": "Removed", "role": "finance"},
+            ])
+            await db.memberships.insert_many([
+                {"tenant_id": _T, "user_id": "new-1", "status": "pending"},
+                {"tenant_id": _T, "user_id": "gone-1", "status": "removed"},
+            ])
+            # the person from before counts; the invitee and the removed do not
+            assert await pick_least_loaded_member(_T, "finance") == "old-1"
+        finally:
+            _voice.db = _prev
+    with_test_db(go)

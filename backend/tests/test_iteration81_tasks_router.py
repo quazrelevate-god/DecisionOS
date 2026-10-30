@@ -261,7 +261,8 @@ class TestCreateTask:
         _cleanup_task(body["id"])
 
     def test_auto_role_assignment(self, owner_token, owner_ctx):
-        """When only assignee_role given, task should auto-assign to a member of that role."""
+        """When only assignee_role is given the task is the team's: its one person,
+        else the team's queue (Epic 11 S11, 2026-10-30 — never by load)."""
         _, tid_tenant, sales_id, _ = owner_ctx
         payload = {"title": f"TEST_iter81 autoassign {uuid.uuid4().hex[:6]}",
                    "priority": "medium", "assignee_role": "sales"}
@@ -269,12 +270,14 @@ class TestCreateTask:
                           headers=_h(owner_token), timeout=15)
         assert r.status_code == 200
         body = r.json()
-        # pick_least_loaded_member should have set assignee_id to some sales user
         assert body["assignee_role"] == "sales"
-        assert body.get("assignee_id") is not None, "auto-assignment did NOT pick a member"
-        # Verify it's actually a sales user
-        u = _db.users.find_one({"id": body["assignee_id"]}, {"_id": 0, "role": 1})
-        assert u and u.get("role") == "sales", f"auto-assigned to non-sales: {u}"
+        if body.get("assignee_id") is None:
+            assert body.get("pickup_route") in ("queue", "owner"), body
+        else:
+            # the team's only person
+            u = _db.users.find_one({"id": body["assignee_id"]}, {"_id": 0, "role": 1})
+            assert u and u.get("role") == "sales", f"given to non-sales: {u}"
+            assert body.get("assignee_how") == "only_member"
         _cleanup_task(body["id"])
 
     def test_approval_required_blocks(self, owner_token, finance_token, owner_ctx):

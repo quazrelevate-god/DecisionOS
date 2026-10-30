@@ -416,6 +416,9 @@ function EscalationCard() {
   // said nothing until the day they were already late.
   const [warn, setWarn] = useState(String(tenant?.due_soon_days ?? 2));
   const [email, setEmail] = useState(tenant?.owner_alert_email !== false);
+  /* Epic 11 S11 (2026-10-30) — work nobody has climbs the team's reporting
+     tree one level per step, the owner last: the days in each step. */
+  const [pickStep, setPickStep] = useState(String(tenant?.pickup_step_days || 1));
   const [busy, setBusy] = useState(false);
   const save = async () => {
     const m = parseInt(manager, 10);
@@ -424,9 +427,12 @@ function EscalationCard() {
     if (o <= m) { toast.error("The owner should hear after the manager"); return; }
     const w = parseInt(warn, 10);
     if (!(w >= 0 && w <= 14)) { toast.error("Use 0 to 14 days of warning before a task is due"); return; }
+    const ps = parseInt(pickStep, 10);
+    if (!(ps >= 1 && ps <= 14)) { toast.error("Use 1 to 14 days between one manager and the next"); return; }
     setBusy(true);
     try {
-      await api.patch("/tenant/settings", { followup_manager_days: m, followup_owner_days: o, due_soon_days: w, owner_alert_email: email });
+      await api.patch("/tenant/settings", { followup_manager_days: m, followup_owner_days: o, due_soon_days: w, owner_alert_email: email,
+        pickup_step_days: ps });
       if (refreshTenant) await refreshTenant();
       toast.success("Overdue work settings saved");
     } catch (e) {
@@ -458,6 +464,19 @@ function EscalationCard() {
           <span className="mt-1 flex items-center gap-2">
             <input type="number" min={1} max={60} value={owner} onChange={(e) => setOwner(e.target.value)}
               data-testid="escalation-owner-days" className={`${FIELD} w-24`} /> days late
+          </span>
+        </label>
+      </div>
+      <div className="mt-5 border-t border-slate-900/[0.06] pt-4" data-testid="settings-pickup">
+        <p className="text-sm font-medium">Work nobody has</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          A task given to a team waits in the team&rsquo;s queue until someone takes it. While nobody has, it goes up the
+          team&rsquo;s reporting line one manager at a time, the owner last (Team &rsaquo; Reports to).
+        </p>
+        <label className="mt-3 block text-sm">Ask the next manager up every
+          <span className="mt-1 flex items-center gap-2">
+            <input type="number" min={1} max={14} value={pickStep} onChange={(e) => setPickStep(e.target.value)}
+              data-testid="pickup-step-days" className={`${FIELD} w-24`} /> days
           </span>
         </label>
       </div>

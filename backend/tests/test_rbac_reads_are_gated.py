@@ -56,6 +56,9 @@ OPEN_TO_EVERY_MEMBER = {
     # narrowed to the caller inside the handler
     "/api/tasks": "task_list_query", "/api/tasks/{task_id}": "_can_work_task etc.",
     "/api/tasks/{task_id}/activity": "same rule as the task",
+    # Epic 11 S11: rows only for an owner (the company) or a team head (their
+    # own team, by Team > Reports to); everyone else gets an empty list.
+    "/api/tasks/needs-person": "owner or team head only (services.task_pickup.needs_person)",
     # 2026-10-29: what got finished — the company's for an owner, otherwise only
     # the work the caller asked others for (created_by = me), in the handler.
     "/api/finished-tasks": "owner: the company; anyone else: tasks they created",

@@ -200,6 +200,16 @@ async def add_decision_task(decision_id: str, inp: TaskCreateInput, user: dict =
     await db.decisions.update_one(tenant_filter(decision_id, user["tenant_id"]), {"$push": {"task_ids": tid}})
     from services import auto_plan  # 2026-10-29: Dex drafts the checklist
     auto_plan.schedule(db, user["tenant_id"], tid)
+    if not assignee_id and status == "todo":
+        # Epic 11 S11 — nobody named: the team's one person or its queue (the
+        # head when high priority, the owner with no team). A task added while
+        # the decision still waits is placed when it is approved.
+        from services import task_pickup
+        placed = await task_pickup.place_and_announce(db, user["tenant_id"], [tid], user["id"], user.get("name"))
+        if placed["assigned"]:
+            assignee_id = placed["assigned"][0]
+            member = await db.users.find_one({"id": assignee_id, "tenant_id": user["tenant_id"]},
+                                             {"_id": 0, "role": 1, "name": 1})
     who = None
     if assignee_id:
         who = (member or {}).get("name")

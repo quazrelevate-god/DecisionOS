@@ -156,7 +156,12 @@ async def deprovision_user(
             "updated_at": now_iso(),
         }
         if not reassign_to_user_id:
-            set_fields["assignee_role"] = None
+            # Epic 11 S11 (2026-10-30) — handed to nobody, their work stays
+            # with their team and waits in its queue: the next follow-up sweep
+            # tells the team (services.task_pickup). It used to lose its team
+            # too and sit with nobody, unseen.
+            set_fields["assignee_role"] = (target_user or {}).get("role") or None
+            set_fields.update({"pickup_since": now_iso(), "pickup_level": 0})
         else:
             # Denormalized name/role update — best-effort look-up.
             replacement = await db.users.find_one(

@@ -89,7 +89,8 @@ def test_dex_is_given_the_teams_as_departments():
 
 def test_finance_follow_ups_are_filed_under_the_accounts_team():
     src = (ROOT / "services" / "finance_signals.py").read_text(encoding="utf-8")
-    assert '"task_type": assignee_role if assignee_role and assignee_role != "owner" else "finance"' in src
+    # NF-11.9 (2026-10-30): the team is the Finance/Accounts team or none (the owner is asked).
+    assert '"task_type": assignee_role or "finance",' in src
 
 
 def test_the_existing_tasks_are_moved_once_at_startup():

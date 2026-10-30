@@ -56,6 +56,7 @@ import {
   HandCoins, // 2026-10-21 · Requests
   ArrowLeft, // 2026-10-29 · the phone task view's way back
   NotePencil, // 2026-10-29 · the task view's Notes tab
+  HandGrabbing, // 2026-10-30 · Take it (Epic 11 S11)
 } from "@phosphor-icons/react";
 import { AvatarStack, PersonAvatar } from "../components/neuglass/PersonAvatar";
 import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "../components/ui/alert-dialog";
@@ -1932,6 +1933,53 @@ function AssigneesEditor({ t, members, roleOptions, canEdit, onPatched, compact 
   );
 }
 
+/* Epic 11 S11 (founder 2026-10-30) — TAKE IT. A task nobody has yet waits in
+   its team's queue: everyone in the team sees it, the head too, and one tap
+   makes it theirs. The first to take it gets it; anyone after is told who has
+   it. A task with no team waits for the owner, who can take it too. Where it
+   waits is services/task_pickup.py on the server. */
+function TakeItBar({ t, roleOptions, onPatched }) {
+  const { user } = useAuth();
+  const [busy, setBusy] = useState(false);
+  if (t.assignee_id || isTerminal(t)) return null;
+  const team = t.assignee_role ? roleLabel(t.assignee_role, roleOptions) : "";
+  const canTake = user?.role === "owner" || (!!t.assignee_role && t.assignee_role === user?.role);
+  const where = t.pickup_route === "manager" && team ? `High priority — a ${team} manager is asked to assign it`
+    : !team ? "It has no team, so the owner assigns it"
+    : `It's in the ${team} queue`;
+  const take = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/tasks/${t.id}/take`);
+      onPatched(data);
+      toast.success("It's yours");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't take it");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section data-testid={`task-take-${t.id}`} className={`${DRAWER_CARD} flex items-center gap-3 p-4`}>
+      <span aria-hidden="true" className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[hsl(30_90%_94%)] text-[hsl(24_75%_38%)]">
+        <HandGrabbing size={20} weight="duotone" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] font-semibold text-slate-900">Nobody has this yet</p>
+        <p className="text-[13px] text-slate-500" data-testid={`task-take-where-${t.id}`}>
+          {where}{canTake ? " — take it if it's yours." : "."}
+        </p>
+      </div>
+      {canTake && (
+        <button type="button" onClick={take} disabled={busy} data-testid={`task-take-btn-${t.id}`}
+          className={`h-11 shrink-0 rounded-pill px-5 text-sm font-medium disabled:opacity-60 ${INK_PILL}`}>
+          {busy ? "Taking…" : "Take it"}
+        </button>
+      )}
+    </section>
+  );
+}
+
 /* ASK-28 TK-06 / ASK-50 — who asked for the task, where it came from and who
    approves it. Under the people on desktop; the phone's Details tab. */
 function TaskRolesLines({ t, roleOptions }) {
@@ -1939,11 +1987,19 @@ function TaskRolesLines({ t, roleOptions }) {
   const teamLabel = (key) => roleLabel(key, roleOptions);
   return (
     <>
-      {(t.auto_assigned?.role && t.assignee_id) || t.created_by_name || t.decision_id || t.approval_required ? (
+      {(t.assignee_how === "only_member" && t.assignee_id) || (t.assignee_how === "took" && t.assignee_id)
+        || t.created_by_name || t.decision_id || t.approval_required ? (
         <div className="mt-3 flex flex-col gap-1.5 text-sm" data-testid={`task-roles-${t.id}`}>
-          {t.auto_assigned?.role && t.assignee_id && (
+          {/* Epic 11 S11 — nobody is picked by load any more; the two ways a
+              task finds its person without anyone choosing say so. */}
+          {t.assignee_how === "only_member" && t.assignee_id && t.assignee_role && (
             <p className="text-slate-500" data-testid={`task-auto-assigned-${t.id}`}>
-              Picked automatically: fewest open tasks in {teamLabel(t.auto_assigned.role)}
+              Given automatically: the only one in {teamLabel(t.assignee_role)}
+            </p>
+          )}
+          {t.assignee_how === "took" && t.assignee_id && t.assignee_role && (
+            <p className="text-slate-500" data-testid={`task-took-${t.id}`}>
+              Taken from the {teamLabel(t.assignee_role)} queue
             </p>
           )}
           {/* ASK-50 — AND WHERE IT CAME FROM IS THIS LINE, not a line of its
@@ -2860,6 +2916,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
 
           {approvalBlocks("-m")}
 
+          <TakeItBar t={t} roleOptions={roleOptions} onPatched={onPeoplePatched} />
+
           <AssigneesEditor compact t={t} members={members} roleOptions={roleOptions}
             canEdit={canEditPeople} onPatched={onPeoplePatched} />
 
@@ -3222,6 +3280,8 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
           is the one thing to do here. */}
       {approvalBlocks("-m")}
 
+      <TakeItBar t={t} roleOptions={roleOptions} onPatched={onPeoplePatched} />
+
       <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
         canEdit={canEditPeople} onPatched={onPeoplePatched} />
 
@@ -3372,6 +3432,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     )}
     {/* ASK-26 — replaces the owner-only one-name assignee line: everyone on
         the task, for everyone who opens it. */}
+    <TakeItBar t={t} roleOptions={roleOptions} onPatched={onPeoplePatched} />
     <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
       canEdit={canEditPeople} onPatched={onPeoplePatched} />
     {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container

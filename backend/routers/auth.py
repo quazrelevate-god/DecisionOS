@@ -250,15 +250,45 @@ async def register(inp: RegisterInput, request: Request, response: Response,
             "code": "phone_unverified",
             "message": "Confirm your mobile number with the code we text you, then create your workspace.",
         })
-    if second_company and not _identity:
+    _reaches_a_workspace = False
+    if second_company and not _identity and _proof_norm:
+        from services.auth.phone import find_tenant_choices_for_phone as _choices, split_live_and_pending as _split
+        _reaches_a_workspace = bool((await _split(db, await _choices(db, _proof_norm)))[0])
+    if second_company and not _identity and not _reaches_a_workspace:
         raise HTTPException(status_code=400, detail={
             "code": "identity_unknown",
             "message": ("This number has no workspace yet, so this is your first one — "
                         "an email for support and receipts is needed with it."),
         })
+    # NF-4.17 (2026-10-30, the team's report) — a number that is on a workspace
+    # but was never confirmed by a code (an employee an owner added, or an
+    # owner from before codes) still reaches the "start another company" door,
+    # which asks no email — and register then refused it at the last step:
+    # "This number has no workspace yet". The code they just entered at
+    # /signup/phone/verify IS the proof that they hold this number, so the new
+    # company is made with it — when the number already reaches a live
+    # workspace (that is when the wizard offers "start another" and skips the
+    # email); a number that reaches nothing is a first company and still needs
+    # an address. Nobody else's row is marked confirmed: a number an owner
+    # typed for an employee could be someone else's.
 
     email = (inp.email or "").lower()
+    _typed_email = email
     _existing = await db.users.find_one({"email": email}) if email else None
+    if _existing and not _norm_company(inp.company_name) == _norm_company(
+            ((await db.tenants.find_one({"id": _existing.get("tenant_id")}, {"_id": 0, "name": 1})) or {}).get("name")) \
+            and _known_norm and _known_norm == (_existing.get("phone_norm") or ""):
+        # NF-4.17 (2026-10-30, the team's report) — the SAME person (their
+        # confirmed mobile is the one on the account holding this address)
+        # starting ANOTHER company and typing the address they already use.
+        # The email is one per account (users.email_1), so this used to fail at
+        # the very last step — "This email already runs Alpha Weaves" — after
+        # the founder had built the whole OS. It is a second company: made on
+        # their number with no sign-in address of its own, and the address they
+        # typed is where this company's support and receipts go.
+        logger.info("register: a known founder reused their email for another company — making it a second company")
+        email, _existing, second_company = "", None, True
+        _identity = _identity or await _identity_for_phone(db, _known_norm)
     if _existing:
         # 2026-09-17 — the founder pressing "Create workspace" a second time is
         # almost never someone else's account: it is the same person, because
@@ -307,6 +337,28 @@ async def register(inp: RegisterInput, request: Request, response: Response,
                 "This email already has a workspace. Sign in instead, or use a different email."
             ),
         })
+
+    # NF-4.17 (2026-10-30) — THE SAME PRESS TWICE ON THE NUMBER PATH. The email
+    # recovery above catches a lost answer only when an email is sent; a second
+    # company sends none, so a retried "Create" (the first answer lost on a slow
+    # line, a double tap) made a SECOND workspace with the same name. Found by
+    # running one number through several signups against the database. The
+    # same confirmed number, a company of the same name it created in the last
+    # half hour: that is this press's company — open it.
+    if _known_norm and inp.company_name:
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        _since = (_dt.now(_tz.utc) - _td(minutes=30)).isoformat()
+        async for _row in db.users.find(
+                {"phone_norm": _known_norm, "role": "owner", "phone_verified_at": {"$ne": None},
+                 "wa_phone_obsolete": {"$ne": True}, "created_at": {"$gte": _since}},
+                {"_id": 0, "id": 1, "tenant_id": 1, "role": 1}).sort("created_at", -1):
+            _t = await db.tenants.find_one({"id": _row.get("tenant_id")}, TENANT_PUBLIC)
+            if _t and _norm_company(_t.get("name")) == _norm_company(inp.company_name):
+                _tok = create_token(_row["id"], _row["tenant_id"], "owner")
+                set_auth_cookie(response, _tok)
+                _u = await db.users.find_one({"id": _row["id"]}, {"_id": 0, "password_hash": 0})
+                logger.info("register: the same number made this company minutes ago — signing them in")
+                return login_response(_tok, user=_u, tenant=_t)
 
     # 2026-09-19 — the founder's mobile is a sign-in (Mobile OTP, the mobile
     # app) and a route (WhatsApp from it lands here as the owner). It used to
@@ -458,7 +510,7 @@ async def register(inp: RegisterInput, request: Request, response: Response,
         # company has no sign-in address of its own, so this is how they are
         # reachable about it — and it may be the same address as their first
         # company, because it is company contact detail, not an account.
-        "support_email": ((inp.support_email or "").strip() or email).lower(),
+        "support_email": ((inp.support_email or "").strip() or email or _typed_email).lower(),
         "branches": inp.branches or "",
         "business_scale": inp.business_scale or {},
         "current_software": inp.current_software or [],
@@ -580,12 +632,18 @@ async def register(inp: RegisterInput, request: Request, response: Response,
     # workspace (services/whatsapp.py, step 2). So the moment a second company
     # appears, name the FIRST one as where messages from this number land —
     # today's behaviour, made explicit — and leave changing it to Settings.
-    if second_company and _phone_norm:
+    # NF-4.17: whenever the number ALREADY had a workspace, however this one was
+    # made (no email, a new email, or an employee's number starting their own).
+    if _phone_norm:
         try:
             _already = await db.users.find_one(
                 {"phone_norm": _phone_norm, "wa_primary": True}, {"_id": 0, "id": 1})
-            if not _already and _identity and _identity.get("id"):
-                await db.users.update_one({"id": _identity["id"]}, {"$set": {"wa_primary": True}})
+            _first = _identity if (_identity and _identity.get("tenant_id") != tenant_id) else None
+            _first = _first or await db.users.find_one(
+                {"phone_norm": _phone_norm, "tenant_id": {"$ne": tenant_id}, "wa_phone_obsolete": {"$ne": True}},
+                {"_id": 0, "id": 1}, sort=[("created_at", 1)])
+            if not _already and _first and _first.get("id"):
+                await db.users.update_one({"id": _first["id"]}, {"$set": {"wa_primary": True}})
         except Exception:
             # Routing preference is a convenience; never fail a registration on it.
             logger.warning("register: could not mark the WhatsApp home workspace", exc_info=True)

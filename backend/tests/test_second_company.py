@@ -298,18 +298,43 @@ def test_a_lost_create_press_is_recovered_by_the_confirmed_mobile(with_test_db):
 # ---------------------------------------------------------------------------
 # The email wall, and the sign-in that pretended to be a new company.
 # ---------------------------------------------------------------------------
-def test_reusing_the_address_for_another_company_is_refused_by_name(with_test_db):
-    """The report: told at the very end that the email is taken. It still is —
-    one address, one company — but now it says which company holds it and where
-    the second one comes from."""
+def test_reusing_the_address_for_another_company_makes_a_second_company(with_test_db):
+    """The report, twice (2026-09-20, and the team's again on 2026-10-30, NF-4.17):
+    told at the very end that the email is taken. The confirmed mobile says this
+    is the same founder, so it is simply their second company: made on their
+    number with no sign-in address of its own, the address they typed becoming
+    the new company's contact address."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _seed_first_company(db)
+            out = await rauth.register(
+                RegisterInput(company_name="Nila Exports", name="Rajesh Sharma",
+                              email="rajesh@sharma.co", phone_token=_proof()),
+                _req(), Response())
+            owner = await db.users.find_one({"tenant_id": out["tenant"]["id"]}, {"_id": 0})
+            tenant = await db.tenants.find_one({"id": out["tenant"]["id"]}, {"_id": 0})
+            first = await db.users.find_one({"id": "u-rajesh"}, {"_id": 0})
+            return out, owner, tenant, first, await db.tenants.count_documents({})
+        finally:
+            restore()
+
+    out, owner, tenant, first, tenants = with_test_db(scenario)
+    assert out["tenant"]["name"] == "Nila Exports" and tenants == 2, "a real second workspace"
+    assert owner["email"] == "" and owner["phone_norm"] == PHONE and owner["name"] == "Rajesh Sharma"
+    assert tenant["support_email"] == "rajesh@sharma.co", "the address they typed reaches this company"
+    assert first["email"] == "rajesh@sharma.co" and first.get("wa_primary") is True, "the first company is untouched"
+
+
+def test_someone_elses_address_is_still_refused(with_test_db):
+    """The address belongs to a different number: that is not this founder."""
     async def scenario(db):
         restore = _patch(db, rauth, core)
         try:
             await _seed_first_company(db)
             refused, _ = await _refused(rauth.register(
-                RegisterInput(company_name="Nila Exports", name="Rajesh Sharma",
-                              email="rajesh@sharma.co", password="Textiles-4821",
-                              phone_token=_proof()),
+                RegisterInput(company_name="Nila Exports", name="Someone Else",
+                              email="rajesh@sharma.co", phone_token=_proof(OTHER)),
                 _req(), Response()))
             return refused, await db.tenants.count_documents({})
         finally:
@@ -317,9 +342,7 @@ def test_reusing_the_address_for_another_company_is_refused_by_name(with_test_db
 
     refused, tenants = with_test_db(scenario)
     assert refused[0] == 400 and refused[1]["code"] == "email_registered"
-    assert "Sharma Textiles" in refused[1]["message"], "it names the company that holds the address"
-    assert "mobile" in refused[1]["message"], "and the door that opens"
-    assert tenants == 1, "they were NOT signed into the first company as if it had worked"
+    assert tenants == 1
 
 
 def test_the_same_company_pressed_twice_still_signs_them_in(with_test_db):
@@ -714,3 +737,59 @@ def test_the_owner_gate_only_stops_an_owner_with_no_way_in():
     assert "if (user.credentials_elsewhere) return false;" in gate
     assert "const signsInByMobile = !!user.phone_verified_at;" in gate
     assert "return !signsInByMobile && !signsInByPassword;" in gate
+
+
+
+# ---------------------------------------------------------------------------
+# NF-4.17 (2026-10-30, the team's report) — one number, several companies,
+# found by running one number through several signups against the database.
+# ---------------------------------------------------------------------------
+def test_an_employees_number_starts_its_own_company_without_an_email(with_test_db):
+    """Kumar works at Sharma Textiles: the owner added his number, he never
+    confirmed it by a code. He starts his own company; the wizard offers
+    "start another" (his number reaches a workspace) and asks no email. That
+    failed at the last step with "This number has no workspace yet"."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _seed_first_company(db)
+            await db.users.insert_one({"id": "u-kumar", "tenant_id": "t-sharma", "name": "Kumar", "role": "sales",
+                                       "email": "", "phone_norm": OTHER, "phone_verified_at": None,
+                                       "created_at": now_iso()})
+            from services.auth.membership import create_membership
+            await create_membership(db, user_id="u-kumar", tenant_id="t-sharma", role="sales", permissions=[])
+            out = await rauth.register(RegisterInput(company_name="Kumar Traders", name="Kumar",
+                                                     phone_token=_proof(OTHER)), _req(), Response())
+            owner = await db.users.find_one({"tenant_id": out["tenant"]["id"]}, {"_id": 0})
+            staff = await db.users.find_one({"id": "u-kumar"}, {"_id": 0})
+            return out, owner, staff
+        finally:
+            restore()
+
+    out, owner, staff = with_test_db(scenario)
+    assert out["tenant"]["name"] == "Kumar Traders"
+    assert (owner["role"], owner["email"], owner["phone_norm"], owner["name"]) == ("owner", "", OTHER, "Kumar")
+    assert staff["phone_verified_at"] is None, "nobody else's row is marked confirmed by this signup"
+    assert staff.get("wa_primary") is True, "his WhatsApp keeps landing at Sharma Textiles"
+
+
+def test_the_same_create_pressed_twice_on_the_number_makes_one_company(with_test_db):
+    """A second company sends no email, so the email recovery never saw a lost
+    press: a retried Create made a second workspace with the same name."""
+    async def scenario(db):
+        restore = _patch(db, rauth, core)
+        try:
+            await _seed_first_company(db)
+            first = await rauth.register(RegisterInput(company_name="Nila Exports", name="Rajesh Sharma", phone_token=_proof()),
+                                         _req(), Response())
+            again = await rauth.register(RegisterInput(company_name="nila  exports", name="Rajesh Sharma", phone_token=_proof()),
+                                         _req(), Response())
+            other = await rauth.register(RegisterInput(company_name="Kaveri Mills", name="Rajesh Sharma", phone_token=_proof()),
+                                         _req(), Response())
+            return first, again, other, await db.tenants.count_documents({})
+        finally:
+            restore()
+
+    first, again, other, tenants = with_test_db(scenario)
+    assert again["tenant"]["id"] == first["tenant"]["id"], "the retry opens the company it made"
+    assert other["tenant"]["id"] != first["tenant"]["id"] and tenants == 3, "a different name is a new company"

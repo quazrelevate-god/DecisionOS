@@ -33,7 +33,7 @@ def test_only_known_short_pieces_reach_the_screen():
 
 
 def test_the_answer_carries_what_it_built_and_the_page_draws_it():
-    src = (ROOT / "routers" / "signup.py").read_text()
+    src = (ROOT / "routers" / "signup.py").read_text(encoding="utf-8")
     assert '"built": built}' in src
     iv = (FE / "pages" / "onboarding" / "VoiceInterview.js").read_text(encoding="utf-8")
     assert "onBuilt?.(data.built)" in iv

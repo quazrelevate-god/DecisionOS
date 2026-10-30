@@ -66,6 +66,7 @@ import { StaleStamp } from "../components/mobile/StaleStamp";
 // the capture hooks and hosts the repurposed InsightWell container itself.
 import { DeskDexWell } from "./desk/DeskDexWell";
 import { FinishedWorkCard } from "./desk/FinishedWorkCard";
+import { NeedsPersonSheet, useNeedsPerson } from "./desk/NeedsPersonSheet";
 import { TeamNudge } from "./desk/TeamNudge";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
@@ -1166,8 +1167,35 @@ export default function Desk() {
   const [scope, setScope] = useState("company");
 
   // E2-66: deep-link from a decision-focused nudge notification.
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const focusDecisionId = searchParams.get("decision");
+  /* Epic 11 S11 (2026-10-30) — NEEDS A PERSON. Work nobody has yet: the
+     company's for an owner, a team manager's own team. The card opens the list
+     through ?needs=person, which is also where the "Assign it to someone"
+     notifications land (lib/notif.js). Nothing is drawn for anyone else: the
+     team's queue is in their My Work. */
+  const needsQ = useNeedsPerson();
+  const needsRows = needsQ.data?.rows || [];
+  const showNeeds = needsRows.length > 0;
+  const needsOpen = searchParams.get("needs") === "person";
+  const closeNeeds = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("needs");
+    setSearchParams(next, { replace: true });
+  };
+  const needsCard = (testid) => (
+    <StackCard
+      tone="flag"
+      title="Needs a person"
+      count={needsRows.length}
+      loading={needsQ.isLoading}
+      line={needsRows[0]?.title}
+      tail={needsRows[0]?.line}
+      empty="Every task has someone"
+      to="?needs=person"
+      testid={testid}
+    />
+  );
   /* THE PHONE'S KPI GRID, approved 2026-10-02 and no longer a proposal.
      The founder saw the Desk on their own iPhone 13 mini: "Spend, this month"
      was a tall, almost empty tile whose own label had truncated to "Spend,
@@ -2387,6 +2415,7 @@ export default function Desk() {
                   testid="desk-requests-m"
                 />
               )}
+              {showNeeds && needsCard("desk-needs-person-m")}
               <StackCard
                 tone="fire"
                 title="Slipping"
@@ -2491,6 +2520,7 @@ export default function Desk() {
                 testid="desk-requests"
               />
             )}
+            {showNeeds && needsCard("desk-needs-person")}
             <StackCard
               tone="fire"
               title="Slipping"
@@ -2511,6 +2541,8 @@ export default function Desk() {
       {openDecisionId && (
         <DecisionDialog decisionId={openDecisionId} open onClose={closeDecision} />
       )}
+
+      <NeedsPersonSheet open={needsOpen} onClose={closeNeeds} />
 
       {openTask && (
         <TaskCard

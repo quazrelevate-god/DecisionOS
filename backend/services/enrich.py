@@ -51,6 +51,14 @@ async def enrich_decision(d: dict, tenant_id: Optional[str] = None) -> dict:
         for t in prop_tasks:
             t["assignee_name"] = names.get(t.get("assignee_id"))
         d["approver_name"] = names.get(d.get("approver_id"))
+    # Epic 11 S11 (2026-10-30) — where each task nobody is named for will go
+    # when it is approved: the team's queue, its head, or the owner.
+    if tid and d.get("status") not in ("approved", "rejected") and any(not t.get("assignee_id") for t in prop_tasks):
+        from services import task_pickup
+        company = await task_pickup.company(db, tid)
+        for t in prop_tasks:
+            if not t.get("assignee_id"):
+                t["goes_to"] = task_pickup.goes_to(company, t.get("assignee_role"), t.get("priority"))
     tq = {"tenant_id": tid} if tid else {}
     # ASK-32 Phase 3 — what was said: the words (typed, or heard from the voice
     # note), whether there is a recording to play, and the files sent with it.

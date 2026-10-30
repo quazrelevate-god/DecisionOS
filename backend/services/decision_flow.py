@@ -586,15 +586,19 @@ async def add_proposal_task(user: dict, decision_id: str, title: str) -> dict:
     return await _save_proposal(user, d, f"Added before approval: task “{clean}”")
 
 
-async def task_assigned_line(tid: str, t: dict, roles: list) -> str:
+async def task_assigned_line(tid: str, t: dict, roles: list, company=None) -> str:
     """The decision's timeline line for one task it created — the person by
     name, or the department by its name (JOURNEY-1: it printed the raw key,
-    `order_intake_&_customer_coordination`)."""
+    `order_intake_&_customer_coordination`). Epic 11 S11: a task nobody has
+    says where it is waiting — "In the Sales queue: …"."""
     from shared.roles import dept_name
     who = None
     if t.get("assignee_id"):
         m = await db.users.find_one({"id": t["assignee_id"], "tenant_id": tid}, {"_id": 0, "name": 1})
         who = (m or {}).get("name")
+    if not who and t.get("pickup_route") and company is not None:
+        from services.task_pickup import waiting_line
+        return f"{waiting_line(company, t)}: {t['title']}"
     if not who and t.get("assignee_role"):
         who = f"the {dept_name(roles, t['assignee_role'])} team"
     return f"Task assigned to {who or 'the team'}: {t['title']}"
@@ -621,6 +625,14 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
     await db.tasks.update_many(
         {"tenant_id": tid, "decision_id": decision_id, "status": "blocked", "approval_required": {"$ne": True}},
         {"$set": {"status": "todo", "updated_at": now_iso(), "last_action": "Decision approved"}})
+    # Epic 11 S11 (founder 2026-10-30) — a task nobody was named for goes to
+    # its team's one person, or waits in the team's queue / on its head / on
+    # the owner; services.task_pickup. Before the timeline below, which says
+    # where each one went.
+    from services import task_pickup
+    pickup = await task_pickup.place(db, tid, [t["id"] async for t in db.tasks.find(
+        {"tenant_id": tid, "decision_id": decision_id, "assignee_id": task_pickup.NO_PERSON},
+        {"_id": 0, "id": 1})])
     parts = []
     new_tasks = [x for x in made["task_ids"] if x not in set(made.get("reused_task_ids") or [])]
     if new_tasks:
@@ -650,9 +662,10 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
     for line in await _run_workflow_moves(user, d, made, resolutions):
         await add_decision_event(decision_id, line, user["name"], "workflow")
     roles = ((await db.tenants.find_one({"id": tid}, {"_id": 0, "roles": 1})) or {}).get("roles") or []
+    company = await task_pickup.company(db, tid) if pickup["placed"] else None
     for t in await db.tasks.find({"tenant_id": tid, "decision_id": decision_id,
                                   "source": {"$nin": ["reminder", "meeting"]}}, {"_id": 0}).to_list(100):
-        await add_decision_event(decision_id, await task_assigned_line(tid, t, roles), user["name"], "assigned")
+        await add_decision_event(decision_id, await task_assigned_line(tid, t, roles, company), user["name"], "assigned")
         # ASK-50 — a task that needs approval before work starts is locked; as
         # with New Task, the APPROVER hears about it first, and the doer when it
         # is approved and can actually be started.
@@ -672,6 +685,8 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
         if t.get("assignee_id") and t["assignee_id"] != user["id"] and t.get("status") not in ("done", "cancelled"):
             await _notify(tid, [t["assignee_id"]], 1, f"Work assigned to you: '{t['title']}'", "task", t["id"],
                           ntype="assigned", title=t["title"], sender=user.get("name"))
+    # …and the people each placed task waits on hear it, one message each.
+    await task_pickup.announce(db, tid, pickup["placed"], actor_id=user["id"], sender=user.get("name"))
     if d.get("created_by") and d["created_by"] != user["id"]:
         await _notify(tid, [d["created_by"]], 1, f"{user.get('name')} approved your decision: {d.get('title')}",
                       "decision", decision_id, ntype="approved", title=d.get("title"), sender=user.get("name"))

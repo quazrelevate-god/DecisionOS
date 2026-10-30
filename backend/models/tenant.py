@@ -102,6 +102,9 @@ class TenantSettingsInput(BaseModel):
     due_soon_days: Optional[int] = None
     followup_manager_days: Optional[int] = None
     followup_owner_days: Optional[int] = None
+    # Epic 11 S11 (2026-10-30): work nobody has climbs the team's reporting
+    # tree one level per step, the owner last — the days in each step.
+    pickup_step_days: Optional[int] = None
     owner_alert_email: Optional[bool] = None
 
 

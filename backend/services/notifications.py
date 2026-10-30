@@ -18,7 +18,9 @@ NOTIF_LEVELS = {1: "reminder", 2: "urgency", 3: "manager", 4: "owner"}
 # news, not asks. Epic 12 (2026-10-22): the bell tested a `kind` field no
 # notification has ever carried, so the badge was always 0;
 # the server counts it now, across every unread row, not inside the newest 100.
-NEEDS_YOU_TYPES = ("approval", "clarification", "waiting", "desk_nudge")
+# 2026-10-30 (Epic 11 S11) — "needs_person": a task nobody has, and you are
+# asked to assign it (services.task_pickup).
+NEEDS_YOU_TYPES = ("approval", "clarification", "waiting", "desk_nudge", "needs_person")
 
 # Short banner titles for the device-push channel (the body is the `message`,
 # which already reads as a full sentence). Keyed by the notification `ntype`.
@@ -36,6 +38,9 @@ PUSH_TITLES = {
     "workflow_stuck": "Workflow stuck",
     "reminder": "Reminder",
     "task_done": "Task done",   # 2026-10-29: the owner hears it is finished
+    # 2026-10-30 (Epic 11 S11): work nobody has yet (services.task_pickup).
+    "queue": "In your team's queue",
+    "needs_person": "Needs a person",
     # Requests (2026-10-21): a no on a request is final, not "changes requested".
     "request_rejected": "Request declined",
     "request_withdrawn": "Request withdrawn",

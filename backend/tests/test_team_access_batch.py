@@ -200,7 +200,8 @@ def test_owners_always_keep_manage_people(monkeypatch):
 def test_signup_fills_the_company_contact():
     src = (ROOT / "routers" / "auth.py").read_text(encoding="utf-8")
     assert '"phone": display_indian_mobile(_phone_norm) if _phone_norm else "",' in src
-    assert '"support_email": ((inp.support_email or "").strip() or email).lower(),' in src
+    # NF-4.17: a founder's own email typed for another company becomes its contact address.
+    assert '"support_email": ((inp.support_email or "").strip() or email or _typed_email).lower(),' in src
     assert '"region": (inp.region or str((inp.os_blueprint or {}).get("region") or "")).strip()[:80],' in src
     br = (FE / "pages" / "onboarding" / "BuildReveal.js").read_text(encoding="utf-8")
     assert "...(bp.region ? { region: bp.region } : {})," in br

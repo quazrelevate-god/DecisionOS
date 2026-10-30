@@ -230,10 +230,17 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         }
       }
       // ASK-28 TK-06 — a team task says where it went, instead of a silent pick.
-      if (teamKey && task?.auto_assigned && task?.assignee_name) {
-        toast.success(`Task created. Assigned to ${task.assignee_name}: fewest open tasks in ${roleLabel(teamKey, roleOptions)}.`);
+      // Epic 11 S11 (2026-10-30) — never by load: the team's one person, or the
+      // team's queue for whoever takes it (services/task_pickup.py).
+      const team = teamKey ? roleLabel(teamKey, roleOptions) : "";
+      if (teamKey && task?.assignee_how === "only_member" && task?.assignee_name) {
+        toast.success(`Task created. Given to ${task.assignee_name}, the only one in ${team}.`);
+      } else if (teamKey && !task?.assignee_id && task?.pickup_why === "nobody_in_team") {
+        toast.success(`Task created for ${team}. Nobody is in ${team} yet, so you'll be asked to assign it.`);
+      } else if (teamKey && !task?.assignee_id && task?.pickup_route === "manager") {
+        toast.success(`Task created. It's high priority, so a ${team} manager is asked to assign it.`);
       } else if (teamKey && !task?.assignee_id) {
-        toast.success(`Task created for the ${roleLabel(teamKey, roleOptions)} team. Nobody in it can take it yet.`);
+        toast.success(`Task created. It's in the ${team} queue for whoever takes it.`);
       } else {
         toast.success("Task created");
       }

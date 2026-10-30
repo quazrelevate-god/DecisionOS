@@ -1121,11 +1121,19 @@ export function DecisionPanel({
                                   className={GLASS_ICON_BTN}>
                                   <X size={14} weight="bold" aria-hidden="true" />
                                 </button>
+                                {!t.assignee_id && t.goes_to?.label && (
+                                  /* Epic 11 S11 — nobody picked: where it waits once approved. */
+                                  <span className="-mt-1 basis-full text-[11px] font-medium text-slate-500" data-testid={`decision-task-goes-to-${t.key}`}>
+                                    {t.goes_to.label}
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <p className="text-xs text-slate-500">
-                                {/* E3-13: auto-assigned to a person, else the role pool, else unassigned */}
+                                {/* Epic 11 S11: a person, else where it will wait — the team's
+                                    queue, its head, or the owner (services/task_pickup.py) */}
                                 {t.assignee_name ? `Goes to ${t.assignee_name}`
+                                  : t.goes_to?.label ? t.goes_to.label
                                   : t.assignee_role ? `Goes to the ${deptName(tenant, t.assignee_role)} team`
                                   : "Unassigned"}
                                 {t.due_date ? ` · due ${new Date(t.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : proposing ? " · no date yet" : ""}

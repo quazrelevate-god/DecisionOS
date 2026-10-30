@@ -148,7 +148,10 @@ function Who({ t, face, tenant, size = 44 }) {
         <span className={cn("block truncate text-[15px] font-semibold", t.assignee_id ? "text-slate-900" : "text-[hsl(30_70%_30%)]")}>
           {t.assignee_name || "Pick who does this"}
         </span>
-        <span className="block truncate text-[13px] text-slate-500">{team || (t.assignee_id ? "Doing this task" : "Nobody yet")}</span>
+        <span className="block truncate text-[13px] text-slate-500">
+          {/* Epic 11 S11 — nobody picked: where it waits once approved */}
+          {!t.assignee_id && t.goes_to?.label ? t.goes_to.label : team || (t.assignee_id ? "Doing this task" : "Nobody yet")}
+        </span>
       </span>
     </span>
   );
@@ -731,8 +734,9 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
                   onChange={(v) => v && editTask(t.key, { assignee_id: v })}
                   options={people.some((p) => p.value === t.assignee_id) || !t.assignee_id
                     ? people : [{ value: t.assignee_id, label: t.assignee_name || "Current person" }, ...people]} />
-                <p className="truncate text-[13px] text-slate-500">
-                  {t.assignee_role ? `${deptName(tenant, t.assignee_role)} team` : t.assignee_id ? "Doing this task" : "Nobody yet"}
+                <p className="truncate text-[13px] text-slate-500" data-testid={`dex-review-task-goes-to-${t.key}`}>
+                  {!t.assignee_id && t.goes_to?.label ? t.goes_to.label
+                    : t.assignee_role ? `${deptName(tenant, t.assignee_role)} team` : t.assignee_id ? "Doing this task" : "Nobody yet"}
                 </p>
               </div>
               <PrioMenu value={prioOf(t)} disabled={ro} testid={`dex-review-task-priority-${t.key}`}

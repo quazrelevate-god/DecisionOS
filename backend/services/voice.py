@@ -107,13 +107,16 @@ async def pick_least_loaded_member(tenant_id: str, role: str) -> Optional[str]:
         if not members:
             return None
         # Only auto-assign to ACTIVE members -- never to a suspended/removed/pending person.
-        # Honor membership data strictly when it exists; fail open for legacy tenants without it.
-        active_ids = {r.get("user_id") for r in await db.memberships.find(
-            {"tenant_id": tenant_id, "status": "active"}, {"_id": 0, "user_id": 1}).to_list(1000)}
-        if active_ids:
-            members = [m for m in members if m["id"] in active_ids]
-            if not members:
-                return None
+        # 2026-10-30 (NF-4.16): judged per person. A membership row that is not
+        # active leaves them out; someone with no row is from before memberships
+        # and counts. The company-wide "any rows? then only active rows" rule
+        # dropped every older member the day one new person was invited.
+        rows = await db.memberships.find({"tenant_id": tenant_id}, {"_id": 0, "user_id": 1, "status": 1}).to_list(5000)
+        active_ids = {r.get("user_id") for r in rows if r.get("status") == "active"}
+        has_row = {r.get("user_id") for r in rows}
+        members = [m for m in members if m["id"] in active_ids or m["id"] not in has_row]
+        if not members:
+            return None
         if len(members) == 1:
             return members[0]["id"]
         # S9 (U8-09.1): one aggregation instead of a count_documents per member
@@ -283,6 +286,8 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
     now = datetime.now(timezone.utc)
     cat_keys = cat_keys or set()
     tasks = []
+    from services import task_pickup
+    company = None
     for t in extracted.get("tasks") or []:
         role = t.get("assignee_role") if t.get("assignee_role") in troles else None
         assignee_id, how = None, "unassigned"
@@ -290,9 +295,12 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
         if member:
             assignee_id, role, how = member["id"], member["role"], "named"
         elif role:
-            # Smart assignment: distribute role-level tasks to the least-loaded member.
-            assignee_id = await pick_least_loaded_member(tenant_id, role)
-            how = "load" if assignee_id else "team"
+            # Epic 11 S11 (founder 2026-10-30): never by who has the fewest
+            # tasks. A team of one is that person; otherwise it is the team's,
+            # and approving puts it in the team's queue (services.task_pickup).
+            company = company or await task_pickup.company(db, tenant_id)
+            only = task_pickup.route(company, role, None).get("assignee_id")
+            assignee_id, how = (only, "only_member") if only else (None, "team")
         due = task_due_date(t, now)
         tasks.append({
             "key": new_id(), "title": t.get("title") or "Untitled task",

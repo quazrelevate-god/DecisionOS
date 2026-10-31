@@ -307,6 +307,10 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
     now = datetime.now(timezone.utc)
     cat_keys = cat_keys or set()
     tasks = []
+    # Epic 11 S12 — who each item is about (services/parties: Dex proposes,
+    # the review decides, approval links).
+    from services import parties
+    bk = await parties.book(db, tenant_id, members)
     from services import task_pickup
     company = None
     for t in extracted.get("tasks") or []:
@@ -337,6 +341,8 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
             "due_date": due,
             "task_type": t.get("task_category") if t.get("task_category") in cat_keys else None,
             **({"repeat_every": rep["every"], "repeat_interval": rep["interval"]} if rep else {}),
+            "party": parties.party_for(bk, t.get("party"), t.get("party_kind"),
+                                       f"{t.get('title') or ''} {t.get('description') or ''}", t.get("party_person")),
         })
     pmap = {p["key"]: p for p in (pipelines or [])}
     # ASK-32 Phase 4.1 — look at what is already on the board first, so a
@@ -353,12 +359,10 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
         if not pipeline or not stages:
             continue
         cp = (ev.get("counterparty") or "").strip()
-        contact_id = None
-        if cp:
-            c = await db.contacts.find_one({"tenant_id": tenant_id, "$or": [
-                {"name": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}},
-                {"company": {"$regex": f"^{re.escape(cp)}$", "$options": "i"}}]}, {"_id": 0, "id": 1})
-            contact_id = (c or {}).get("id")
+        # Epic 11 S12 — "Toyota" finds Toyota Kirloskar Pvt Ltd; a party nobody
+        # has becomes a Needs-details record on approval.
+        wparty = parties.party_for(bk, cp, ev.get("party_kind")) if cp else None
+        contact_id = (wparty or {}).get("contact_id") if (wparty or {}).get("status") == "linked" else None
         title = (ev.get("title") or ev.get("action") or pipeline.get("label") or "").strip()
         amount = ev.get("amount") if isinstance(ev.get("amount"), (int, float)) else None
         match = next((w for w in open_wfs if w["id"] not in claimed and w.get("type") == ev["type"] and (
@@ -376,16 +380,21 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
                 "detail": ev.get("detail", ""), "amount": amount, "counterparty": match.get("counterparty") or cp,
                 "said_counterparty": cp, "stages": wstages, "stage": match.get("stage"),
                 "move_to": wstages[to] if to is not None and to < len(wstages) else None,
+                "party": ({"said": match.get("counterparty") or cp, "status": "linked", "confidence": "card",
+                           "contact_id": match["contact_id"], "contact_name": match.get("counterparty") or cp}
+                          if match.get("contact_id") else wparty),
             })
             continue
         workflows.append({
             "key": new_id(), "mode": "new", "type": ev["type"], "pipeline_label": pipeline.get("label"),
             "title": title, "detail": ev.get("detail", ""), "amount": amount,
-            "counterparty": cp, "contact_id": contact_id, "stages": stages, "stage": stages[0],
+            "counterparty": (wparty or {}).get("contact_name") or cp, "said_counterparty": cp,
+            "contact_id": contact_id, "stages": stages, "stage": stages[0], "party": wparty,
         })
     meetings = [{"key": new_id(), "title": (mt.get("title") or "Meeting").strip(),
                  "when": (mt.get("when") or "").strip(),
-                 "date": _resolve_meeting_date((mt.get("when") or "").strip(), mt.get("due_in_days"))}
+                 "date": _resolve_meeting_date((mt.get("when") or "").strip(), mt.get("due_in_days")),
+                 "party": parties.party_for(bk, mt.get("party"), mt.get("party_kind"), mt.get("title") or "")}
                 for mt in extracted.get("meeting_events") or []]
     reminders = []
     for r in extracted.get("reminders") or []:
@@ -405,11 +414,16 @@ async def build_proposal(tenant_id, extracted, troles, members, cat_keys, pipeli
         item = next((w for w in workflows if mentions(words, w.get("counterparty"), w.get("said_counterparty"))), None)
         if item:
             t.update({"workflow_key": item["key"], "workflow_title": item.get("title")})
+            if not t.get("party") and item.get("party"):
+                t["party"] = dict(item["party"])
             continue
         wf = next((w for w in open_wfs if w["id"] not in claimed and party_words(w.get("counterparty"))
                    and party_words(w.get("counterparty")) <= words), None)
         if wf:
             t.update({"workflow_id": wf["id"], "workflow_title": wf.get("title"), "workflow_stage": wf.get("stage")})
+            if not t.get("party") and wf.get("contact_id"):
+                t["party"] = {"said": wf.get("counterparty") or "", "status": "linked", "confidence": "card",
+                              "contact_id": wf["contact_id"], "contact_name": wf.get("counterparty") or ""}
     await find_existing_work(tenant_id, tasks, workflows)        # audit C-14
     return {"tasks": tasks, "workflows": workflows, "meetings": meetings,
             "reminders": reminders, "memory_notes": memory_notes}
@@ -559,6 +573,10 @@ async def _reuse_existing_task(tenant_id, decision, t) -> str:
         sets["due_date"] = t["due_date"]
         sets.pop("due_from_stage", None)
         changed.append("due date")
+    # Epic 11 S12 — the party it names, when the task had none; never replaced.
+    if t.get("contact_id") and not cur.get("contact_id"):
+        sets.update({"contact_id": t["contact_id"], "contact_name": t.get("contact_name") or ""})
+        changed.append("customer/supplier")
     # NF-4.22 — "every Monday" said about work that is already there makes THAT
     # task the routine. Silence about a cadence never stops one it already has.
     if t.get("repeat_every"):
@@ -633,6 +651,8 @@ async def _create_decision_tasks(tenant_id, decision, items, reused=None):
             # WE-01 / ASK-32 4.2: the workflow the proposal tied it to, else filled
             # in by _link_tasks_to_workflows once the workflows exist.
             "workflow_id": t.get("workflow_id"), "stage_key": t.get("stage_key"),
+            # Epic 11 S12 — the customer / supplier it is about.
+            "contact_id": t.get("contact_id"), "contact_name": t.get("contact_name") or "",
             "updated_at": now_iso(), "last_action": "Created",
             **({"tags": list(t["tags"])} if t.get("tags") else {}),
             **({"recurrence": rec, "series_id": tid} if rec else {}),
@@ -678,6 +698,7 @@ async def _create_meetings(tenant_id, note, decision_id, meetings):
         await db.calendar_events.insert_one({
             "id": new_id(), "tenant_id": tenant_id, "date": mt.get("date") or _resolve_meeting_date(when, None),
             "title": title, "when_text": when, "decision_id": decision_id, "source": "voice",
+            "contact_id": mt.get("contact_id"), "contact_name": mt.get("contact_name") or "",
             "created_by": note["created_by"], "created_at": now_iso(),
         })
         await db.tasks.insert_one({
@@ -686,6 +707,7 @@ async def _create_meetings(tenant_id, note, decision_id, meetings):
             "description": "", "assignee_role": None, "assignee_id": note["created_by"],
             "priority": "medium", "status": "todo", "due_date": None, "decision_id": decision_id,
             "source": "meeting", "created_at": now_iso(),
+            "contact_id": mt.get("contact_id"), "contact_name": mt.get("contact_name") or "",
         })
     return meetings or []
 
@@ -749,6 +771,23 @@ async def materialize_proposal(tenant_id: str, decision: dict) -> dict:
     """Create everything an approved decision proposed. Returns what was made."""
     p = decision.get("proposal") or {}
     note = {"created_by": decision.get("created_by"), "decision_id": decision["id"]}
+    # Epic 11 S12 — every item's party becomes its CRM record: the one it
+    # names, or ONE new record marked Needs details (services/parties.settle).
+    from services import parties
+    settled = await parties.settle(db, tenant_id, decision, decision.get("approved_by") or decision.get("created_by"))
+    party_of = settled["by_item"]
+
+    def _with_party(kind, item):
+        c = party_of.get((kind, item.get("key")))
+        if c:
+            item = {**item, "contact_id": c["id"], "contact_name": c.get("name") or c.get("company") or ""}
+        return item
+    p = {**p, "tasks": [_with_party("tasks", t) for t in p.get("tasks") or []],
+         "meetings": [_with_party("meetings", m) for m in p.get("meetings") or []],
+         "workflows": [_with_party("workflows", w) for w in p.get("workflows") or []]}
+    for w in p["workflows"]:
+        if w.get("contact_id") and w.get("mode") != "existing":
+            w["counterparty"] = w.get("contact_name") or w.get("counterparty")
     # ASK-32 Phase 4: new workflows are created; existing ones are only linked
     # (and moved later by services.decision_flow when the proposal says so).
     items = [w for w in p.get("workflows") or [] if w.get("stages")]
@@ -760,6 +799,10 @@ async def materialize_proposal(tenant_id: str, decision: dict) -> dict:
         if w.get("mode") == "existing" and w.get("workflow_id"):
             key_to_id[w["key"]] = w["workflow_id"]
             existing_ids.append(w["workflow_id"])
+            if w.get("contact_id"):   # a card that named its party only as text gets the record
+                await db.workflows.update_one(
+                    {"id": w["workflow_id"], "tenant_id": tenant_id, "contact_id": {"$in": [None, ""]}},
+                    {"$set": {"contact_id": w["contact_id"], "counterparty": w.get("contact_name") or w.get("counterparty")}})
     task_items = []
     for t in p.get("tasks") or []:
         t = dict(t)
@@ -784,7 +827,13 @@ async def materialize_proposal(tenant_id: str, decision: dict) -> dict:
     # stays a plain task (no blind "first workflow" fallback).
     unlinked = [tid for tid, t in zip(task_ids, task_items) if not t.get("workflow_id")]
     await _link_tasks_to_workflows(tenant_id, unlinked, list(key_to_id.values()), fallback=False)
-    return {"task_ids": task_ids, "workflow_ids": new_ids, "linked_workflow_ids": existing_ids,
+    contact_ids = list(dict.fromkeys(c["id"] for c in party_of.values()))
+    if contact_ids:
+        await db.decisions.update_one({"id": decision["id"], "tenant_id": tenant_id},
+                                      {"$addToSet": {"contact_ids": {"$each": contact_ids}}})
+    return {"task_ids": task_ids,
+            "contact_ids": contact_ids,
+            "contacts_added": [c.get("name") for c in settled["made"]], "workflow_ids": new_ids, "linked_workflow_ids": existing_ids,
             "reused_task_ids": reused,
             "meetings": len(meetings), "reminders": len(p.get("reminders") or []),
             "memory_notes": len(p.get("memory_notes") or [])}

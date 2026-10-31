@@ -134,6 +134,17 @@ async def _fetch_workflow_summaries(tenant_id: str, wf_ids: set) -> dict:
     return out
 
 
+_CONTACT_CHIP = {"_id": 0, "id": 1, "name": 1, "company": 1, "type": 1, "needs_details": 1}
+
+
+def _contact_chip(c: Optional[dict]) -> Optional[dict]:
+    if not c:
+        return None
+    kind = {"customer": "customer", "dealer": "dealer", "vendor": "supplier"}.get(c.get("type"), "customer")
+    return {"id": c["id"], "name": c.get("name") or c.get("company") or "", "type": c.get("type"),
+            "kind": kind, "needs_details": bool(c.get("needs_details"))}
+
+
 async def enrich_task(t: Optional[dict]) -> Optional[dict]:
     if not t:
         return t
@@ -159,6 +170,11 @@ async def enrich_task(t: Optional[dict]) -> Optional[dict]:
         t["workflow_summary"] = wf_map.get(t["workflow_id"]) or None
     else:
         t["workflow_summary"] = None
+    # Epic 11 S12 — the customer / supplier it is about, for the chip.
+    t["contact_summary"] = None
+    if t.get("contact_id") and t.get("tenant_id"):
+        c = await db.contacts.find_one({"id": t["contact_id"], "tenant_id": t["tenant_id"]}, _CONTACT_CHIP)
+        t["contact_summary"] = _contact_chip(c)
     # ASK-32 4.4 — the decision a task came from, for a link back.
     t["decision_title"] = None
     if t.get("decision_id") and t.get("tenant_id"):
@@ -191,7 +207,12 @@ async def enrich_tasks(tasks: List[dict]) -> List[dict]:
     dec_ids = list({t["decision_id"] for t in tasks if t.get("decision_id")})
     dec_map = {x["id"]: x.get("title") async for x in db.decisions.find(
         {"id": {"$in": dec_ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "title": 1})} if dec_ids and tenant_id else {}
+    # Epic 11 S12 — the customers / suppliers they are about, one batch.
+    c_ids = list({t["contact_id"] for t in tasks if t.get("contact_id")})
+    c_map = {c["id"]: _contact_chip(c) async for c in db.contacts.find(
+        {"id": {"$in": c_ids}, "tenant_id": tenant_id}, _CONTACT_CHIP)} if c_ids and tenant_id else {}
     for t in tasks:
+        t["contact_summary"] = c_map.get(t.get("contact_id"))
         t["decision_title"] = dec_map.get(t.get("decision_id"))
         t["assignee_name"] = umap.get(t.get("assignee_id"))
         t["co_assignees"] = [{"id": i, "name": umap.get(i)} for i in (t.get("co_assignee_ids") or [])]

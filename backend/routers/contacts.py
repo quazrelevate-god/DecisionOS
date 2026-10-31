@@ -52,9 +52,11 @@ def _refuse_other_side(user: dict, contact_type: str) -> None:
 
 @router.get("/contacts")
 async def list_contacts(type: Optional[str] = None, status: Optional[str] = None, q: Optional[str] = None,
-                        user: dict = Depends(require_crm)):
+                        needs_details: Optional[bool] = None, user: dict = Depends(require_crm)):
     allowed = crm_types(user)
     query = {"tenant_id": user["tenant_id"], "type": {"$in": list(allowed)}}
+    if needs_details:   # Epic 11 S12 — the records Dex or a task added with only a name
+        query["needs_details"] = True
     if type:
         _refuse_other_side(user, type)
         query["type"] = type
@@ -93,6 +95,57 @@ def trading_terms(data: dict, partial: bool = False) -> dict:
                 people.append(row)
         out["contact_people"] = people[:10]
     return out
+
+
+@router.get("/parties/search")
+async def search_parties(q: Optional[str] = "", user: dict = Depends(get_current_user)):
+    """Epic 11 S12 — "who is this task for?": the party pickers (New Task, the
+    decision review, the task drawer). Name and kind only — enough to link work
+    to a customer or supplier, nothing of their terms or money — so anyone who
+    creates work can link it. Closest first: the matcher's answer, then names
+    containing the words."""
+    from services import parties
+    tid = user["tenant_id"]
+    text = " ".join((q or "").split())[:80]
+    bk = await parties.book(db, tid)
+    out, seen = [], set()
+    # New Task reads its title as it is typed: "Send samples to Kumar Exports"
+    # offers Kumar Exports in one tap (a whole CRM name in the sentence).
+    for c in (bk.scan(text) if len(text.split()) >= 3 else []):
+        seen.add(c["id"])
+        out.append(parties.public(c))
+    if text:
+        ans = bk.find(text)
+        for c in ([bk.by_id[ans["contact_id"]]] if ans.get("status") == "linked" else
+                  [bk.by_id[x["id"]] for x in ans.get("candidates") or []]):
+            if c["id"] not in seen:
+                seen.add(c["id"])
+                out.append(parties.public(c))
+        n = parties.norm(text)
+        for c in bk.contacts:
+            if len(out) >= 8:
+                break
+            if c["id"] not in seen and any(n in parties.norm(x) for x in parties._names(c)):
+                seen.add(c["id"])
+                out.append(parties.public(c))
+    else:
+        for c in sorted(bk.contacts, key=lambda c: c.get("name") or "")[:8]:
+            out.append(parties.public(c))
+    for o in out:
+        o.pop("phone", None)
+    return {"results": out[:8], "exact": bool(text) and any(parties.norm(o["name"]) == parties.norm(text) for o in out)}
+
+
+@router.get("/parties/needs-details")
+async def parties_needing_details(user: dict = Depends(require_crm)):
+    """Epic 11 S12 — the Desk card and the CRM filter: records added with only a
+    name (by Dex or a task), the sides this person holds, newest first."""
+    allowed = list(crm_types(user))
+    rows = await db.contacts.find(
+        {"tenant_id": user["tenant_id"], "needs_details": True, "type": {"$in": allowed}},
+        {"_id": 0, "id": 1, "name": 1, "type": 1, "phone": 1, "tax_id": 1, "address": 1, "contact_people": 1,
+         "made_from": 1, "created_at": 1}).sort("created_at", -1).to_list(200)
+    return {"count": len(rows), "items": rows}
 
 
 @router.post("/contacts")
@@ -155,6 +208,10 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
     if inp.type is not None:
         _refuse_other_side(user, inp.type)
     updates = {k: v for k, v in inp.model_dump().items() if v is not None}
+    # Epic 11 S12 — a record added with only a name needs details until a phone
+    # number is saved, or somebody says it is done.
+    if c.get("needs_details") and str(updates.get("phone") or c.get("phone") or "").strip():
+        updates["needs_details"] = False
     # Audit C-07 -- trading terms, cleaned the same way as on create.
     updates.update(trading_terms(updates, partial=True))
     if "tax_id" in updates:
@@ -225,6 +282,13 @@ async def update_contact(contact_id: str, inp: ContactUpdateInput, user: dict = 
                 )
         except Exception:
             logger.exception("[FIX-003-C] counterparty cascade failed on workflows")
+        # Epic 11 S12 — the tasks and meetings linked to it say the new name too.
+        for coll_name in ("tasks", "calendar_events"):
+            try:
+                await db[coll_name].update_many({"tenant_id": tid, "contact_id": contact_id},
+                                                {"$set": {"contact_name": new_name}})
+            except Exception:
+                logger.exception(f"[S12] contact_name cascade failed on {coll_name}")
     c = await db.contacts.find_one({"id": contact_id}, {"_id": 0})
     return (await enrich_contacts([c]))[0]
 

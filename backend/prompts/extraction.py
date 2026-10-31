@@ -29,7 +29,11 @@ EXTRACT = register(Prompt(
     # 1.4 (2026-10-31, NF-4.22) — work that comes back. "Check the stock every
     # Monday" became a one-off task: the schema had no way to say a task
     # repeats. Each task now carries "repeat" and "repeat_interval".
-    version="1.4",
+    # 1.5 (2026-10-31, Epic 11 Sprint 12) — who it is about. Every task,
+    # meeting and workflow names its customer / dealer / supplier / prospect
+    # ("party", "party_kind") and a person there ("party_person"), so the
+    # work is linked to that CRM record (services/parties.py).
+    version="1.5",
     intent="Convert a founder's spoken/written directive into structured decisions/tasks/workflow_events/reminders/meeting_events/memory_notes JSON.",
     template=(
         "You are the extraction engine of DecisionOS, an operating brain for small businesses. "
@@ -45,10 +49,16 @@ EXTRACT = register(Prompt(
         '"due_on": "YYYY-MM-DD" or null, '
         '"repeat": one of [day,week,month] or null (ONLY when the work comes back on a cadence: daily, every Monday, weekly, '
         'on the 5th of every month, quarterly; null for one-off work, and "on Monday" alone is one-off), '
-        '"repeat_interval": integer or null (2 for every 2 weeks / fortnightly / every other Friday, 3 for quarterly)}], '
-        '"workflow_events": [{"type": one of [${pipe_keys_str}], "title": string, "detail": string, "counterparty": string, "amount": number or null}], '
+        '"repeat_interval": integer or null (2 for every 2 weeks / fortnightly / every other Friday, 3 for quarterly), '
+        '"party": string (the OUTSIDE company or person this task is about — a customer, dealer, supplier or prospect — '
+        'exactly as said; empty for internal work and never one of our own team), '
+        '"party_kind": one of [customer,dealer,supplier,prospect] or null, '
+        '"party_person": string (a named person AT that party, e.g. "Sajith" in "call Sajith from MK Associates"; else empty)}], '
+        '"workflow_events": [{"type": one of [${pipe_keys_str}], "title": string, "detail": string, "counterparty": string, '
+        '"party_kind": one of [customer,dealer,supplier,prospect] or null, "amount": number or null}], '
         '"reminders": [{"title": string, "due_in_days": integer or null}], '
-        '"meeting_events": [{"title": string, "when": string, "due_in_days": integer or null}], '
+        '"meeting_events": [{"title": string, "when": string, "due_in_days": integer or null, '
+        '"party": string (the outside company met, else empty), "party_kind": one of [customer,dealer,supplier,prospect] or null}], '
         '"memory_notes": [{"text": string, "tag": string}]}. '
         "${members_line}"
         # --- the guard: what is, and is not, a decision -------------------

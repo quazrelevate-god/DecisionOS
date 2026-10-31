@@ -12,7 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, CaretDown, Phone, EnvelopeSimple, CurrencyInr, ArrowRight,
-  ClockCounterClockwise, Sparkle, FileText, ListChecks, Warning, MapPin, PencilSimple,
+  ClockCounterClockwise, Sparkle, FileText, ListChecks, Warning, MapPin, PencilSimple, CalendarBlank,
 } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { inr, money } from "../../lib/format";
@@ -106,8 +106,12 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
   const {
     contact: c, summary = {}, invoices = [], payments = [], complaints = [],
     workflows = [], pending_deliveries = [], follow_ups = [], price_history = [],
-    ai_relationship: rel, documents = [], tasks = [],
+    ai_relationship: rel, documents = [], tasks = [], meetings = [],
   } = data;
+  /* Epic 11 S12 (2026-10-31) — CRM access opens this page too; without Finance
+     the server sends no money (money: false), and the Money section says who
+     sees it instead of showing zeros or skeletons that never fill. */
+  const showMoney = data.money !== false;
 
   const outstanding = summary.outstanding ?? null;
   const billed = summary.total_billed ?? null;
@@ -140,6 +144,12 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
               status={/risk|dormant|watch/i.test(c.lifecycle_stage) ? "pending" : "rejected"}
               label={humanStage(c.lifecycle_stage)}
             />
+          )}
+          {c.needs_details && (
+            <span data-testid="cp-needs-details"
+              className="inline-flex items-center rounded-pill bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 ring-1 ring-inset ring-amber-200">
+              Details needed
+            </span>
           )}
         </div>
         {/* One tap each — call and email are the two things he actually does. */}
@@ -192,6 +202,9 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
       </header>
 
       {/* ---------------- financial summary (expanded) ---------------- */}
+      {!showMoney ? (
+        <p className="mt-3 text-sm text-muted-foreground" data-testid="cp-money-hidden">Money is visible to Finance.</p>
+      ) : (
       <Accordion id="financial" title="Money" icon={CurrencyInr} defaultOpen>
         {/* §5.3: a skeleton, never a zero standing in for an unknown. */}
         <Row label="Outstanding" value={outstanding == null ? <MoneySkeleton /> : fmtSum(outstanding)} />
@@ -218,6 +231,7 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
           </ul>
         )}
       </Accordion>
+      )}
 
       {/* ---------------- workflow feed ---------------- */}
       <Accordion id="workflows" title="In progress" icon={ArrowRight} count={workflows.length + pending_deliveries.length}>
@@ -272,7 +286,7 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
       </Accordion>
 
       {/* ---------------- AI relationship intelligence ---------------- */}
-      {rel && (
+      {showMoney && rel && (
         <Accordion id="ai" title="How this relationship is going" icon={Sparkle}>
           <div className="flex gap-3">
             <Row label="Health" value={`${rel.relationship_score ?? "—"}/100`} />
@@ -326,6 +340,20 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
         )}
       </Accordion>
 
+      {/* ---------------- meetings (Epic 11 S12: the ones linked to them) ---------------- */}
+      {meetings.length > 0 && (
+        <Accordion id="meetings" title="Meetings" icon={CalendarBlank} count={meetings.length}>
+          <ul className="space-y-2 text-sm">
+            {meetings.map((m) => (
+              <li key={m.id} data-testid={`cp-meeting-${m.id}`}>
+                <span className="font-semibold">{m.title}</span>
+                <span className="block text-muted-foreground">{humanDate(m.date) || m.when_text || m.date}</span>
+              </li>
+            ))}
+          </ul>
+        </Accordion>
+      )}
+
       {/* ---------------- complaints ---------------- */}
       <Accordion id="complaints" title="Complaints" icon={Warning} count={complaints.length}>
         {complaints.length === 0 ? (
@@ -342,7 +370,7 @@ export default function ContactProfileMobile({ canManage = false, onEdit, onLogC
         )}
       </Accordion>
 
-      {price_history.length > 0 && (
+      {showMoney && price_history.length > 0 && (
         <Accordion id="prices" title="What they've paid before" icon={CurrencyInr} count={price_history.length}>
           <ul className="space-y-1 text-sm">
             {price_history.map((p) => (

@@ -2,6 +2,7 @@ import { useEffect, lazy, Suspense } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
+import { PartyDetailsHost } from "./components/party/PartyDetailsPrompt";
 import { AffirmationLayer, installAffirmations } from "./components/mobile/Affirmation";
 import { AuthProvider, useAuth, rememberArrival } from "./context/AuthContext";
 import { hasPerm } from "./lib/perms";
@@ -463,6 +464,8 @@ function App() {
         </BrowserRouter>
         <Toaster position="top-right" />
         <AffirmationLayer />
+        {/* Epic 11 S12 — "Add Kumar Exports' phone and GST?", after any task about a Needs-details party is done. */}
+        <PartyDetailsHost />
       </AuthProvider>
     </div>
   );

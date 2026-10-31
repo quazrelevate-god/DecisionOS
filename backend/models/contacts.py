@@ -79,3 +79,6 @@ class ContactUpdateInput(BaseModel):
     payment_terms_days: Optional[int] = Field(None, ge=0, le=365)
     credit_limit: Optional[float] = Field(None, ge=0)
     contact_people: Optional[List[ContactPerson]] = None
+    # Epic 11 S12 — False: the details are in ("Done" on the prompt). Saving a
+    # phone number clears it by itself.
+    needs_details: Optional[bool] = None

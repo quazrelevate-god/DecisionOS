@@ -58,6 +58,7 @@ from core import (
 from models.tasks import (
     TaskCreateInput,
     TaskUpdateInput,
+    TaskPartyDetailsInput,
     TaskReassignInput,
     TaskRejectInput,
     ExecPlanInput,
@@ -118,6 +119,53 @@ router = APIRouter(prefix="/api")
 # ---------------------------------------------------------------------------
 _INVOICE_KEYWORDS = ("invoice", "gst bill", "raise bill", "issue bill",
                      "sales invoice", "billing", "raise gst")
+
+
+@router.post("/tasks/{task_id}/party-details")
+async def fill_task_party_details(task_id: str, inp: TaskPartyDetailsInput, user: dict = Depends(get_current_user)):
+    """Epic 11 S12 — the doer fills in the customer / supplier a task added with
+    only a name, when the task is done. Only a Needs-details record, only by the
+    people with a say on the task (no CRM access needed: they met the party),
+    and only blank fields -- nothing anyone already wrote is overwritten."""
+    tid = user["tenant_id"]
+    t = await db.tasks.find_one({"id": task_id, "tenant_id": tid}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    if user.get("role") != "owner" and not any(
+            task_edit_rights(user, t, await _team_ids(user), user_perms(user)).values()):
+        raise HTTPException(status_code=403, detail="Only the people on this task can add these details.")
+    c = await db.contacts.find_one({"id": t.get("contact_id") or "-", "tenant_id": tid}, {"_id": 0})
+    if not c or not c.get("needs_details"):
+        raise HTTPException(status_code=409, detail="These details are already in CRM.")
+    sets = {}
+    for f in ("phone", "tax_id", "address"):
+        v = " ".join(str(getattr(inp, f) or "").split())
+        if v and not str(c.get(f) or "").strip():
+            sets[f] = v.upper() if f == "tax_id" else v
+    if inp.done or str(sets.get("phone") or c.get("phone") or "").strip():
+        sets["needs_details"] = False
+    if sets:
+        sets["updated_at"] = now_iso()
+        await db.contacts.update_one({"id": c["id"], "tenant_id": tid}, {"$set": sets})
+    from services import parties
+    return parties.public({**c, **sets})
+
+
+async def _task_party(user: dict, contact_id=None, contact_new=None, contact_name=None) -> tuple:
+    """(contact_id, contact_name) for a task: an existing CRM record, or a new
+    one added as Needs details. Unknown ids are refused, not silently dropped."""
+    from services import parties
+    tid = user["tenant_id"]
+    if contact_id:
+        c = await db.contacts.find_one({"id": contact_id, "tenant_id": tid}, {"_id": 0, "id": 1, "name": 1, "company": 1})
+        if not c:
+            raise HTTPException(status_code=400, detail="That customer or supplier isn't in CRM any more.")
+        return c["id"], c.get("name") or c.get("company") or ""
+    if isinstance(contact_new, dict) and str(contact_new.get("name") or "").strip():
+        c = await parties.create_needs_details(db, tid, str(contact_new["name"]), contact_new.get("kind"), user["id"],
+                                               made_from={"kind": "task"})
+        return c["id"], c.get("name") or ""
+    return None, (contact_name or "")
 
 
 def _looks_like_invoice_task(task: dict) -> bool:
@@ -703,6 +751,9 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
     # why a routine in particular needs one.
     if not due:
         raise HTTPException(status_code=400, detail="Give the task a due date — when does it need to be done?")
+    # Epic 11 S12 — who the task is about: a CRM record, or a new one added as
+    # Needs details (found again first, so a name already in CRM is linked).
+    party_id, party_name = await _task_party(user, inp.contact_id, inp.contact_new, inp.contact_name)
     troles = await tenant_role_keys(user["tenant_id"])
     assignee_id = inp.assignee_id
     role = inp.assignee_role if inp.assignee_role in troles else None
@@ -791,8 +842,8 @@ async def create_task(inp: TaskCreateInput, background: BackgroundTasks, user: d
         "evidence_required": bool(inp.evidence_required),
         # FUP-50: carry finance metadata forward so the FUP-50 auto-
         # invoice hook has something to seed the draft with.
-        "contact_id": inp.contact_id,
-        "contact_name": inp.contact_name or "",
+        "contact_id": party_id,
+        "contact_name": party_name,
         "amount": inp.amount,
         # WE-01: workflow linkage (both None for ad-hoc tasks).
         "workflow_id": link_wf,
@@ -892,6 +943,15 @@ async def update_task(task_id: str, inp: TaskUpdateInput, user: dict = Depends(g
     # hand: this task stays open and closing it simply brings nothing after it.
     if updates.pop("stop_repeating", None):
         updates["recurrence"] = None
+    # Epic 11 S12 — who it is about, changed in the drawer ("" = nobody).
+    # Somebody with no say on this task is refused BEFORE a new record is added.
+    if "contact_id" in updates or "contact_new" in updates:
+        if user.get("role") != "owner" and not any(
+                task_edit_rights(user, t, await _team_ids(user), user_perms(user)).values()):
+            raise HTTPException(status_code=403, detail=edit_refusal(t, {"contact_id": True}, {"none": False}))
+        pid, pname = await _task_party(user, updates.pop("contact_id", None) or None, updates.pop("contact_new", None))
+        if pid != t.get("contact_id"):
+            updates["contact_id"], updates["contact_name"] = pid, pname
     # NF-4.23 (2026-10-31) — start a routine on a task that exists, or change
     # its cadence. The series keeps its id, so its history stays one thread.
     if any(k in updates for k in ("repeat_every", "repeat_interval", "repeat_until")):

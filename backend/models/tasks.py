@@ -45,6 +45,9 @@ class TaskCreateInput(BaseModel):
     # + contact link by the time it reached MyWork.
     contact_id: Optional[str] = None
     contact_name: Optional[str] = None
+    # Epic 11 S12 — a customer / supplier nobody has in CRM yet, added with
+    # the task as a Needs-details record: {"name": ..., "kind": customer|dealer|supplier|prospect}.
+    contact_new: Optional[dict] = None
     amount: Optional[float] = None
     # WE-01 (2026-08-16): workflow linkage. Every task can point at its
     # parent workflow card + the specific stage that owns it. Both null
@@ -109,6 +112,19 @@ class TaskUpdateInput(BaseModel):
     repeat_every: Optional[str] = None
     repeat_interval: Optional[int] = None
     repeat_until: Optional[str] = None
+    # Epic 11 S12 — who the task is about: a CRM record's id ("" = nobody), or
+    # a new one {"name", "kind"} added as Needs details.
+    contact_id: Optional[str] = None
+    contact_new: Optional[dict] = None
+
+
+class TaskPartyDetailsInput(BaseModel):
+    """Epic 11 S12 — "Add Kumar Exports' phone and GST?", asked when the task is
+    done: what the doer knows, filled in there. `done` = nothing more to add."""
+    phone: Optional[str] = Field(None, max_length=30)
+    tax_id: Optional[str] = Field(None, max_length=20)
+    address: Optional[str] = Field(None, max_length=400)
+    done: bool = False
 
 
 class TaskReassignInput(BaseModel):

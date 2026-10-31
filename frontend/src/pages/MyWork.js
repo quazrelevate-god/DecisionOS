@@ -75,6 +75,9 @@ import { RoutinesNudge } from "../components/routines/RoutinesSetup";
 import { DraftNote } from "../components/neuglass/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { draftScope, hasDraft, hasDraftUnder } from "../lib/drafts";
+import { PartyChip } from "../components/party/PartyChip";
+import { PartyPicker, partyBody } from "../components/party/PartyPicker";
+import { askPartyDetails } from "../components/party/PartyDetailsPrompt";
 import { ReportButton } from "../components/ReportButton";
 import { askBeforeMic } from "../lib/micNotice";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -1789,6 +1792,58 @@ function RepeatLine({ t: task, canStop, onSaved, className = "", picker = false 
   );
 }
 
+/* Epic 11 S12 — the customer / supplier a task is about. The chip opens their
+   page; whoever has a say on the task (the server's rule: anyone on it, who
+   asked for it, their manager, the owner) can change it, add one — a new
+   name joins CRM marked "details needed" — or take it off. */
+function PartyLine({ t: task, canEdit, onSaved, testid }) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const save = async (value) => {
+    setBusy(true);
+    try {
+      await api.patch(`/tasks/${task.id}`, partyBody(value));
+      toast.success(!value ? "Not linked to a customer or supplier any more"
+        : value.new ? `${value.name} added to CRM — details needed` : `Linked to ${value.name}`);
+      setEditing(false);
+      onSaved?.();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not change the customer or supplier.");
+    } finally { setBusy(false); }
+  };
+  const party = task.contact_summary;
+  if (!party && !canEdit) return null;
+  if (editing) {
+    return (
+      <div className="min-w-0 flex-1" data-testid={testid}>
+        <PartyPicker value={null} autoFocus testid={`${testid}-picker`}
+          onChange={(v) => v && !busy && save(v)} />
+        <button type="button" onClick={() => setEditing(false)}
+          className="mt-1 text-xs font-medium text-slate-500 underline underline-offset-2">Cancel</button>
+      </div>
+    );
+  }
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center justify-end gap-1.5" data-testid={testid}>
+      {party && <PartyChip party={party} testid={`${testid}-chip`} />}
+      {canEdit && (
+        <button type="button" onClick={() => setEditing(true)} disabled={busy}
+          data-testid={`${testid}-change`}
+          className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-800 disabled:opacity-50">
+          {party ? "Change" : "Add customer/supplier"}
+        </button>
+      )}
+      {canEdit && party && (
+        <button type="button" onClick={() => save(null)} disabled={busy}
+          data-testid={`${testid}-clear`}
+          className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-800 disabled:opacity-50">
+          Remove
+        </button>
+      )}
+    </span>
+  );
+}
+
 /* ASK-26 — everyone on a task: the lead (assignee_id) first, then the people
    added alongside them (co_assignee_ids). A role queue with nobody named yet
    keeps the team glyph. Names come from /users so a photo set on Team shows
@@ -2553,6 +2608,9 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       } else {
         toast.success("Task completed — reopen from the card if needed.");
       }
+      // Epic 11 S12 — CRM has only a name for who this was about: the person
+      // who just did it is asked for their phone and GST, once, all optional.
+      if (data?.status === "done") askPartyDetails(t);
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not complete task"); }
   };
@@ -3115,6 +3173,14 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-slate-500">Repeats</span>
                   <RepeatLine t={t} canStop={rights.priority} onSaved={onChange} className="text-sm text-slate-800" />
+                </div>
+              )}
+              {/* Epic 11 S12 — who it is about, linked to their CRM page. */}
+              {(t.contact_summary || (!terminal && Object.values(rights).some(Boolean))) && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="shrink-0 text-slate-500">Customer / supplier</span>
+                  <PartyLine t={t} canEdit={Object.values(rights).some(Boolean)} onSaved={onChange}
+                    testid={`task-party-${t.id}`} />
                 </div>
               )}
               <div className="flex items-center justify-between gap-3">

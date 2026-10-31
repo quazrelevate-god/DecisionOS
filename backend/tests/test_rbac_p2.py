@@ -182,7 +182,13 @@ def test_reassign_handoff_dictation_owner_exclusions_and_one_ai_key(with_test_db
             # Owners keep Manage team.
             await _refused(tenant_settings.update_owner_exclusions(
                 OwnerExclusionsInput(exclusions=["finance", "team_manage"]), REQUEST, user=OWNER), 400)
-            out = await tenant_settings.update_owner_exclusions(OwnerExclusionsInput(exclusions=["finance"]), REQUEST, user=OWNER)
+            # Audit B-10 (2026-10-09, 32d28bca): Rajesh is the only owner, so
+            # hiding an area from owners hides it from him too -- he confirms first.
+            asked = await _refused(tenant_settings.update_owner_exclusions(
+                OwnerExclusionsInput(exclusions=["finance"]), REQUEST, user=OWNER), 409)
+            assert asked["code"] == "only_owner_excludes_self" and asked["areas"] == ["finance"]
+            out = await tenant_settings.update_owner_exclusions(
+                OwnerExclusionsInput(exclusions=["finance"], confirm_self=True), REQUEST, user=OWNER)
             assert out["owner_exclusions"] == ["finance"]
 
             # One AI key at a time keeps the others.

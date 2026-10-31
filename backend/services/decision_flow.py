@@ -611,6 +611,118 @@ async def add_proposal_task(user: dict, decision_id: str, title: str) -> dict:
     return await _save_proposal(user, d, f"Added before approval: task “{clean}”")
 
 
+async def edit_proposal_party(user: dict, decision_id: str, item_kind: str, key: str, action: str, *,
+                              contact_id=None, name=None, kind=None, person=None, apply_same: bool = True) -> dict:
+    """Epic 11 S12 — the reviewer's word on who a proposed item is about.
+
+    action  link    this CRM record (any kind: one firm on both sides is one record)
+            new     nobody in CRM: approval adds ONE record, marked Needs details
+                    (a name already in CRM is linked instead, and the label says so)
+            kind    customer / dealer / supplier / prospect, for a party being added
+            person  the person at the party ("" = not saved)
+            none    not a customer or supplier
+            split   a task naming several parties becomes one task per party
+    apply_same: every item naming the same party gets the same answer, so a
+    name resolved once is resolved everywhere in this decision."""
+    from services import parties
+    if item_kind not in ("tasks", "meetings", "workflows"):
+        raise HTTPException(status_code=400, detail="Unknown item.")
+    d = await _editable(user, decision_id)
+    tid = user["tenant_id"]
+    items = d["proposal"].setdefault(item_kind, [])
+    it = next((x for x in items if x.get("key") == key), None)
+    if not it:
+        raise HTTPException(status_code=404, detail="That item is no longer in this decision.")
+    old = dict(it.get("party") or {})
+    same = parties.party_key(old)
+    label = ""
+    if action == "split":
+        if item_kind != "tasks" or old.get("status") != "several":
+            raise HTTPException(status_code=400, detail="Only a task naming several customers or suppliers can be split.")
+        wanted = [c for c in old.get("several") or [] if not contact_id or c["id"] in (contact_id or [])]
+        if len(wanted) < 2:
+            raise HTTPException(status_code=400, detail="Pick at least two to split into.")
+        at = items.index(it)
+        made = []
+        for c in wanted:
+            part = {k: v for k, v in it.items() if k not in ("key", "party", "existing", "use_existing")}
+            part.update({"key": new_id(), "title": f"{it.get('title') or 'Task'} — {c['name']}"[:200],
+                         "party": {"said": c["name"], "kind": c.get("kind"), "status": "linked", "confidence": "picked",
+                                   "contact_id": c["id"], "contact_name": c["name"], "contact_type": c.get("type")}})
+            made.append(part)
+        items[at:at + 1] = made
+        for t in items:   # what waited for the one task waits for the first of its parts
+            if key in (t.get("depends_on") or []):
+                t["depends_on"] = [made[0]["key"] if k == key else k for k in t["depends_on"]]
+        return await _save_proposal(user, d, f"Split “{it.get('title')}” into {len(made)} tasks, one per customer/supplier")
+    if action == "link":
+        c = await db.contacts.find_one({"id": contact_id, "tenant_id": tid},
+                                       {"_id": 0, "id": 1, "name": 1, "company": 1, "type": 1})
+        if not c:
+            raise HTTPException(status_code=400, detail="That customer or supplier isn't in CRM any more.")
+        new_party = {"said": old.get("said") or c.get("name"), "kind": parties.KIND_OF_TYPE.get(c.get("type")),
+                     "status": "linked", "confidence": "picked", "contact_id": c["id"],
+                     "contact_name": c.get("name") or c.get("company") or "", "contact_type": c.get("type")}
+        label = f"linked to {new_party['contact_name']}"
+    elif action == "new":
+        said = " ".join(str(name or old.get("said") or "").split())
+        if not said:
+            raise HTTPException(status_code=400, detail="Give the customer or supplier a name.")
+        k = kind if kind in parties.KINDS else (old.get("kind") if old.get("kind") in parties.KINDS else "customer")
+        bk = await parties.book(db, tid)
+        ans = bk.find(said, k)
+        if ans["status"] == "linked" and ans.get("confidence") == "exact":
+            new_party = {**ans, "said": said, "confidence": "picked"}
+            label = f"{ans['contact_name']} is already in CRM — linked"
+        else:
+            new_party = {"said": said, "kind": k, "status": "new"}
+            label = f"adds {said} to CRM as a {k}"
+    elif action == "kind":
+        if kind not in parties.KINDS:
+            raise HTTPException(status_code=400, detail="Pick customer, dealer, supplier or prospect.")
+        if old.get("status") != "new":
+            raise HTTPException(status_code=400, detail="The kind is set on the CRM record itself; change it there.")
+        new_party = {**old, "kind": kind}
+        label = f"{old.get('said')} will be a {kind}"
+    elif action == "person":
+        if not old or old.get("status") not in ("linked", "new"):
+            raise HTTPException(status_code=400, detail="Pick the customer or supplier first.")
+        clean = " ".join(str(person or "").split())
+        new_party = dict(old)
+        if clean:
+            new_party["person"] = clean
+        else:
+            new_party.pop("person", None)
+        label = (f"{clean} saved as a contact at {old.get('contact_name') or old.get('said')}" if clean
+                 else "the person is not saved")
+        apply_same = False
+    elif action == "none":
+        new_party = {"said": old.get("said") or "", "status": "none", "dismissed": True}
+        label = "not a customer or supplier"
+    else:
+        raise HTTPException(status_code=400, detail="Unknown change.")
+    targets = [it]
+    if apply_same and same:
+        targets = [x for k2 in ("tasks", "meetings", "workflows") for x in d["proposal"].get(k2) or []
+                   if parties.party_key(x.get("party")) == same]
+        if not any(x is it for x in targets):
+            targets.append(it)
+    wf_items = d["proposal"].get("workflows") or []
+    for x in targets:
+        keep_person = (x.get("party") or {}).get("person") if action in ("link", "new") else None
+        x["party"] = {**new_party, **({"person": keep_person} if keep_person else {})}
+        if any(x is w for w in wf_items):
+            if new_party.get("status") == "linked":
+                x["contact_id"] = new_party["contact_id"]
+                if x.get("mode") != "existing":
+                    x["counterparty"] = new_party["contact_name"]
+            elif x.get("mode") != "existing":
+                x["contact_id"] = None
+    who = old.get("said") or it.get("title") or "it"
+    n = len(targets)
+    return await _save_proposal(user, d, f"Customer/supplier for “{who}”: {label}" + (f" ({n} items)" if n > 1 else ""))
+
+
 async def task_assigned_line(tid: str, t: dict, roles: list, company=None) -> str:
     """The decision's timeline line for one task it created — the person by
     name, or the department by its name (JOURNEY-1: it printed the raw key,
@@ -638,7 +750,7 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
 
     made = {"task_ids": [], "workflow_ids": [], "meetings": 0, "reminders": 0, "memory_notes": 0}
     if d.get("proposal"):
-        made = await materialize_proposal(tid, d)
+        made = await materialize_proposal(tid, {**d, "approved_by": user["id"]})
         await db.decisions.update_one(tenant_filter(decision_id, tid), {"$set": {
             "task_ids": list(d.get("task_ids") or []) + made["task_ids"] + list(made.get("reused_task_ids") or []),
             "workflow_ids": list(d.get("workflow_ids") or []) + made["workflow_ids"],
@@ -670,6 +782,10 @@ async def approve_decision_flow(user: dict, decision_id: str, *, authorized: boo
         parts.append(f"{made['reminders']} reminder(s)")
     await add_decision_event(decision_id, "Approved — created " + ", ".join(parts) if parts else "Approved — tasks unblocked",
                              user["name"], "approved")
+    # Epic 11 S12 — who the work is about, and who is new to CRM.
+    if made.get("contacts_added"):
+        await add_decision_event(decision_id, "Added to CRM — details needed: " + ", ".join(made["contacts_added"]),
+                                 user["name"], "crm")
     # Audit C-14: say which existing tasks it used, and what changed on them.
     for rid in made.get("reused_task_ids") or []:
         rt = await db.tasks.find_one({"id": rid, "tenant_id": tid}, {"_id": 0, "title": 1, "assignee_id": 1, "due_date": 1})

@@ -105,17 +105,22 @@ def test_the_basis_is_stable_across_key_order():
 def test_an_analysis_written_for_an_empty_company_is_not_served_after_the_first_invoice(with_test_db):
     """The exact path a new customer walks: open Finance on day one, then
     raise the first invoice."""
+    # Audit F-06 (2026-10-09, 1dc4bf39) changed day one on purpose: a company
+    # with no records gets a fixed "nothing to analyse yet" answer, with no AI
+    # call and nothing stored. So day one carries no basis to compare; what
+    # matters is that nothing from it is served once the first invoice lands.
     async def scenario(db):
         import routers.ledger as L
         first = await L.get_ledger_ai("revenue", user=OWNER)          # empty company
+        before = await db.ledger_ai.find_one({"tenant_id": T, "scope": "revenue"}, {"_id": 0})
         await db.invoices.insert_one(_invoice("INV-1", 393000.0))     # first sale
         second = await L.get_ledger_ai("revenue", user=OWNER)
         row = await db.ledger_ai.find_one({"tenant_id": T, "scope": "revenue"}, {"_id": 0})
-        return first, second, row
+        return first, before, second, row
 
-    first, second, row = with_test_db(_env(scenario))
-    assert first.get("basis") and second.get("basis")
-    assert second["basis"] != first["basis"], "the figures moved, so it was written again"
+    first, before, second, row = with_test_db(_env(scenario))
+    assert first.get("empty") and before is None, "day one is said, not stored"
+    assert second.get("basis") and not second.get("empty"), "the first sale is analysed"
     assert row["basis"] == second["basis"], "and the stored one is the new one"
 
 
@@ -157,6 +162,9 @@ def test_a_row_from_before_this_shipped_is_rewritten_once(with_test_db):
     """Every tenant already has cached rows with no basis on them."""
     async def scenario(db):
         import routers.ledger as L
+        # A sale on the books: since Audit F-06 (2026-10-09) a company with no
+        # records is answered without the model, which is not what this tests.
+        await db.invoices.insert_one(_invoice("INV-1", 393000.0))
         await db.ledger_ai.insert_one({
             "tenant_id": T, "scope": "revenue", "headline": "stale words",
             "insights": [], "generated_at": "2026-01-01T00:00:00+00:00"})
@@ -171,6 +179,9 @@ def test_a_row_from_before_this_shipped_is_rewritten_once(with_test_db):
 def test_each_scope_is_judged_on_its_own(with_test_db):
     async def scenario(db):
         import routers.ledger as L
+        # Audit F-06 (2026-10-09): an empty company's answer is not stored, so
+        # there must be something on the books for either scope to be written.
+        await db.invoices.insert_one(_invoice("INV-1", 393000.0))
         await L.get_ledger_ai("revenue", user=OWNER)
         await L.get_ledger_ai("expenses", user=OWNER)
         rows = await db.ledger_ai.find({"tenant_id": T}, {"_id": 0, "scope": 1, "basis": 1}).to_list(10)

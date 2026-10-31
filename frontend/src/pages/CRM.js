@@ -45,6 +45,7 @@ import { DraftNote } from "../components/neuglass/DraftNote";
 import { useDraft } from "../hooks/useDraft";
 import { cn } from "@/lib/utils";
 import { LogComplaintDialog, severityLabel } from "../components/crm/LogComplaintDialog";
+import { LinkSuggestionsDialog } from "../components/party/LinkSuggestionsDialog";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
@@ -234,6 +235,7 @@ function ContactCard({ c, info, onOpen, canOpen }) {
         </div>
         <span data-testid={`crm-type-chip-${c.id}`} className={`mt-0.5 ${CHIP} ${QUIET_CHIP}`}>{info.typeChip}</span>
       </div>
+      {c.needs_details && <DetailsNeeded id={c.id} />}
       {info.signal && <SignalPill id={c.id} signal={info.signal} />}
       <div className="mt-auto flex w-full items-center justify-between gap-3 pt-3 text-xs text-slate-500">
         {info.touched ? (
@@ -244,6 +246,17 @@ function ContactCard({ c, info, onOpen, canOpen }) {
         {info.ownerName && <span className="truncate" data-testid={`crm-owner-${c.id}`}>Owner: {info.ownerName}</span>}
       </div>
     </button>
+  );
+}
+
+/* Epic 11 S12 — added by Dex or a task with only a name: the phone, GST and
+   address are still to come. */
+function DetailsNeeded({ id, className = "mt-3" }) {
+  return (
+    <span data-testid={`crm-needs-details-${id}`}
+      className={`${className} inline-flex w-fit ${CHIP} bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-200`}>
+      Details needed
+    </span>
   );
 }
 
@@ -269,6 +282,7 @@ function ContactRow({ c, info, onOpen, canOpen }) {
         </span>
         <span className="hidden flex-wrap items-center gap-1 lg:flex">
           <span className={`${CHIP} ${QUIET_CHIP}`}>{info.typeChip}</span>
+          {c.needs_details && <DetailsNeeded id={c.id} className="" />}
           {info.stage && <span data-testid={`crm-stage-${c.id}`} className={`${CHIP} ${info.stage.tone}`}>{info.stage.label}</span>}
         </span>
         <span className="hidden min-w-0 lg:block">
@@ -837,12 +851,17 @@ export default function CRM() {
   const [adding, setAdding] = useState(null); // "customer" | "vendor" while the New window is open
   const [editing, setEditing] = useState(null); // a contact, while its Edit window is open
   const [complaintFor, setComplaintFor] = useState(null); // a contact, while Log complaint is open
+  // Epic 11 S12 — records added with only a name; the Desk card links here.
+  const [needsDetails, setNeedsDetails] = useState(() => searchParams.get("needs_details") === "1");
+  const [linking, setLinking] = useState(false);
 
   // RBAC P1 (2026-09-15): People access, not the role name (the server's rule).
   // J7-04 / J8-01 — adding and editing is per SIDE now, not one "people" key:
   // whoever may see a list may keep it, which is the point of the split.
   const canManage = seesBuyers || seesSuppliers;
-  const can360 = hasPerm(user, "finance");
+  /* Epic 11 S12 (2026-10-31) — the page opens for CRM access too; the money on
+     it stays with Finance (GET /contacts/:id/profile answers money: false). */
+  const can360 = hasPerm(user, "finance") || canManage;
   const canImport = hasPerm(user, "data_input");
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -922,7 +941,7 @@ export default function CRM() {
     const typesInScope = scope === "suppliers" ? VENDOR_TYPES
       : scope === "partners" ? PARTNER_TYPES
       : CUSTOMER_TYPES;
-    const list = (data || []).filter((c) => typesInScope.includes(c.type));
+    const list = (data || []).filter((c) => typesInScope.includes(c.type) && (!needsDetails || c.needs_details));
     const outMap = outstandingMap || {};
     const sorted = [...list];
     if (sort === "name") {
@@ -936,10 +955,19 @@ export default function CRM() {
       sorted.sort((a, b) => String(a.updated_at || a.created_at || "").localeCompare(String(b.updated_at || b.created_at || "")));
     }
     return sorted;
-  }, [data, scope, sort, outstandingMap]);
+  }, [data, scope, sort, outstandingMap, needsDetails]);
 
   // Any change to what is listed starts again from the first page.
-  useEffect(() => { setPage(1); }, [scope, status, q, sort, view]);
+  useEffect(() => { setPage(1); }, [scope, status, q, sort, view, needsDetails]);
+  const needsDetailsCount = useMemo(() => (data || []).filter((c) => c.needs_details).length, [data]);
+  /* Epic 11 S12 — the filter counts every tab, so it opens on a tab that has
+     them: a new dealer is under Partners, and the Desk card's link landed on
+     Buyers saying "No matches". */
+  useEffect(() => {
+    if (!needsDetails || !needsDetailsCount || contacts.length) return;
+    const first = (data || []).find((c) => c.needs_details);
+    if (first) setScope(scopeForType(first.type));
+  }, [needsDetails, needsDetailsCount, contacts.length, data]);
   const pageSize = PAGE_SIZE[view];
   const pages = Math.max(1, Math.ceil(contacts.length / pageSize));
   const currentPage = Math.min(page, pages);
@@ -971,7 +999,7 @@ export default function CRM() {
     ...(seesSuppliers ? [{ key: "suppliers", label: L.vendor_plural, icon: Truck, count: scopeCounts.suppliers }] : []),
   ];
   const scopeLabel = SCOPES.find((s) => s.key === scope)?.label || "";
-  const filtering = !!q || !!status;
+  const filtering = !!q || !!status || needsDetails;
   /* 2026-09-29 — WHOSE EMPTINESS IS IT. The empty card spoke for the whole
      CRM whenever the CURRENT tab happened to be empty, so a workspace with
      one supplier and no buyers showed "No relationships yet" three
@@ -1001,6 +1029,7 @@ export default function CRM() {
         complaints={editing ? (openComplaints || []).filter((cp) => cp.customer_id === editing.id) : []}
         onComplaintsChanged={() => qc.invalidateQueries({ queryKey: ["complaints-open"] })} />
       <LogComplaintDialog contact={complaintFor} onClose={() => setComplaintFor(null)} />
+      <LinkSuggestionsDialog open={linking} onOpenChange={setLinking} />
 
       {/* KM-27 — the controls pin with the title: they act ON the list, so
           they are the last things to scroll away. */}
@@ -1069,6 +1098,25 @@ export default function CRM() {
             <ViewToggle view={view} onChange={setView} />
           </div>
         </div>
+        {/* Epic 11 S12 — records Dex or a task added with only a name, and the
+            review that links old work to the customers and suppliers it names. */}
+        {canManage && (
+          <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="crm-party-tools">
+            <button type="button" onClick={() => setNeedsDetails((v) => !v)} aria-pressed={needsDetails}
+              data-testid="crm-filter-needs-details"
+              className={`flex h-9 items-center gap-1.5 rounded-pill px-3.5 text-xs font-semibold transition-colors ${needsDetails
+                ? "bg-amber-500 text-white" : `text-amber-900 ${GLASS_PILL}`}`}>
+              Needs details
+              <span className={`rounded-pill px-1.5 text-[11px] tabular-nums ${needsDetails ? "bg-white/25" : "bg-amber-100"}`}>
+                {needsDetailsCount}
+              </span>
+            </button>
+            <button type="button" onClick={() => setLinking(true)} data-testid="crm-link-old-work"
+              className={`flex h-9 items-center gap-1.5 rounded-pill px-3.5 text-xs font-semibold text-slate-700 hover:bg-white ${GLASS_PILL}`}>
+              Link old work
+            </button>
+          </div>
+        )}
       </StickyHeader>
 
       {isLoading && !data ? (
@@ -1088,7 +1136,9 @@ export default function CRM() {
           </p>
           <p className="mt-1 max-w-md text-sm text-slate-500">
             {filtering
-              ? `No ${scopeLabel.toLowerCase()} match that search or status.`
+              ? needsDetails && !q && !status
+                ? `Every ${scopeLabel.toLowerCase().replace(/s$/, "")} here has their details.`
+                : `No ${scopeLabel.toLowerCase()} match that search or status.`
               : anyContacts
                 ? `Your other lists have people in them — this one is empty.`
                 : canManage ? t("crm.empty_hint_manage", {
@@ -1098,7 +1148,7 @@ export default function CRM() {
                 }) : t("crm.empty_hint")}
           </p>
           {filtering ? (
-            <button type="button" onClick={() => { setQ(""); setStatus(""); }} data-testid="crm-clear-filters"
+            <button type="button" onClick={() => { setQ(""); setStatus(""); setNeedsDetails(false); }} data-testid="crm-clear-filters"
               className={`mt-5 h-11 rounded-pill px-5 text-sm font-medium text-neutral-800 transition-colors hover:bg-white ${GLASS_PILL}`}>
               Clear search and status
             </button>

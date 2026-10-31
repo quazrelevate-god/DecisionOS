@@ -83,6 +83,9 @@ import { LeftoverReview } from "./workflow/LeftoverReview";
 import { ReportButton } from "./ReportButton";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { DexReview } from "../pages/desk/DexReview";
+import { PartyChip } from "./party/PartyChip";
+import { PartyDialog } from "./party/PartyDialog";
+import { OpenPartiesDialog } from "./party/OpenPartiesDialog";
 import { isDraft as readDraft, subscribeDrafts, draftOverrides, settleDraft, saveAsDraft, clearDraft } from "../lib/decisionDrafts";
 
 /* ── helpers shared with the Desk's decision cards ───────────────────────── */
@@ -249,6 +252,10 @@ export function DecisionPanel({
   const [taskProof, setTaskProof] = useState(null);
   const [taskAppr, setTaskAppr] = useState(null);
   const [taskApprover, setTaskApprover] = useState(null);
+  // Epic 11 S12 — the proposed item whose customer/supplier is being changed,
+  // and the "check these first" step before approving.
+  const [partyItem, setPartyItem] = useState(null);
+  const [askParties, setAskParties] = useState(false);
   // Focus lands on the close when the card opens, not on the card itself:
   // Radix focuses the content, and the content's focus ring is the app's
   // lavender outline drawn round the whole popup.
@@ -300,7 +307,7 @@ export function DecisionPanel({
     ...(proposal.workflows || []).map((w) => {
       const stage = (k) => String(k || "").replace(/_/g, " ");
       return {
-        key: w.key, kind: "workflows",
+        key: w.key, kind: "workflows", title: w.title, party: w.party,
         label: w.mode === "existing" ? `${w.pipeline_label || "Workflow"}: ${w.title} (already on the board)` : `New ${w.pipeline_label || "workflow"}: ${w.title}`,
         sub: [w.counterparty, Number(w.amount) > 0 ? `₹${Number(w.amount).toLocaleString("en-IN")}` : null,
           w.mode === "existing"
@@ -308,7 +315,7 @@ export function DecisionPanel({
             : (w.stage ? `starts at ${stage(w.stage)}` : null)].filter(Boolean).join(" · "),
       };
     }),
-    ...(proposal.meetings || []).map((m) => ({ key: m.key, kind: "meetings", label: `Meeting: ${m.title}`, sub: [m.when, m.date].filter(Boolean).join(" · ") })),
+    ...(proposal.meetings || []).map((m) => ({ key: m.key, kind: "meetings", title: m.title, party: m.party, label: `Meeting: ${m.title}`, sub: [m.when, m.date].filter(Boolean).join(" · ") })),
     ...(proposal.reminders || []).map((r) => ({ key: r.key, kind: "reminders", label: `Reminder: ${r.title}`, sub: `For ${d?.created_by_name || "the person who raised it"}` })),
     ...(proposal.memory_notes || []).map((n) => ({ key: n.key, kind: "memory_notes", label: `Company note: ${n.text}`, sub: n.tag ? `About: ${noteTag(n.tag)}` : "" })),   // audit C-16
   ] : [];
@@ -553,6 +560,12 @@ export function DecisionPanel({
     onError: (e) => toast.error(e.response?.data?.detail || "Could not reject"),
   });
   const busy = approveM.isPending || rejectM.isPending || draftM.isPending;
+  /* Epic 11 S12 — approving never stops silently on "Which Kumar?": the open
+     questions are shown first; "Approve and link later" goes ahead. */
+  const approve = () => {
+    if (d?.open_parties?.length) { setAskParties(true); return; }
+    approveM.mutate();
+  };
 
   const sendNote = async () => {
     if (!note.trim()) return;
@@ -635,7 +648,7 @@ export function DecisionPanel({
                       <div className="flex flex-wrap gap-2.5" data-testid="decision-actions">
                         <button
                           type="button"
-                          onClick={() => approveM.mutate()}
+                          onClick={approve}
                           disabled={busy}
                           data-testid="decision-approve"
                           className={`flex h-14 flex-1 items-center justify-center gap-2 rounded-pill px-5 text-sm font-medium disabled:opacity-60 lg:h-12 ${INK_PILL}`}
@@ -720,7 +733,7 @@ export function DecisionPanel({
         <div className="flex gap-2.5" data-testid="decision-actions">
           <button
             type="button"
-            onClick={() => approveM.mutate()}
+            onClick={approve}
             disabled={busy}
             data-testid="decision-approve"
             className={`flex h-14 min-w-0 flex-1 items-center justify-center gap-2 rounded-pill px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 focus-visible:ring-offset-2 disabled:opacity-60 lg:h-12 ${INK_PILL}`}
@@ -841,6 +854,13 @@ export function DecisionPanel({
 
   return (
           <>
+            {/* Epic 11 S12 — who each proposed item is about, and the questions
+                left open before approving (portals: placed anywhere). */}
+            <PartyDialog decisionId={decisionId} item={partyItem} open={!!partyItem}
+              onOpenChange={(v) => !v && setPartyItem(null)} onChanged={() => invalidate()} />
+            <OpenPartiesDialog decisionId={decisionId} openParties={d.open_parties} open={askParties}
+              onOpenChange={setAskParties} busy={busy} onChanged={() => invalidate()}
+              onApprove={() => { setAskParties(false); approveM.mutate(); }} />
             {/* HEADER — title, the amount, the chips; the close on the
                 title's line. Sticky over the scrolling body. Embedded, the
                 host's own header is the sticky one and this block scrolls
@@ -1158,6 +1178,22 @@ export function DecisionPanel({
                                 Part of {t.workflow_title || t.workflow_summary.title}
                               </p>
                             )}
+                            {/* Epic 11 S12 — who it is about: Dex's answer, changed in one tap
+                                while proposing; the CRM record (a link) once it exists. */}
+                            {proposing ? (
+                              (t.party || editable) && (
+                                <div className="mt-1.5">
+                                  <PartyChip party={t.party} testid={`decision-task-party-${t.key}`}
+                                    addLabel="Customer / supplier"
+                                    onClick={editable && !editBusy ? () => setPartyItem({ item_kind: "tasks", key: t.key, title: t.title, party: t.party }) : undefined} />
+                                </div>
+                              )
+                            ) : (t.contact_summary || t.contact_id) && (
+                              <div className="mt-1.5">
+                                <PartyChip party={t.contact_summary || { id: t.contact_id, name: t.contact_name }}
+                                  testid={`decision-task-party-${t.id || t.key}`} />
+                              </div>
+                            )}
                             {/* Audit C-14 (2026-10-09) — the work is already there. Shown
                                 with who has it and when it is due; approving uses it (new
                                 person and date) unless "Add as new" is picked. */}
@@ -1201,6 +1237,14 @@ export function DecisionPanel({
                           <div className="min-w-0 flex-1">
                             <p className="text-sm text-slate-800">{x.label}</p>
                             {x.sub && <p className="text-xs text-slate-500">{x.sub}</p>}
+                            {/* Epic 11 S12 — a meeting or workflow card's customer/supplier. */}
+                            {(x.kind === "meetings" || x.kind === "workflows") && (x.party || editable) && (
+                              <div className="mt-1.5">
+                                <PartyChip party={x.party} testid={`decision-extra-party-${x.key}`}
+                                  addLabel="Customer / supplier"
+                                  onClick={editable && !editBusy ? () => setPartyItem({ item_kind: x.kind, key: x.key, title: x.title, party: x.party }) : undefined} />
+                              </div>
+                            )}
                           </div>
                           {editable && (
                             <button type="button" onClick={() => removeItem(x.kind, x.key)} disabled={editBusy}
@@ -1223,6 +1267,13 @@ export function DecisionPanel({
                         </li>
                       ))}
                     </ol>
+                    {/* Epic 11 S12 — once decided: the CRM records it is linked to. */}
+                    {!proposing && d.parties?.length > 0 && (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5" data-testid="decision-parties">
+                        <span className="text-xs text-slate-500">Customers & suppliers:</span>
+                        {d.parties.map((c) => <PartyChip key={c.id} party={c} testid={`decision-party-${c.id}`} />)}
+                      </div>
+                    )}
                   </Card>
 
                   {/* ASK-34 item 3 — NOT WHEN YOU RAISED IT YOURSELF.

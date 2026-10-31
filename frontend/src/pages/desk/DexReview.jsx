@@ -41,6 +41,9 @@ import { GlassSelect } from "../../components/neuglass/GlassSelect";
 import { ScopeSlider } from "../../components/neuglass/ScopeSlider";
 import { PersonAvatar } from "../../components/neuglass/PersonAvatar";
 import { LeftoverReview } from "../../components/workflow/LeftoverReview";
+import { PartyChip } from "../../components/party/PartyChip";
+import { PartyDialog } from "../../components/party/PartyDialog";
+import { OpenPartiesDialog } from "../../components/party/OpenPartiesDialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
@@ -217,6 +220,10 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
   const [historyOpen, setHistoryOpen] = useState(false);
   const [note, setNote] = useState("");
   const [sendingNote, setSendingNote] = useState(false);
+  // Epic 11 S12 — the item whose customer/supplier is being changed, and the
+  // "Which one?" questions asked before approving.
+  const [partyItem, setPartyItem] = useState(null);
+  const [askParties, setAskParties] = useState(false);
   const scrollRef = useRef(null);
   useEffect(() => { scrollRef.current?.scrollTo?.({ top: 0 }); }, [view]);
 
@@ -249,9 +256,10 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
   const isDraft = canDecide && readDraft(d, draftMarks);
   const leftMoves = (Array.isArray(movesQ.data) ? movesQ.data : []).filter((m) => (m.tasks || []).length > 0);
   const extras = proposing ? [
-    ...(proposal.workflows || []).map((w) => ({ key: w.key, kind: "workflows",
+    ...(proposal.workflows || []).map((w) => ({ key: w.key, kind: "workflows", title: w.title, party: w.party, hasParty: true,
       label: w.mode === "existing" ? `${w.pipeline_label || "Workflow"}: ${w.title}` : `New ${w.pipeline_label || "workflow"}: ${w.title}` })),
-    ...(proposal.meetings || []).map((m) => ({ key: m.key, kind: "meetings", label: `Meeting: ${m.title}` })),
+    ...(proposal.meetings || []).map((m) => ({ key: m.key, kind: "meetings", title: m.title, party: m.party, hasParty: true,
+      label: `Meeting: ${m.title}` })),
     ...(proposal.reminders || []).map((r) => ({ key: r.key, kind: "reminders", label: `Reminder: ${r.title}` })),
     ...(proposal.memory_notes || []).map((n) => ({ key: n.key, kind: "memory_notes", label: `Company note: ${n.text}` })),
   ] : [];
@@ -268,6 +276,14 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
     qc.invalidateQueries({ queryKey: ["desk"] }),
     qc.invalidateQueries({ queryKey: ["desk-summary"] }),
   ]);
+  /* Epic 11 S12 — the party dialog answers with the decision as it now is
+     (PATCH …/proposal/party); shown at once, then the lists catch up. */
+  const onPartyChanged = (data) => {
+    if (data?.id === decisionId) qc.setQueryData(["decision", decisionId], data);
+    invalidate();
+  };
+  const openParty = (kind, item) => editable && setPartyItem({
+    item_kind: kind, key: item.key, title: item.title || item.label || "", party: item.party });
   const editTask = async (key, body) => {
     setEditBusy(true);
     try {
@@ -541,7 +557,17 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
             {extras.map((x) => (
               <li key={x.key} className="flex min-h-12 items-center gap-3 py-1.5" data-testid={`decision-timeline-extra-${x.key}`}>
                 <LinkSimple size={15} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400" />
-                <span className="min-w-0 flex-1 text-[14px] text-slate-700">{x.label}</span>
+                <span className="min-w-0 flex-1 text-[14px] text-slate-700">
+                  {x.label}
+                  {/* Epic 11 S12 — who the meeting or workflow card is about. */}
+                  {x.hasParty && (
+                    <span className="mt-1 flex flex-wrap">
+                      <PartyChip party={x.party} testid={`dex-review-party-${x.key}`} className="min-h-10"
+                        onClick={editable ? () => openParty(x.kind, x) : undefined}
+                        addLabel={editable ? "Customer / supplier" : undefined} />
+                    </span>
+                  )}
+                </span>
                 {editable && (
                   <button type="button" onClick={() => removeItem(x.kind, x.key)} disabled={editBusy}
                     aria-label={`Remove ${x.label}`} data-testid={`decision-extra-remove-${x.key}`}
@@ -647,8 +673,9 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
                 <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full text-[13px] font-semibold text-white", INK_PLATE)}>{i + 1}</span>
                 {i < rows.length - 1 && <span aria-hidden="true" className="w-[2px] flex-1 rounded-full bg-slate-900/[0.12]" />}
               </div>
+              <div className="mb-3 min-w-0 flex-1">
               <button type="button" onClick={() => go({ name: "task", key: t.key })} disabled={!t.key}
-                className={cn(CARD, "mb-3 min-w-0 flex-1 p-4 text-left")}>
+                className={cn(CARD, "w-full min-w-0 p-4 text-left")}>
                 <span className="flex items-center gap-2.5">
                   <Who t={t} face={face} tenant={tenant} size={40} />
                   <PrioChip p={p} />
@@ -675,6 +702,17 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
                   <CaretRight size={15} weight="bold" aria-hidden="true" className="shrink-0 text-slate-400" />
                 </span>
               </button>
+              {/* Epic 11 S12 — the customer/supplier it is about, under the card (a
+                  button cannot sit inside the card's own button). Tap to change. */}
+              {(t.party || t.contact_summary || (editable && t.key)) && (
+                <div className="mt-1.5 flex flex-wrap px-1">
+                  <PartyChip party={t.party || t.contact_summary} testid={`dex-review-party-${t.key || t.id}`}
+                    className="min-h-10"
+                    onClick={editable && t.key ? () => openParty("tasks", t) : undefined}
+                    addLabel={editable && t.key ? "Customer / supplier" : undefined} />
+                </div>
+              )}
+              </div>
             </li>
           );
         })}
@@ -983,7 +1021,9 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
             share the one under it — three across a 360px phone wrapped
             "Save as draft" onto two lines. */}
         <div className="flex flex-col gap-2" data-testid="decision-actions">
-          <button type="button" onClick={() => approveM.mutate()} disabled={busy} data-testid="decision-approve"
+          {/* Epic 11 S12 — a "Which one?" still open is asked first, never skipped silently. */}
+          <button type="button" disabled={busy} data-testid="decision-approve"
+            onClick={() => (editable && d?.open_parties?.length ? setAskParties(true) : approveM.mutate())}
             className={cn(footBtn, "w-full flex-none", INK_PILL)}>
             <CheckCircle size={17} weight="bold" aria-hidden="true" className="shrink-0" />
             {approveM.isPending ? "Approving…" : "Approve"}
@@ -1060,6 +1100,12 @@ export function DexReview({ decisionId, open = true, onClose, onSaveDraft = null
         </AnimatePresence>
       </div>
       {foot}
+      {/* Epic 11 S12 — who each item is about, changed before approving. */}
+      <PartyDialog decisionId={decisionId} item={partyItem} open={!!partyItem}
+        onOpenChange={(v) => !v && setPartyItem(null)} onChanged={onPartyChanged} />
+      <OpenPartiesDialog decisionId={decisionId} openParties={d?.open_parties} open={askParties}
+        onOpenChange={setAskParties} onChanged={onPartyChanged} busy={busy}
+        onApprove={() => { setAskParties(false); approveM.mutate(); }} />
     </>
   );
 }

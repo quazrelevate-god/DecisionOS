@@ -20,6 +20,7 @@ import { ApprovalPanel } from "../components/neuglass/ApprovalPanel";
 import { GlassSelect } from "../components/neuglass/GlassSelect";
 import { DraftNote } from "../components/neuglass/DraftNote";
 import { useDraft } from "../hooks/useDraft";
+import { PartyPicker, partyBody, usePartySearch } from "../components/party/PartyPicker";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
   AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
@@ -63,6 +64,8 @@ const EMPTY_FORM = {
   repeat_every: "", repeat_interval: "1", repeat_until: "",
   expected_output: "", approval: "none", approver_id: "",
   evidence_required: false,
+  // Epic 11 S12 — who it is about: {id, name, kind} or {new, name, kind}.
+  party: null,
 };
 
 /* ASK-29 — due presets. A date with no time is due for that whole day.
@@ -147,6 +150,10 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controlled, openProp]);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  // Epic 11 S12 — the title read as it is typed: "Send samples to Kumar
+  // Exports" offers Kumar Exports in one tap, while the field is still empty.
+  const titleParty = usePartySearch(form.title, open && !form.party);
+  const suggestParty = !form.party ? titleParty.data?.results?.[0] : null;
   const personId = form.assign.startsWith("u:") ? form.assign.slice(2) : "";
   const teamKey = form.assign.startsWith("r:") ? form.assign.slice(2) : "";
   const dueDate = form.due_preset === "pick" ? form.due_date : presetDate(form.due_preset);
@@ -236,6 +243,7 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
         repeat_every: form.repeat_every || null,
         repeat_interval: form.repeat_every ? (parseInt(form.repeat_interval, 10) || 1) : null,
         repeat_until: form.repeat_every ? (form.repeat_until || null) : null,
+        ...partyBody(form.party),
       });
       if (files.length && task?.id) {
         for (const f of files) {
@@ -447,6 +455,22 @@ export function NewTaskDialog({ onCreated, onOpenChange, roleOptions, members, d
             {titleError && (
               <p id="task-title-error" role="alert" data-testid="task-title-error" className="mt-1.5 text-sm font-medium text-ng-accent">{titleError}</p>
             )}
+          </div>
+
+          {/* Epic 11 S12 — who the task is about: a customer or supplier in CRM,
+              or a new one added right here (marked "details needed"). */}
+          <div data-testid="new-task-party">
+            <span className={lbl}>Customer / supplier <span className="font-normal">(optional)</span></span>
+            {suggestParty && (
+              <button type="button" data-testid="new-task-party-suggest"
+                onClick={() => setForm({ ...form, party: { id: suggestParty.id, name: suggestParty.name, kind: suggestParty.kind, type: suggestParty.type } })}
+                className={`mt-1 inline-flex min-h-9 items-center gap-1.5 rounded-pill px-3 text-xs font-medium text-sky-900 ${GLASS_PILL}`}>
+                About {suggestParty.name}? <span className="font-semibold underline">Link</span>
+              </button>
+            )}
+            <div className="mt-1">
+              <PartyPicker value={form.party} onChange={(v) => setForm({ ...form, party: v })} testid="new-task-party-picker" />
+            </div>
           </div>
 
           <div className="ng-form-row">

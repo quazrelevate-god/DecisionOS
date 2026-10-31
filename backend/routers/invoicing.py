@@ -142,7 +142,9 @@ async def next_invoice_number(user: dict = Depends(require_ledger)):
 @router.post("/invoices/gst")
 async def create_gst_invoice(inp: GstInvoiceInput, user: dict = Depends(require_ledger)):
     tid = user["tenant_id"]
-    tenant = await db.tenants.find_one({"id": tid}, {"_id": 0}) or {}
+    # Only the fields an invoice uses: the whole record carries the AI keys.
+    tenant = await db.tenants.find_one({"id": tid}, {"_id": 0, "name": 1, "invoice_prefix": 1, "state": 1,
+                                                     "currency": 1, "payment_terms_days": 1}) or {}
     cust = (inp.customer_name or "").strip()
     if not cust:
         raise HTTPException(status_code=400, detail="Who is this invoice for? Add the buyer's name.")

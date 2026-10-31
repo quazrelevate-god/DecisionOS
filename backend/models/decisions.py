@@ -49,6 +49,20 @@ class DecisionProposalTaskInput(BaseModel):
     repeat_interval: Optional[int] = None
 
 
+class DecisionProposalPartyInput(BaseModel):
+    """Epic 11 S12 — who a proposed task, meeting or workflow is about
+    (services/decision_flow.edit_proposal_party)."""
+    item_kind: str = Field("tasks", max_length=12)          # tasks | meetings | workflows
+    key: str = Field(..., max_length=64)
+    action: str = Field(..., max_length=10)                 # link | new | kind | person | none | split
+    contact_id: Optional[str] = Field(None, max_length=64)
+    contact_ids: Optional[List[str]] = Field(None, max_length=12)   # split: which of the named ones
+    name: Optional[str] = Field(None, max_length=120)
+    kind: Optional[str] = Field(None, max_length=10)        # customer | dealer | supplier | prospect
+    person: Optional[str] = Field(None, max_length=80)
+    apply_same: bool = True
+
+
 class DecisionProposalTaskAddInput(BaseModel):
     """2026-10-29 — "Add another task": one Dex did not hear, added before approving."""
     title: str = Field(..., min_length=1, max_length=200)

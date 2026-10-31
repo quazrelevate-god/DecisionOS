@@ -249,27 +249,38 @@ async def list_payments(user: dict = Depends(require_perm("finance"))):
 
 
 # ---------------------------------------------------------------------------
-# 360° Customer / Supplier profile  (Owner + Finance only)
+# 360° Customer / Supplier profile
 # ---------------------------------------------------------------------------
 @router.get("/contacts/{contact_id}/profile")
-async def contact_profile(contact_id: str, user: dict = Depends(require_perm("finance"))):
+async def contact_profile(contact_id: str, user: dict = Depends(get_current_user)):
+    """Epic 11 S12 (2026-10-31) -- the page reads LINKS, not names, and opens for
+    CRM access too. It found tasks and decisions by searching titles for the
+    name, so "Ravi Traders" showed the employee Ravi's work, and it opened only
+    with Finance access although it is the CRM's page. Now: the tasks, decisions,
+    meetings and workflows carrying this record (the old-data review links the
+    rest), for anyone who may see this side of CRM. The money -- invoices,
+    payments, bills, totals, prices -- stays with Finance."""
+    from core.permissions import may_see_contact, user_perms
     tid = user["tenant_id"]
     c = await db.contacts.find_one({"id": contact_id, "tenant_id": tid}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Contact not found")
+    money = "finance" in user_perms(user)
+    if not money and not may_see_contact(user, c.get("type")):
+        raise HTTPException(status_code=403, detail="You don't have access to this feature")
     name = c.get("name") or ""
     name_rx = {"$regex": f"^{re.escape(name)}$", "$options": "i"}
-    loose_rx = {"$regex": re.escape(name), "$options": "i"} if name else {"$exists": False}
     match_party = {"tenant_id": tid, "$or": [{"contact_id": contact_id}, {"contact_name": name_rx}]}
 
-    invoices = await db.invoices.find(match_party, {"_id": 0}).sort("created_at", -1).to_list(500)
-    payments = await db.payments.find(match_party, {"_id": 0}).sort("created_at", -1).to_list(500)
+    invoices = await db.invoices.find(match_party, {"_id": 0}).sort("created_at", -1).to_list(500) if money else []
+    payments = await db.payments.find(match_party, {"_id": 0}).sort("created_at", -1).to_list(500) if money else []
     complaints = await db.complaints.find({"tenant_id": tid, "customer_id": contact_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     workflows = await db.workflows.find({"tenant_id": tid, "contact_id": contact_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
-    tasks = await db.tasks.find({"tenant_id": tid, "title": loose_rx}, {"_id": 0}).sort("created_at", -1).to_list(200) if name else []
+    tasks = await db.tasks.find({"tenant_id": tid, "contact_id": contact_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     decisions = await db.decisions.find(
-        {"tenant_id": tid, "$or": [{"title": loose_rx}, {"summary": loose_rx}]}, {"_id": 0}
-    ).sort("created_at", -1).to_list(100) if name else []
+        {"tenant_id": tid, "contact_ids": contact_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    meetings = await db.calendar_events.find(
+        {"tenant_id": tid, "contact_id": contact_id}, {"_id": 0}).sort("date", -1).to_list(100)
 
     # J2-04 (JOURNEY-1) — A SUPPLIER'S PAGE COUNTS WHAT YOU PAID THEM, not only
     # the bills that arrived with a document. A wholesaler's oil supplier showed
@@ -278,7 +289,7 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
     expenses = await db.expenses.find(
         {"tenant_id": tid, "approval_status": {"$nin": ["pending", "rejected"]},
          "$or": [{"vendor_id": contact_id}, {"vendor_name": name_rx}]},
-        {"_id": 0}).sort("created_at", -1).to_list(500) if name or contact_id else []
+        {"_id": 0}).sort("created_at", -1).to_list(500) if money and (name or contact_id) else []
     # An expense raised FROM a bill is that bill; counting both would double it.
     billed_ids = {i.get("id") for i in invoices}
     direct_expenses = [e for e in expenses if e.get("invoice_id") not in billed_ids]
@@ -319,8 +330,12 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
                     price_history.append({"item": li.get("description"), "rate": li.get("rate"),
                                           "date": inv.get("date") or inv.get("created_at", "")[:10]})
 
+    if not money:   # Epic 11 S12: CRM access sees the relationship, not the money
+        c = {k: v for k, v in c.items() if k not in ("credit_limit", "payment_terms_days", "ai_relationship")}
     return {
         "contact": c,
+        "money": money,
+        "meetings": meetings,
         "summary": {"total_billed": round(total_billed, 2), "total_paid": round(total_paid, 2),
                     "outstanding": outstanding, "last_payment": last_payment,
                     "currency": summary_currency,   # audit C-07
@@ -338,7 +353,7 @@ async def contact_profile(contact_id: str, user: dict = Depends(require_perm("fi
         "tasks": await enrich_tasks(tasks),
         "decisions": decisions,
         "price_history": price_history,
-        "ai_relationship": c.get("ai_relationship"),
+        "ai_relationship": c.get("ai_relationship") if money else None,
     }
 
 

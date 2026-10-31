@@ -324,6 +324,14 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         existing = await db.contacts.find_one(
             {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
             {"_id": 0, "id": 1})
+        if not existing:
+            # Epic 11 S12 — one matcher for every door: "Toyota Kirloskar Pvt.
+            # Ltd." on a bill is the "Toyota Kirloskar" Dex added; a record made
+            # with only a name gets its details from the bill's side.
+            from services import parties
+            ans = (await parties.book(db, tenant_id)).find(name)
+            if ans.get("status") == "linked":
+                existing = {"id": ans["contact_id"]}
         if existing:
             name_to_id[key] = existing["id"]
             return existing["id"]
@@ -481,6 +489,14 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         # waits in the Needs-matching queue — supplier payments no longer silently create an expense.
         await reconcile_payment(tenant_id, pay_doc, matched_by="auto")
 
+    # Epic 11 S12 — a document from one customer or supplier: its follow-ups are
+    # about them, and show on their page (which reads links, not names).
+    one_party = list(set(name_to_id.values()))
+    one_party = one_party[0] if len(one_party) == 1 else None
+    party_name = ""
+    if one_party:
+        pc = await db.contacts.find_one({"id": one_party, "tenant_id": tenant_id}, {"_id": 0, "name": 1})
+        party_name = (pc or {}).get("name") or ""
     for t in records.get("tasks", []):
         title = (t.get("title") or "").strip()
         if not title:
@@ -494,6 +510,7 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             "priority": t.get("priority", "medium") if t.get("priority") in ("low", "medium", "high") else "medium",
             "status": "todo", "due_date": due, "decision_id": None,
             "source": "ingest", "ingestion_id": ingestion_id, "created_at": now_iso(),
+            "contact_id": one_party, "contact_name": party_name,
         })
         created["tasks"] += 1
 

@@ -6,7 +6,7 @@ import api, { formatApiError } from "../lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
 import ContactProfileMobile from "./mobile/ContactProfileMobile";
 import { useAuth } from "../context/AuthContext";
-import { hasPerm } from "../lib/perms";
+import { hasPerm, canSeeAnyCrm } from "../lib/perms";
 import { Chip, EmptyState } from "../components/common";
 import { money, typeLabel, formatPhone } from "../lib/format";
 import { lex } from "../lib/lexicon";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Phone, EnvelopeSimple, MapPin, Receipt, CurrencyCircleDollar,
   Warning, Truck, TrendUp, Brain, CheckSquare, Buildings, Sparkle, Heart, ShieldWarning,
-  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow, PencilSimple, CheckCircle, Trash,
+  Note, Clock, ChatCircleDots, WhatsappLogo, Handshake, FlowArrow, PencilSimple, CheckCircle, Trash, CalendarBlank,
 } from "@phosphor-icons/react";
 
 // Epic 2 Sprint 1 (E2-08): activity kind -> icon + colour. Small map
@@ -105,7 +105,8 @@ export default function ContactProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, tenant } = useAuth();
-  const canView = hasPerm(user, "finance");
+  // Epic 11 S12 (2026-10-31) — CRM access opens it too; the money stays with Finance.
+  const canView = hasPerm(user, "finance") || canSeeAnyCrm(user);
   const qc = useQueryClient();
   // JOURNEY-1 J8 — change a buyer and log a complaint against them (the
   // server asks for People access for both, as it does for adding one).
@@ -167,7 +168,7 @@ export default function ContactProfile() {
     onError: () => toast.error("Could not score right now"),
   });
 
-  if (!canView) return <EmptyState title="Restricted" hint="The 360° profile is available to Owner and Finance only." />;
+  if (!canView) return <EmptyState title="Restricted" hint="This page is for the people who work with customers and suppliers." />;
   // B?? — a SKELETON, not a centered "Loading profile…". Routing here fetches
   // the profile on mount, so the old bare text filled the whole page empty for a
   // frame and then snapped to the full layout — the "crack on opening a screen".
@@ -206,6 +207,13 @@ export default function ContactProfile() {
   }
 
   const { contact: c, summary, invoices: rawInvoices, payments: rawPayments, complaints: rawComplaints, pending_deliveries, workflows: rawWorkflows, follow_ups, decisions, price_history, ai_relationship } = data;
+  /* Epic 11 S12 (2026-10-31) — the page opens for CRM access too. `money` is
+     false for somebody without Finance: the server sends no invoices, payments
+     or totals, and the money sections are left out rather than shown as zeros.
+     Tasks, decisions and meetings are the ones LINKED to this record. */
+  const showMoney = data.money !== false;
+  const linkedTasks = (data.tasks || []).length ? data.tasks : (follow_ups || []);
+  const meetings = data.meetings || [];
   const isVendor = c.type === "vendor";
   // U7-07 (2026-08-17): dedupe by id on the frontend. Backend was
   // returning duplicate complaint rows (visible in the Anand Fabrics
@@ -290,6 +298,10 @@ export default function ContactProfile() {
           {/* Audit C-08 (2026-10-09) — the company's own word ("Buyer"), not "Customer". */}
           <Chip value={typeLabels[c.type] || typeLabel(c.type)} className={c.type === "customer" ? "bg-brand-50 text-brand-700" : "bg-muted text-muted-foreground"} />
           <Chip value={c.status} />
+          {c.needs_details && (
+            <Chip value="Details needed" className="bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-200"
+              data-testid="profile-needs-details" />
+          )}
         </div>
         {canManage && (
           <div className="flex shrink-0 flex-wrap justify-end gap-2" data-testid="profile-actions">
@@ -329,7 +341,7 @@ export default function ContactProfile() {
             {c.credit_limit != null && <span>Credit limit {money(c.credit_limit, c.currency || tenant?.currency || "INR")}</span>}
           </div>
         )}
-        {summary?.over_credit_limit && (
+        {showMoney && summary?.over_credit_limit && (
           <p className="mt-2 text-sm font-medium text-ng-accent" data-testid="profile-over-limit">
             They owe {money(summary.outstanding, cur)} — more than their credit limit.
           </p>
@@ -348,19 +360,24 @@ export default function ContactProfile() {
         )}
       </div>
 
+      {!showMoney && (
+        <p className="mb-6 text-sm text-muted-foreground" data-testid="profile-money-hidden">Money is visible to Finance.</p>
+      )}
       {/* Financial summary */}
+      {showMoney && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         <Stat testid="stat-outstanding" label="Outstanding" value={money(summary.outstanding, cur)} accent={summary.outstanding > 0 ? "text-brand-600" : "text-foreground"} />
         <Stat testid="stat-billed" label={isVendor ? "Total Billed" : "Total Invoiced"} value={money(summary.total_billed, cur)} />
         <Stat testid="stat-paid" label="Total Paid" value={money(summary.total_paid, cur)} />
         <Stat testid="stat-complaints" label="Open Complaints" value={summary.open_complaints} accent={summary.open_complaints > 0 ? "text-purple-600" : ""} />
       </div>
+      )}
 
       {/* U7-07 (2026-08-17): AI Relationship Intelligence -- when
           NOT scored, was a big card just saying "no assessment yet".
           Now a subtle inline prompt when empty; expands into the full
           card only when there's actually a score to show. */}
-      {!rel ? (
+      {!showMoney ? null : !rel ? (
         /* RD-3: this is an OFFER, not a warning — it was picked up by the
            brand-yellow sweep and landed on a caution tint, which told the
            user something was wrong when nothing is. Neutral hairline card;
@@ -501,6 +518,7 @@ export default function ContactProfile() {
       </Section>
       </div>
 
+      {showMoney && (<>
       <Section icon={Receipt} title={isVendor ? "Purchase Bills" : "Sales Bills"} count={invoices.length} hideWhenEmpty>
         <Table head={["Number", "Amount", "Date", "Due", "Status"]} rows={invoices.map((inv) => (
           <tr key={inv.id} data-testid={`profile-invoice-${inv.id}`} className="border-t border-border">
@@ -524,10 +542,11 @@ export default function ContactProfile() {
           </tr>
         ))} />
       </Section>
+      </>)}
 
       {isVendor && (
-        <Section icon={Truck} title="Pending Deliveries" count={pending_deliveries.length} hideWhenEmpty>
-          <div className="space-y-2">{pending_deliveries.map((w) => (
+        <Section icon={Truck} title="Pending Deliveries" count={(pending_deliveries || []).length} hideWhenEmpty>
+          <div className="space-y-2">{(pending_deliveries || []).map((w) => (
             <div key={w.id} className="nm-tile p-3 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold">{w.title}</span><Chip value={w.stage} />
             </div>
@@ -535,7 +554,7 @@ export default function ContactProfile() {
         </Section>
       )}
 
-      {isVendor && price_history.length > 0 && (
+      {showMoney && isVendor && (price_history || []).length > 0 && (
         <Section icon={TrendUp} title="Price History" count={price_history.length}>
           <Table head={["Item", "Rate", "Date"]} rows={price_history.map((h, i) => (
             <tr key={`${h.item || "row"}-${h.date || ""}-${i}`} className="border-t border-border">
@@ -547,10 +566,11 @@ export default function ContactProfile() {
         </Section>
       )}
 
-      <Section icon={CheckSquare} title="Follow-ups & Tasks" count={follow_ups.length} hideWhenEmpty>
-        <div className="space-y-2">{follow_ups.map((t) => (
-          <div key={t.id} className="nm-tile p-3 flex items-center justify-between gap-2">
-            <span className="text-sm">{t.title}</span>
+      <Section icon={CheckSquare} title="Follow-ups & Tasks" count={linkedTasks.length} hideWhenEmpty>
+        <div className="space-y-2">{linkedTasks.map((t) => (
+          <div key={t.id} data-testid={`profile-task-${t.id}`} className="nm-tile p-3 flex items-center justify-between gap-2">
+            <button type="button" onClick={() => navigate(`/my-work?task=${t.id}`)}
+              className="text-left text-sm underline-offset-2 hover:underline">{t.title}</button>
             <div className="flex gap-1.5">{t.assignee_role && <Chip value={roleLabel(t.assignee_role)} className="bg-white" />}<Chip value={t.status} /></div>
           </div>
         ))}</div>
@@ -579,8 +599,18 @@ export default function ContactProfile() {
         ))}</div>
       </Section>
 
-      <Section icon={Brain} title="Linked Decisions" count={decisions.length} hideWhenEmpty>
-        <div className="space-y-2">{decisions.map((d) => (
+      {/* Epic 11 S12 — meetings Dex booked with them. */}
+      <Section icon={CalendarBlank} title="Meetings" count={meetings.length} hideWhenEmpty>
+        <div className="space-y-2">{meetings.map((m) => (
+          <div key={m.id} data-testid={`profile-meeting-${m.id}`} className="nm-tile p-3 flex items-center justify-between gap-2">
+            <span className="text-sm">{m.title}</span>
+            <span className="text-xs text-neutral-600 font-mono">{m.date || m.when_text || ""}</span>
+          </div>
+        ))}</div>
+      </Section>
+
+      <Section icon={Brain} title="Linked Decisions" count={(decisions || []).length} hideWhenEmpty>
+        <div className="space-y-2">{(decisions || []).map((d) => (
           <div key={d.id} className="nm-tile p-3">
             <div className="flex items-center gap-2 mb-1"><Chip value={d.status} />{d.dtype && <Chip value={d.dtype} className="bg-brand-blue text-white" />}</div>
             <p className="text-sm font-semibold">{d.title}</p>

@@ -87,6 +87,11 @@ OPEN_TO_EVERY_MEMBER = {
     # by unguessable id only; see the report on file access
     "/api/files/{file_id}/download": "may_read_file: the record the file belongs to (2026-10-03)",
     "/api/files/{fname}": "may_read_file, Finance/Data Input for bills, the review queue for drafts",
+    # Epic 11 S12 (2026-10-31) — the customer/supplier page opened to CRM access
+    "/api/contacts/{contact_id}/profile": "Finance, or may_see_contact for its side; money only with Finance",
+    "/api/crm/activity/{contact_id}": "Finance, or may_see_contact for its side (same gate as the profile)",
+    "/api/crm/link-suggestions": "_require_crm, and only records on the sides of CRM this person holds",
+    "/api/parties/search": "name and kind only, for linking work to a party; no phone, terms or money",
 }
 
 

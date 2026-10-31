@@ -58,6 +58,7 @@ from models.decisions import (
     DecisionCommentInput,
     DecisionProposalTaskInput,
     DecisionProposalTaskAddInput,
+    DecisionProposalPartyInput,
 )
 
 
@@ -302,6 +303,18 @@ async def edit_decision_proposal_task(decision_id: str, key: str, inp: DecisionP
                                  approver_id=inp.approver_id, description=inp.description,
                                  tags=inp.tags, depends_on=inp.depends_on,
                                  repeat_every=inp.repeat_every, repeat_interval=inp.repeat_interval)
+    return await enrich_decision(d, tenant_id=user["tenant_id"])
+
+
+@router.patch("/decisions/{decision_id}/proposal/party")
+async def edit_decision_proposal_party(decision_id: str, inp: DecisionProposalPartyInput,
+                                       user: dict = Depends(get_current_user)):
+    """Epic 11 S12 — before approving: which customer / supplier an item is about."""
+    from services.decision_flow import edit_proposal_party
+    from services.enrich import enrich_decision
+    d = await edit_proposal_party(user, decision_id, inp.item_kind, inp.key, inp.action,
+                                  contact_id=inp.contact_ids if inp.action == "split" else inp.contact_id,
+                                  name=inp.name, kind=inp.kind, person=inp.person, apply_same=inp.apply_same)
     return await enrich_decision(d, tenant_id=user["tenant_id"])
 
 

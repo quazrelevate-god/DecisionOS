@@ -354,7 +354,9 @@ def test_the_team_form_has_no_password_and_requires_a_real_mobile():
 
 def test_the_invite_sign_in_carries_its_link():
     login = _fe("pages", "Login.js")
-    assert "invite?.token" in login and "loginWithOtp(otpPhone, otpCode, otpTenant, invite?.token)" in login
+    # 2026-10-08 (a735f5b4): verify sends `code`, the code as typed, not the
+    # `otpCode` state that lagged a digit behind; the invite still goes with it.
+    assert "invite?.token" in login and "loginWithOtp(otpPhone, code, otpTenant, invite?.token)" in login
     assert "invite_token: inviteToken" in _fe("context", "AuthContext.js")
 
 

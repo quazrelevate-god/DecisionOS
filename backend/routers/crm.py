@@ -31,6 +31,7 @@ def _remaining(inv: dict) -> float:
 # Request models consolidated into models/ (Epic 8 Sprint 5).
 from models.crm import (
     ActivityInput,
+    LinkSuggestionsInput,
 )
 
 
@@ -165,18 +166,106 @@ async def log_activity_for_contact(
 async def list_activity_for_contact(
     contact_id: str,
     limit: int = 50,
-    user: dict = Depends(require_perm("finance")),
+    user: dict = Depends(get_current_user),
 ):
     """Return recent CRM activities for a contact, newest first. Same
-    permission gate as the 360 profile (finance) since these are the
-    same eyes that see the invoices."""
+    permission gate as the 360 profile: Finance, or (Epic 11 S12, 2026-10-31,
+    when the profile opened to CRM) this side of CRM -- the people who log them."""
+    from core.permissions import user_perms
     tid = user["tenant_id"]
     contact = await db.contacts.find_one(
-        {"id": contact_id, "tenant_id": tid}, {"_id": 0, "id": 1})
+        {"id": contact_id, "tenant_id": tid}, {"_id": 0, "id": 1, "type": 1})
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
+    if "finance" not in user_perms(user) and not may_see_contact(user, contact.get("type")):
+        raise HTTPException(status_code=403, detail="You don't have access to this feature")
     limit = max(1, min(200, int(limit)))
     rows = await db.crm_activities.find(
         {"tenant_id": tid, "contact_id": contact_id}, {"_id": 0},
     ).sort("created_at", -1).to_list(limit)
     return rows
+
+
+# ---------------------------------------------------------------------------
+# Epic 11 S12 — old data: a review list, never silent changes
+# ---------------------------------------------------------------------------
+_SCAN_CAP = 5000
+
+
+async def _require_crm(user: dict = Depends(get_current_user)) -> dict:
+    if not crm_types(user):
+        raise HTTPException(status_code=403, detail="You don't have access to Contacts")
+    return user
+
+
+@router.get("/link-suggestions")
+async def link_suggestions(user: dict = Depends(_require_crm)):
+    """Work written before Sprint 12 names its customers and suppliers only in
+    words: "these tasks name Nippon Audiotronix -- link them?". A suggestion is
+    made only where ONE record's whole name appears (services/parties.scan:
+    never a team member's name, never generic words), grouped by the record,
+    for the person to tick and approve in one go. Nothing changes until then."""
+    from services import parties
+    tid = user["tenant_id"]
+    allowed = set(crm_types(user))
+    bk = await parties.book(db, tid)
+    groups: dict = {}
+
+    def _add(c, kind, row, title):
+        if c.get("type") not in allowed:
+            return
+        g = groups.setdefault(c["id"], {"contact": parties.public(c), "items": []})
+        g["items"].append({"kind": kind, "id": row["id"], "title": title[:200],
+                           "status": row.get("status") or row.get("stage") or "",
+                           "created_at": row.get("created_at") or ""})
+
+    async for t in db.tasks.find({"tenant_id": tid, "contact_id": {"$in": [None, ""]}},
+                                 {"_id": 0, "id": 1, "title": 1, "description": 1, "status": 1, "created_at": 1}
+                                 ).sort("created_at", -1).limit(_SCAN_CAP):
+        found = bk.scan(f"{t.get('title') or ''} {t.get('description') or ''}")
+        if len(found) == 1:
+            _add(found[0], "task", t, t.get("title") or "")
+    async for d in db.decisions.find({"tenant_id": tid, "contact_ids": {"$in": [None, []]}},
+                                     {"_id": 0, "id": 1, "title": 1, "summary": 1, "status": 1, "created_at": 1}
+                                     ).sort("created_at", -1).limit(_SCAN_CAP):
+        found = bk.scan(f"{d.get('title') or ''} {d.get('summary') or ''}")
+        if len(found) == 1:
+            _add(found[0], "decision", d, d.get("title") or d.get("summary") or "")
+    async for w in db.workflows.find({"tenant_id": tid, "contact_id": {"$in": [None, ""]},
+                                      "counterparty": {"$nin": [None, ""]}},
+                                     {"_id": 0, "id": 1, "title": 1, "counterparty": 1, "stage": 1, "created_at": 1}
+                                     ).limit(_SCAN_CAP):
+        ans = bk.find(w.get("counterparty"))
+        if ans.get("status") == "linked":
+            _add(bk.by_id[ans["contact_id"]], "workflow", w, w.get("title") or w.get("counterparty") or "")
+    out = sorted(groups.values(), key=lambda g: (-len(g["items"]), g["contact"]["name"].lower()))
+    return {"groups": out, "count": sum(len(g["items"]) for g in out)}
+
+
+@router.post("/link-suggestions")
+async def apply_link_suggestions(inp: LinkSuggestionsInput, user: dict = Depends(_require_crm)):
+    """The ticked rows, linked. Each is checked again: still in this company,
+    still unlinked (a link somebody made meanwhile is never replaced), and a
+    record on a side of CRM this person holds."""
+    tid = user["tenant_id"]
+    allowed = set(crm_types(user))
+    ids = list({x.contact_id for x in inp.links})
+    contacts = {c["id"]: c async for c in db.contacts.find(
+        {"tenant_id": tid, "id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "company": 1, "type": 1})}
+    linked = {"task": 0, "decision": 0, "workflow": 0}
+    for x in inp.links:
+        c = contacts.get(x.contact_id)
+        if not c or c.get("type") not in allowed or x.kind not in linked:
+            continue
+        name = c.get("name") or c.get("company") or ""
+        if x.kind == "task":
+            r = await db.tasks.update_one({"id": x.id, "tenant_id": tid, "contact_id": {"$in": [None, ""]}},
+                                          {"$set": {"contact_id": c["id"], "contact_name": name}})
+        elif x.kind == "decision":
+            r = await db.decisions.update_one({"id": x.id, "tenant_id": tid, "contact_ids": {"$in": [None, []]}},
+                                              {"$set": {"contact_ids": [c["id"]]}})
+        else:
+            r = await db.workflows.update_one({"id": x.id, "tenant_id": tid, "contact_id": {"$in": [None, ""]}},
+                                              {"$set": {"contact_id": c["id"]}})
+        linked[x.kind] += r.modified_count
+    return {"linked": linked, "count": sum(linked.values())}

@@ -68,6 +68,7 @@ import { DeskDexWell } from "./desk/DeskDexWell";
 import { FinishedWorkCard } from "./desk/FinishedWorkCard";
 import { NeedsPersonSheet, useNeedsPerson } from "./desk/NeedsPersonSheet";
 import { TeamNudge } from "./desk/TeamNudge";
+import { NeedsDetailsCard } from "../components/party/NeedsDetailsCard";
 // DEX-SLIDER Part 1 — the phone Desk's new order sits behind this.
 import { DEX_SLIDER } from "../lib/flags";
 import { publishDeskSheetTop } from "../lib/deskSheet";
@@ -1795,6 +1796,9 @@ export default function Desk() {
       )}
       {/* Audit A-16 — until the first person is added, for whoever can add them. */}
       <TeamNudge className="shrink-0" />
+      {/* Epic 11 S12 — customers/suppliers Dex or a task added with only a
+          name (phone, GST, address to come); nothing when there are none. */}
+      <NeedsDetailsCard className="shrink-0" />
       {/* ── LIGHT ZONE ───────────────────────────────────────────────── */}
       {/* KR-8.6 — the split and the gaps are MEASURED off the reference:
           36 / 56 with a wide 8% trough between. */}

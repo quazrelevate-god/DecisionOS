@@ -42,6 +42,7 @@ import { lex } from "../lib/lexicon";
 import { opModel } from "../lib/operatingModel";
 import { canSeePipeline } from "../lib/perms";
 import { money, timeAgo, fullTime, humanStage } from "../lib/format";
+import { PartyChip } from "../components/party/PartyChip";
 import { toast } from "sonner";
 import {
   Plus, ArrowRight, Trash, ClockCounterClockwise, WarningCircle, DotsSixVertical, Check,
@@ -945,9 +946,13 @@ export default function Workflows() {
                           </div>
                         )}
 
-                        {(w.counterparty || w.amount != null) && (
-                          <div className="mt-1.5 flex items-baseline justify-between gap-2 lg:pl-[23px]">
-                            {w.counterparty && <span className="truncate text-xs text-muted-foreground">{w.counterparty}</span>}
+                        {(w.counterparty || w.contact_summary || w.amount != null) && (
+                          <div className={`mt-1.5 flex justify-between gap-2 lg:pl-[23px] ${w.contact_summary ? "items-center" : "items-baseline"}`}>
+                            {/* Epic 11 S12 — linked to a CRM record: the chip, which opens
+                                their page; a party only typed as text stays text. */}
+                            {w.contact_summary
+                              ? <span className="flex min-w-0"><PartyChip party={w.contact_summary} testid={`wf-card-party-${w.id}`} compact /></span>
+                              : w.counterparty && <span className="truncate text-xs text-muted-foreground">{w.counterparty}</span>}
                             {w.amount != null && <span className="shrink-0 font-mono text-xs font-semibold tabular-nums">{money(w.amount, tenant?.currency)}</span>}
                           </div>
                         )}

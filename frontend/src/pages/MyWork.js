@@ -2627,6 +2627,7 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
       const { data } = await api.patch(`/tasks/${t.id}`, { status });
       applyPatched(data);   // MW-01 fix
       toast.success(`Status: ${STATUS_LABEL[status] || status}`);
+      if (status === "done" && data?.status === "done") askPartyDetails(t);   // Epic 11 S12, as complete()
       onChange();
     } catch (e) { toast.error(e.response?.data?.detail || "Could not update status"); }
   };
@@ -4084,6 +4085,13 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             {t.source === "handoff" && (
               <span className={`${PILL} ${QUIET_PILL}`}>
                 <ArrowBendUpRight size={12} weight="bold" aria-hidden="true" /> Handoff
+              </span>
+            )}
+            {/* Epic 11 S12 — the customer/supplier; the chip opens their page,
+                not the card (a click inside the tile would toggle it). */}
+            {t.contact_summary && (
+              <span className="inline-flex min-w-0 max-w-full" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                <PartyChip party={t.contact_summary} testid={`task-card-party-${t.id}`} compact />
               </span>
             )}
           </div>
@@ -6111,10 +6119,14 @@ export default function MyWork({ only = null }) {
                   const open = list.filter((tk) => selected.has(tk.id) && !isTerminal(tk));
                   const targets = open.filter((tk) => taskEditRights(user, tk, members).finish);
                   const skipped = open.length - targets.length;
-                  await Promise.all(targets.map((tk) => api.patch(`/tasks/${tk.id}`, { status: "done" })));
+                  const done = await Promise.all(targets.map((tk) => api.patch(`/tasks/${tk.id}`, { status: "done" })));
                   const msg = `Completed ${targets.length} ${targets.length === 1 ? "task" : "tasks"}`
                     + (skipped ? ` · ${skipped} skipped: the doer marks ${skipped === 1 ? "it" : "them"} done` : "");
                   (targets.length ? toast.success : toast.error)(msg);
+                  // Epic 11 S12 — asked once, not once per task: the first one
+                  // finished whose customer/supplier CRM has only a name for.
+                  const ask = targets.find((tk, i) => done[i]?.data?.status === "done" && tk.contact_summary?.needs_details);
+                  if (ask) askPartyDetails(ask);
                   clearSelection();
                   refresh();
                 } catch (e) {

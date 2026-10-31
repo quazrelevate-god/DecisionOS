@@ -146,6 +146,12 @@ async def list_workflows(type: Optional[str] = None,
             {"id": {"$in": dec_ids}, "tenant_id": user["tenant_id"]}, {"_id": 0, "id": 1, "title": 1})}
         for w in wfs:
             w["decision_title"] = dmap.get(w.get("decision_id"))
+    # Epic 11 S12 — the customer/supplier a card is linked to, as a chip (its
+    # kind as well as its name, so a supplier is not called a customer).
+    from services.tasks import contact_chips
+    chips = await contact_chips(user["tenant_id"], [w.get("contact_id") for w in wfs])
+    for w in wfs:
+        w["contact_summary"] = chips.get(w.get("contact_id"))
     # WE-12 (2026-08-16): when the client asks with_tasks=true, we
     # hydrate each card with the OPEN tasks at its current stage
     # (workflow_id + stage_key + status not-in done/cancelled), plus

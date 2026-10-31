@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
+import { CaretDown } from "@phosphor-icons/react";
+import { DesignCheckbox } from "../neuglass/DesignCheckbox";
+import { GLASS_PILL, INK_PILL } from "../neuglass/glass";
+import { PartySheet, SHEET_BTN } from "./PartySheet";
 import { kindLabel } from "../../lib/party";
 
 /* Epic 11 S12 — old data gets a review list, not silent changes. Work written
@@ -43,69 +46,67 @@ export function LinkSuggestionsDialog({ open, onOpenChange }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto" data-testid="link-suggestions-dialog">
-        <DialogHeader>
-          <DialogTitle>Link old work to customers and suppliers</DialogTitle>
-          <DialogDescription>
-            Tasks, decisions and workflow cards that name exactly one of them. Untick anything that's wrong — nothing changes until you press Link.
-          </DialogDescription>
-        </DialogHeader>
-        {q.isLoading && <p className="text-sm text-slate-500">Reading your old work…</p>}
-        {!q.isLoading && !groups.length && (
-          <p className="text-sm text-slate-600" data-testid="link-suggestions-empty">Nothing to link — your work already names its customers and suppliers.</p>
-        )}
-        <ul className="space-y-2">
-          {groups.map((g) => {
-            const keys = g.items.map((i) => `${i.kind}:${i.id}:${g.contact.id}`);
-            const on = keys.filter((k) => !off.has(k)).length;
-            const expanded = openGroup === g.contact.id;
-            return (
-              <li key={g.contact.id} className="rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-inset ring-slate-200"
-                data-testid={`link-group-${g.contact.id}`}>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" checked={on === keys.length} aria-label={`Link all to ${g.contact.name}`}
-                    ref={(el) => { if (el) el.indeterminate = on > 0 && on < keys.length; }}
-                    onChange={() => setOff((s) => { const n = new Set(s); (on === keys.length ? keys.forEach((k) => n.add(k)) : keys.forEach((k) => n.delete(k))); return n; })}
-                    className="h-4 w-4" />
-                  <button type="button" onClick={() => setOpenGroup(expanded ? null : g.contact.id)}
-                    className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-sm font-semibold text-slate-900">{g.contact.name}</span>
+    <PartySheet open={open} onOpenChange={onOpenChange} testid="link-suggestions-dialog" wide
+      title="Link old work to customers and suppliers"
+      description="Tasks, decisions and workflow cards whose words name exactly one of them. Untick anything that's wrong. Nothing changes until you press Link."
+      footer={groups.length ? <>
+        <button type="button" onClick={() => onOpenChange(false)} className={`${SHEET_BTN} ${GLASS_PILL}`}>Not now</button>
+        <button type="button" disabled={busy || !picked.length} onClick={link} data-testid="link-suggestions-link"
+          className={`${SHEET_BTN} px-5 text-white ${INK_PILL}`}>
+          {busy ? "Linking…" : `Link ${picked.length}`}
+        </button>
+      </> : null}>
+      {q.isLoading && <p className="text-sm text-slate-500">Reading your old work…</p>}
+      {!q.isLoading && !groups.length && (
+        <p className="text-sm text-slate-600" data-testid="link-suggestions-empty">
+          Nothing to link. No older task, decision or workflow card names one of your customers or suppliers on its own.
+        </p>
+      )}
+      <ul className="space-y-2">
+        {groups.map((g) => {
+          const keys = g.items.map((i) => `${i.kind}:${i.id}:${g.contact.id}`);
+          const on = keys.filter((k) => !off.has(k)).length;
+          const expanded = openGroup === g.contact.id;
+          return (
+            <li key={g.contact.id} className="rounded-2xl bg-white/75 px-3.5 py-3 ring-1 ring-inset ring-slate-900/[0.06]"
+              data-testid={`link-group-${g.contact.id}`}>
+              <div className="flex items-start gap-1">
+                <div className="min-w-0 flex-1">
+                  <DesignCheckbox checked={on === keys.length} testid={`link-group-tick-${g.contact.id}`}
+                    onChange={() => setOff((s) => { const n = new Set(s); (on === keys.length ? keys.forEach((k) => n.add(k)) : keys.forEach((k) => n.delete(k))); return n; })}>
+                    <span className="block truncate font-semibold text-slate-900">{g.contact.name}</span>
                     <span className="block text-[11px] text-slate-500">
-                      {kindLabel(g.contact.kind)} · {on} of {keys.length} ticked · {expanded ? "hide" : "show"}
+                      {kindLabel(g.contact.kind)} · {on === keys.length ? `all ${keys.length}` : `${on} of ${keys.length}`} ticked
                     </span>
-                  </button>
+                  </DesignCheckbox>
                 </div>
-                {expanded && (
-                  <ul className="mt-2 space-y-1 border-t border-slate-100 pt-2">
-                    {g.items.map((i) => {
-                      const k = `${i.kind}:${i.id}:${g.contact.id}`;
-                      return (
-                        <li key={k}>
-                          <label className="flex items-start gap-2 text-xs text-slate-700">
-                            <input type="checkbox" checked={!off.has(k)} onChange={() => toggle(k)} className="mt-0.5 h-3.5 w-3.5" />
-                            <span><span className="text-slate-400">{KIND_WORD[i.kind]} · </span>{i.title}</span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        {!!groups.length && (
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => onOpenChange(false)}
-              className="min-h-10 rounded-pill px-4 text-xs font-semibold text-slate-600 hover:bg-slate-100">Not now</button>
-            <button type="button" disabled={busy || !picked.length} onClick={link} data-testid="link-suggestions-link"
-              className="min-h-10 rounded-pill bg-slate-900 px-4 text-xs font-semibold text-white disabled:opacity-40">
-              Link {picked.length}
-            </button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+                <button type="button" onClick={() => setOpenGroup(expanded ? null : g.contact.id)}
+                  aria-expanded={expanded} data-testid={`link-group-show-${g.contact.id}`}
+                  className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-pill px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-900/[0.05]">
+                  {expanded ? "Hide" : `Show ${keys.length}`}
+                  <CaretDown size={12} weight="bold" aria-hidden="true" className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+                </button>
+              </div>
+              {expanded && (
+                <ul className="mt-2.5 space-y-2 border-t border-slate-900/[0.06] pl-8 pt-2.5">
+                  {g.items.map((i) => {
+                    const k = `${i.kind}:${i.id}:${g.contact.id}`;
+                    return (
+                      <li key={k}>
+                        <DesignCheckbox checked={!off.has(k)} onChange={() => toggle(k)} testid={`link-item-${i.kind}-${i.id}`}>
+                          <span className="text-[13px] text-slate-700">
+                            <span className="text-slate-400">{KIND_WORD[i.kind]} · </span>{i.title}
+                          </span>
+                        </DesignCheckbox>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </PartySheet>
   );
 }

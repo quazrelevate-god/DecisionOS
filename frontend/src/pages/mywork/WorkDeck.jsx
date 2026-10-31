@@ -27,6 +27,8 @@ import { taskEditRights } from "../../lib/taskAccess";
 import { AvatarStack } from "../../components/neuglass/PersonAvatar";
 import { INK_PILL, INK_PLATE, GLASS_MENU, GLASS_MENU_ITEM, GLASS_MENU_LABEL } from "../../components/neuglass/glass";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from "../../components/ui/dropdown-menu";
+import { PartyChip } from "../../components/party/PartyChip";
+import { askPartyDetails } from "../../components/party/PartyDetailsPrompt";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
 const uiScale = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
@@ -376,6 +378,10 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
       if (data?.approval_status === "pending" && data?.status === "review") {
         toast.success(`Sent for approval — ${t.approver_name || "the approver"} will close it.`);
       } else toast.success(said);
+      // Epic 11 S12 — finished from the card (the phone's usual way): CRM has
+      // only a name for who it was about, so the doer is asked once, as the
+      // drawer's slider asks.
+      if (body.status === "done" && data?.status === "done") askPartyDetails(t);
       onChange?.();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Could not update the task");
@@ -444,6 +450,14 @@ export function TaskSummaryCard({ t, kit, members = [], roleOptions = [], onOpen
         </div>
         <DueBlock t={t} kit={kit} />
       </div>
+      {/* Epic 11 S12 — the customer/supplier it is about; opens their page.
+          A line of its own, the card's full width: beside the due date it had
+          half the card and cut even "Kumar Exports" short. */}
+      {t.contact_summary && (
+        <div className="mt-2.5 flex min-w-0 shrink-0">
+          <PartyChip party={t.contact_summary} testid={`deck-party-${t.id}`} className="max-w-full" compact />
+        </div>
+      )}
 
       <div className="mt-3 flex shrink-0 flex-col">
         {(() => {

@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api, { formatApiError } from "../../lib/api";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
+import { DRAWER_FIELD, GLASS_PILL, INK_PILL } from "../neuglass/glass";
+import { PartySheet, SHEET_BTN } from "./PartySheet";
 
 /* Epic 11 S12 — a task about a customer or supplier that CRM has only a name
    for is finished: the person who did it is the one most likely to know their
    phone and GST number. Asked once, here; every field optional; "Later" leaves
-   it in the Needs-details list, "Nothing to add" takes it off.
+   it in the Details-needed list, "Nothing to add" takes it off, and so does a
+   saved phone number (the server's rule).
    (POST /tasks/:id/party-details: blank fields only, never overwrites.)
 
    task: a task with contact_summary {id, name, needs_details} */
@@ -47,7 +49,7 @@ export function PartyDetailsPrompt({ task, open, onOpenChange, onSaved }) {
     setBusy(true);
     try {
       await api.post(`/tasks/${task.id}/party-details`, { ...form, done });
-      toast.success(done && !form.phone ? `${party.name} is off the Needs details list` : `Saved to ${party.name} in CRM`);
+      toast.success(done && !form.phone ? `${party.name} is off the Details needed list` : `Saved to ${party.name} in CRM`);
       onSaved && onSaved();
       onOpenChange(false);
     } catch (e) {
@@ -56,36 +58,35 @@ export function PartyDetailsPrompt({ task, open, onOpenChange, onSaved }) {
   };
   const field = (key, label, props = {}) => (
     <label className="block">
-      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <span className="mb-1.5 block text-xs font-semibold text-slate-600">{label}</span>
       <input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} {...props} aria-label={label}
-        data-testid={`party-details-${key}`}
-        className="mt-1 h-10 w-full rounded-xl bg-white px-3 text-sm ring-1 ring-inset ring-slate-200 outline-none focus:ring-slate-400" />
+        data-testid={`party-details-${key}`} className={`${DRAWER_FIELD} h-11 py-0 text-sm`} />
     </label>
   );
   const any = Object.values(form).some((v) => v.trim());
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm" data-testid="party-details-prompt" onFocusOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle>Add {party.name}'s details?</DialogTitle>
-          <DialogDescription>CRM only has their name. Fill in what you know — all optional.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2.5">
-          {field("phone", "Phone", { inputMode: "tel", autoComplete: "off" })}
-          {field("tax_id", "GST number", { placeholder: "33ABCDE1234F1Z5", maxLength: 15 })}
-          {field("address", "Address")}
-        </div>
-        <div className="flex flex-wrap justify-end gap-2 pt-2">
-          <button type="button" onClick={() => onOpenChange(false)} disabled={busy} data-testid="party-details-later"
-            className="min-h-10 rounded-pill px-3 text-xs font-semibold text-slate-600 hover:bg-slate-100">Later</button>
-          <button type="button" onClick={() => save(true)} disabled={busy} data-testid="party-details-nothing"
-            className="min-h-10 rounded-pill px-3 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-            {any ? "Save, that's all" : "Nothing to add"}
-          </button>
-          <button type="button" onClick={() => save(false)} disabled={busy || !any} data-testid="party-details-save"
-            className="min-h-10 rounded-pill bg-slate-900 px-4 text-xs font-semibold text-white disabled:opacity-40">Save</button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <PartySheet open={open} onOpenChange={onOpenChange} testid="party-details-prompt"
+      contentProps={{ onFocusOutside: (e) => e.preventDefault() }}
+      title={`Add details for ${party.name}?`}
+      description={`You've finished “${task.title}”. CRM only has their name. Add what you know; every field is optional.`}
+      footer={<>
+        <button type="button" onClick={() => onOpenChange(false)} disabled={busy} data-testid="party-details-later"
+          className={`${SHEET_BTN} mr-auto text-slate-600 hover:bg-slate-900/[0.05]`}>Later</button>
+        <button type="button" onClick={() => save(true)} disabled={busy} data-testid="party-details-nothing"
+          className={`${SHEET_BTN} ${GLASS_PILL}`}>
+          {any ? "Save, that's everything" : "Nothing to add"}
+        </button>
+        <button type="button" onClick={() => save(false)} disabled={busy || !any} data-testid="party-details-save"
+          className={`${SHEET_BTN} px-5 text-white ${INK_PILL}`}>Save</button>
+      </>}>
+      <div className="space-y-3">
+        {field("phone", "Phone", { inputMode: "tel", type: "tel", autoComplete: "off", placeholder: "+91 98765 43210" })}
+        {field("tax_id", "GST number", { placeholder: "33ABCDE1234F1Z5", maxLength: 15, autoCapitalize: "characters" })}
+        {field("address", "Address", { placeholder: "Town, area or full address" })}
+        <p className="text-[11px] leading-snug text-slate-500">
+          A phone number takes them off CRM's Details needed list.
+        </p>
+      </div>
+    </PartySheet>
   );
 }

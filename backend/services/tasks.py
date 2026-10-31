@@ -145,6 +145,16 @@ def _contact_chip(c: Optional[dict]) -> Optional[dict]:
             "kind": kind, "needs_details": bool(c.get("needs_details"))}
 
 
+async def contact_chips(tenant_id: Optional[str], ids) -> dict:
+    """Epic 11 S12 — {contact id: chip} for a batch of ids, one query. The
+    workflow board and the calendar's meetings wear the same chip a task does."""
+    ids = [i for i in {*(ids or [])} if i]
+    if not ids or not tenant_id:
+        return {}
+    return {c["id"]: _contact_chip(c) async for c in db.contacts.find(
+        {"id": {"$in": ids}, "tenant_id": tenant_id}, _CONTACT_CHIP)}
+
+
 async def enrich_task(t: Optional[dict]) -> Optional[dict]:
     if not t:
         return t

@@ -20,7 +20,7 @@
 //     visible rather than implied.
 //
 // ON THE ABSENCE OF AN HOUR GRID. /calendar returns day-level buckets:
-// `{ days: [{ date, events: [{ type, title, subtitle, overdue, contact_id }] }] }`
+// `{ days: [{ date, events: [{ type, title, subtitle, overdue, contact_id, party }] }] }`
 // with no time-of-day on an event. A Google-style hour grid would therefore
 // have to invent positions, so the day view is a time-less agenda instead.
 // When the API grows a time field this is where the grid goes.
@@ -30,6 +30,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../lib/api";
 import { EmptyState, LoadFailed } from "../components/common";
 import { ymd, addDays, startOfWeek, DOW, dayTitle } from "../lib/dates";
+import { PartyChip } from "../components/party/PartyChip";
 import {
   CurrencyCircleDollar, CheckSquare, Truck, Warning, Cake, CalendarBlank,
   UsersThree, AirplaneTakeoff, CaretLeft, CaretRight,
@@ -258,6 +259,12 @@ export default function Calendar() {
                           <p className="truncate text-sm font-medium leading-snug">{e.title}</p>
                           {e.subtitle && (
                             <p className="truncate text-xs text-muted-foreground">{e.subtitle}</p>
+                          )}
+                          {/* Epic 11 S12 — who a meeting is with; opens their page. */}
+                          {e.party && (
+                            <div className="mt-1 flex min-w-0">
+                              <PartyChip party={e.party} testid={`cal-event-party-${e.type}-${i}`} />
+                            </div>
                           )}
                         </div>
                         {e.overdue && (

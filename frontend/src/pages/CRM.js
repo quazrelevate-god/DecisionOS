@@ -531,6 +531,22 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
   const typeName = labels[form.type] || "Contact";
   const Icon = TYPE_META[form.type]?.icon || AddressBook;
 
+  // Epic 11 S12 — off the Details needed list without a phone number. Only the
+  // flag is sent, so anything typed in the form above is still there to save.
+  const [detailsDone, setDetailsDone] = useState(false);
+  useEffect(() => { setDetailsDone(false); }, [contact?.id]);
+  const detailsComplete = async () => {
+    setBusy(true);
+    try {
+      await api.patch(`/contacts/${contact.id}`, { needs_details: false });
+      setDetailsDone(true);
+      toast.success(`${contact.name} is off the Details needed list`);
+      onSaved();
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Could not change it");
+    } finally { setBusy(false); }
+  };
+
   const save = async (opts = {}) => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
     setBusy(true);
@@ -600,6 +616,22 @@ export function CrmContactDialog({ type, contact, onClose, onSaved, users, label
           {(() => { const TypeIcon = TYPE_META[form.type]?.icon || AddressBook; return <TypeIcon size={15} weight="fill" aria-hidden="true" className="shrink-0" />; })()}
           <span className="truncate">{labels[form.type] || form.type}</span>
         </div>
+
+        {/* Epic 11 S12 — added by Dex or a task with only a name. A phone number
+            clears it on save; when there is honestly nothing more to add (a
+            walk-in buyer, a supplier paid in cash), this says so without one. */}
+        {editing && contact.needs_details && !detailsDone && (
+          <div data-testid="crm-contact-needs-details"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-2xl bg-amber-50/80 px-4 py-3 ring-1 ring-inset ring-amber-200/70">
+            <p className="min-w-0 flex-1 basis-60 text-sm leading-snug text-amber-950">
+              <span className="font-semibold">Details needed.</span> Added with only a name. Saving a phone number clears this.
+            </p>
+            <button type="button" onClick={detailsComplete} disabled={busy} data-testid="crm-contact-details-complete"
+              className={`flex min-h-11 shrink-0 items-center gap-2 rounded-pill px-4 text-sm font-medium text-slate-800 transition-colors hover:bg-white disabled:opacity-40 ${GLASS_PILL}`}>
+              <CheckCircle size={15} weight="bold" aria-hidden="true" /> Details are complete
+            </button>
+          </div>
+        )}
 
         <div className="space-y-4">
           <FormSection label="Who they are">
@@ -927,15 +959,17 @@ export default function CRM() {
   };
 
   // E2-68: counts come off the whole list, so they hold whichever scope is on.
+  // Epic 11 S12 — with Needs details on, they count only those, so the tabs say
+  // where the rest of the badge's number is.
   const scopeCounts = useMemo(() => {
-    const list = data || [];
+    const list = (data || []).filter((c) => !needsDetails || c.needs_details);
     return {
       customers: list.filter((c) => CUSTOMER_TYPES.includes(c.type)).length,
       // J15 — partners are their own tab, not a type hidden inside customers.
       partners: list.filter((c) => PARTNER_TYPES.includes(c.type)).length,
       suppliers: list.filter((c) => VENDOR_TYPES.includes(c.type)).length,
     };
-  }, [data]);
+  }, [data, needsDetails]);
 
   const contacts = useMemo(() => {
     const typesInScope = scope === "suppliers" ? VENDOR_TYPES

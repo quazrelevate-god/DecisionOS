@@ -32,7 +32,9 @@ export function NeedsDetailsCard({ className = "" }) {
         <span className="block text-sm font-semibold text-slate-900">
           {n === 1 ? "1 new customer/supplier needs details" : `${n} new customers/suppliers need details`}
         </span>
-        <span className="block truncate text-xs text-slate-500">{names}{n > 3 ? ` and ${n - 3} more` : ""} — phone, GST, address</span>
+        <span className="block truncate text-xs text-slate-500">
+          {names}{n > 3 ? ` and ${n - 3} more` : ""} · add their phone and GST
+        </span>
       </span>
       <ArrowRight size={16} className="shrink-0 text-slate-400" aria-hidden="true" />
     </Link>

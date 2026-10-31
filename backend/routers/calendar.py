@@ -53,13 +53,13 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
     end = (now + timedelta(days=days)).date().isoformat()
     events = []
 
-    def add(date, etype, title, subtitle="", contact_id=None, entity_id=None, amount=None):
+    def add(date, etype, title, subtitle="", contact_id=None, entity_id=None, amount=None, party=None):
         d = (date or "")[:10]
         if not d:
             return
         events.append({"date": d, "type": etype, "title": title, "subtitle": subtitle,
                        "contact_id": contact_id, "entity_id": entity_id, "amount": amount,
-                       "overdue": d < now.date().isoformat()})
+                       "overdue": d < now.date().isoformat(), "party": party})
 
     # Payments due (unpaid sales invoices) — finance only
     if can_finance:
@@ -114,8 +114,14 @@ async def business_calendar(days: int = 45, user: dict = Depends(get_current_use
 
     # Meetings scheduled from directives
     mevs = await db.calendar_events.find({"tenant_id": tid}, {"_id": 0}).to_list(300)
+    # Epic 11 S12 — who a meeting is with, as the chip tasks wear. (contact_id
+    # stays None: that field makes the whole row open the contact, and a
+    # meeting row is about the meeting.)
+    from services.tasks import contact_chips
+    mchips = await contact_chips(tid, [ev.get("contact_id") for ev in mevs])
     for ev in mevs:
-        add(ev.get("date"), "meeting", ev.get("title", "Meeting"), ev.get("when_text", ""), None, ev.get("id"))
+        add(ev.get("date"), "meeting", ev.get("title", "Meeting"), ev.get("when_text", ""), None, ev.get("id"),
+            party=mchips.get(ev.get("contact_id")))
 
     # Approved leaves (team availability)
     lvs = await db.leaves.find({"tenant_id": tid, "status": "approved"}, {"_id": 0}).to_list(300)

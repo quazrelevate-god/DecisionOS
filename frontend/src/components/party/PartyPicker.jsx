@@ -4,6 +4,7 @@ import { MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
 import api from "../../lib/api";
 import { PARTY_KINDS, kindLabel, kindOf } from "../../lib/party";
 import { GLASS_PILL } from "../neuglass/glass";
+import { GlassSelect } from "../neuglass/GlassSelect";
 
 /* Epic 11 S12 — "Customer / supplier": search CRM as you type (name and kind
    only, GET /parties/search — anyone who makes work can link it), or add the
@@ -13,7 +14,20 @@ import { GLASS_PILL } from "../neuglass/glass";
 
    value:    null | {id, name, kind}          an existing record
                   | {new: true, name, kind}   added when the work is saved
-   onChange: (value) => void */
+   onChange: (value) => void
+
+   The kind is the app's glass list in the repeat picker's pill, never the
+   operating system's dropdown. */
+const KIND_PILL = `h-9 rounded-pill px-3 text-xs font-medium text-slate-700 ${GLASS_PILL}`;
+export function KindSelect({ value, onChange, testid, lower = false, ariaLabel = "What kind of customer or supplier" }) {
+  return (
+    <div className="w-[8.5rem] shrink-0">
+      <GlassSelect value={value} onChange={onChange} ariaLabel={ariaLabel} testid={testid} variant="field"
+        triggerClassName={KIND_PILL}
+        options={PARTY_KINDS.map((k) => ({ value: k.value, label: lower ? k.label.toLowerCase() : k.label }))} />
+    </div>
+  );
+}
 export function useDebounced(value, ms = 250) {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -49,14 +63,10 @@ export function PartyPicker({ value, onChange, testid = "party-picker", autoFocu
           {value.new ? `New: ${value.name} · ${kindLabel(value.kind)} · details needed` : `${value.name} · ${kindLabel(kindOf(value))}`}
         </span>
         {value.new && (
-          <select value={value.kind} onChange={(e) => onChange({ ...value, kind: e.target.value })}
-            aria-label="What kind of party" data-testid={`${testid}-kind`}
-            className={`h-8 rounded-pill px-2 text-xs text-slate-700 ${GLASS_PILL}`}>
-            {PARTY_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
-          </select>
+          <KindSelect value={value.kind} onChange={(k) => onChange({ ...value, kind: k })} testid={`${testid}-kind`} />
         )}
         <button type="button" onClick={() => onChange(null)} aria-label="Remove the customer or supplier"
-          data-testid={`${testid}-clear`} className="grid h-8 w-8 place-items-center rounded-full text-slate-500 hover:bg-slate-100">
+          data-testid={`${testid}-clear`} className="grid h-9 w-9 place-items-center rounded-full text-slate-500 hover:bg-slate-900/[0.06]">
           <X size={14} weight="bold" aria-hidden="true" />
         </button>
       </div>
@@ -66,11 +76,13 @@ export function PartyPicker({ value, onChange, testid = "party-picker", autoFocu
   const clean = q.trim().replace(/\s+/g, " ");
   return (
     <div data-testid={testid}>
-      <label className={`flex h-10 items-center gap-2 rounded-pill px-3 ${GLASS_PILL}`}>
-        <MagnifyingGlass size={14} className="text-slate-400" aria-hidden="true" />
+      {/* The ring is the pill's, not the input's: a square browser outline
+          inside a round field read as a bug. */}
+      <label className={`flex h-11 items-center gap-2 rounded-pill px-4 focus-within:ring-2 focus-within:ring-neutral-900/20 lg:h-10 ${GLASS_PILL}`}>
+        <MagnifyingGlass size={15} className="shrink-0 text-slate-400" aria-hidden="true" />
         <input value={q} onChange={(e) => setQ(e.target.value)} autoFocus={autoFocus} placeholder={placeholder}
           aria-label="Search customers and suppliers" data-testid={`${testid}-input`}
-          className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400" />
+          className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:outline-none focus-visible:outline-none" />
       </label>
       {clean.length >= 2 && (
         <ul className="mt-1.5 space-y-1" role="listbox" aria-label="Customers and suppliers">
@@ -89,20 +101,16 @@ export function PartyPicker({ value, onChange, testid = "party-picker", autoFocu
           ))}
           {search.isFetching && !results.length && <li className="px-3 py-2 text-xs text-slate-500">Looking in CRM…</li>}
           {!exact && !search.isFetching && (
-            <li className="flex flex-wrap items-center gap-2 rounded-xl bg-amber-50/70 px-3 py-2">
+            <li className="flex flex-wrap items-center gap-2 rounded-2xl bg-amber-50/80 px-3 py-2.5 ring-1 ring-inset ring-amber-200/70">
               <button type="button" data-testid={`${testid}-add`}
                 onClick={() => { onChange({ new: true, name: clean, kind }); setQ(""); }}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900">
-                <Plus size={14} weight="bold" aria-hidden="true" />
-                Add “{clean}” as a new
+                className="inline-flex min-h-9 min-w-0 items-center gap-1.5 text-left text-sm font-semibold text-amber-950">
+                <Plus size={14} weight="bold" aria-hidden="true" className="shrink-0" />
+                <span className="min-w-0 break-words">Add “{clean}” as a new</span>
               </button>
-              <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="What kind of party"
-                data-testid={`${testid}-add-kind`}
-                className="h-8 rounded-pill bg-white px-2 text-xs text-slate-700 ring-1 ring-inset ring-amber-200">
-                {PARTY_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label.toLowerCase()}</option>)}
-              </select>
-              <span className="basis-full text-[11px] text-amber-800">
-                Added to CRM marked “details needed” — the phone and GST can come later.
+              <KindSelect value={kind} onChange={setKind} testid={`${testid}-add-kind`} lower />
+              <span className="basis-full text-[11px] leading-snug text-amber-900/80">
+                It goes into CRM marked “Details needed”. The phone and GST can be added later.
               </span>
             </li>
           )}

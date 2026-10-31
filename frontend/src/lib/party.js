@@ -21,18 +21,30 @@ export const kindLabel = (k) => (PARTY_KINDS.find((x) => x.value === k) || {}).l
 
 export const kindOf = (c) => c?.kind || KIND_OF_TYPE[c?.type] || "customer";
 
-/* A proposal item's party, or a task's contact_summary, in one line. */
-export function partyText(p) {
-  if (!p) return "";
+/* A proposal item's party, or a task's contact_summary, in three pieces: what
+   comes before the name, the name, and what comes after it. The chip lets only
+   the NAME shorten, so a long firm's kind and "details needed" stay readable
+   ("MK Associates & Sons Wholes… · Dealer", never "… · Deal…"). */
+export function partyParts(p, { compact = false } = {}) {
+  if (!p) return null;
   if (p.status === "linked" || (!p.status && p.id)) {
     const name = p.contact_name || p.name || p.said;
+    // Compact (a card's meta line): the kind only; the amber tone and the
+    // chip's title still say details are needed.
+    if (compact) return { before: "", name, after: ` · ${kindLabel(p.kind || kindOf(p))}` };
     const differs = p.kind_differs && p.contact_type ? ` · in CRM as a ${kindLabel(KIND_OF_TYPE[p.contact_type]).toLowerCase()}` : "";
-    return `${name} · ${kindLabel(p.kind || kindOf(p))}${differs}${p.needs_details ? " · details needed" : ""}`;
+    return { before: "", name, after: ` · ${kindLabel(p.kind || kindOf(p))}${differs}${p.needs_details ? " · details needed" : ""}` };
   }
-  if (p.status === "new") return `New: ${p.said} · ${kindLabel(p.kind)} · details needed`;
-  if (p.status === "choose") return `Which ${p.said}?`;
-  if (p.status === "several") return `${(p.several || []).length} customers/suppliers named`;
-  return "";
+  if (p.status === "new") return { before: "New: ", name: p.said, after: ` · ${kindLabel(p.kind)} · details needed` };
+  if (p.status === "choose") return { before: "Which ", name: p.said, after: "?" };
+  if (p.status === "several") return { before: "", name: "", after: `${(p.several || []).length} customers/suppliers named` };
+  return null;
+}
+
+/* ...and in one line. */
+export function partyText(p) {
+  const x = partyParts(p);
+  return x ? `${x.before}${x.name}${x.after}` : "";
 }
 
 /* What still needs the person: a choice to make before approving links it. */

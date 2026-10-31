@@ -461,3 +461,67 @@ def test_old_work_is_suggested_and_linked_only_when_approved(with_test_db):
     assert out["linked"] == {"task": 1, "decision": 0, "workflow": 1}
     assert after["tk-1"] == "c-mk", "a link made meanwhile is never replaced"
     assert after["tk-4"] == "c-ktex" and wf["contact_id"] == "c-toyota"
+
+
+# ═══════════════════════ 6 · the other doors (validation pass, 2026-10-31) ════
+def test_a_bill_naming_a_firm_dex_knows_finds_it_instead_of_making_a_twin(with_test_db):
+    """Finance's bill import asks the same matcher: "Toyota Kirloskar Pvt. Ltd."
+    on a bill is the Toyota Kirloskar already in CRM (even on the other side),
+    and its GSTIN lands on that record."""
+    async def scenario(db):
+        from services.ingestion import commit_ingestion_records
+        await _seed(db)
+        await db.contacts.insert_one({"id": "c-nip", "tenant_id": T, "name": "Nippon Audiotronix", "type": "customer",
+                                      "phone": "", "needs_details": True, "source": "dex"})
+        records = {"contacts": [{"type": "vendor", "name": "Toyota Kirloskar Pvt. Ltd.", "tax_id": "33ABCDE1234F1Z5"},
+                                {"type": "customer", "name": "Nippon Audiotronix Pvt Ltd", "phone": "9840012345",
+                                 "address": "Guindy, Chennai"}],
+                   "invoices": [], "payments": [], "tasks": []}
+        with _env(db):
+            await commit_ingestion_records(T, OWNER["id"], records, "ing-1", "upload")
+            return (await db.contacts.count_documents({"tenant_id": T}),
+                    await db.contacts.find_one({"id": "c-toyota"}, {"_id": 0}),
+                    await db.contacts.find_one({"id": "c-nip"}, {"_id": 0}))
+    n, toyota, nip = with_test_db(scenario)
+    assert n == len(CONTACTS) + 1, "no second Toyota, no second Nippon"
+    assert toyota["tax_id"] == "33ABCDE1234F1Z5"
+    assert (nip["phone"], nip["address"], nip["needs_details"]) == ("9840012345", "Guindy, Chennai", False),         "a record Dex added with only a name takes the bill's details and is done"
+
+
+def test_a_task_dex_reuses_gets_the_party_but_never_loses_its_own(with_test_db):
+    async def scenario(db):
+        from services.decision_flow import approve_decision_flow
+        await _seed(db)
+        for tid, cid in (("tk-bare", None), ("tk-mk", "c-mk")):
+            await db.tasks.insert_one({"id": tid, "tenant_id": T, "title": "Send samples", "status": "todo",
+                                       "assignee_id": DOER["id"], "due_date": "2026-11-05", "contact_id": cid,
+                                       "contact_name": "MK Associates" if cid else "", "created_at": "2026-10-30"})
+        toyota = _party("Toyota", "linked", contact_id="c-toyota", contact_name="Toyota Kirloskar Pvt Ltd")
+        await db.decisions.insert_one(_decision([
+            {**_task("k1", "Send samples", dict(toyota)), "existing": {"id": "tk-bare"}, "use_existing": True},
+            {**_task("k2", "Send samples again", dict(toyota)), "existing": {"id": "tk-mk"}, "use_existing": True},
+        ]))
+        with _env(db):
+            await approve_decision_flow(OWNER, "dec-1")
+            return {t["id"]: t for t in await db.tasks.find({"tenant_id": T}, {"_id": 0}).to_list(10)}
+    rows = with_test_db(scenario)
+    assert len(rows) == 2, "reused, not twinned"
+    assert rows["tk-bare"]["contact_id"] == "c-toyota", "a task with no party takes the one the decision names"
+    assert rows["tk-mk"]["contact_id"] == "c-mk", "a party a task already has is never replaced"
+
+
+def test_renaming_a_firm_renames_it_on_its_tasks_and_meetings(with_test_db):
+    async def scenario(db):
+        from routers.contacts import update_contact
+        from models.contacts import ContactUpdateInput
+        await _seed(db)
+        await db.tasks.insert_one({"id": "tk-1", "tenant_id": T, "title": "Call", "status": "todo",
+                                   "contact_id": "c-mk", "contact_name": "MK Associates"})
+        await db.calendar_events.insert_one({"id": "ev-1", "tenant_id": T, "title": "Meet", "date": "2026-11-02",
+                                             "contact_id": "c-mk", "contact_name": "MK Associates"})
+        with _env(db):
+            await update_contact("c-mk", ContactUpdateInput(name="MK Associates Erode"), user=OWNER)
+            return (await db.tasks.find_one({"id": "tk-1"}, {"_id": 0}),
+                    await db.calendar_events.find_one({"id": "ev-1"}, {"_id": 0}))
+    task, event = with_test_db(scenario)
+    assert task["contact_name"] == event["contact_name"] == "MK Associates Erode"

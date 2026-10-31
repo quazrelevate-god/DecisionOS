@@ -314,6 +314,37 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         n = _norm_company(name)
         return bool(own_norm) and bool(n) and (n == own_norm or n in own_norm or own_norm in n)
 
+    _party_book = {}   # Epic 11 S12 — the matcher's view of CRM, read once per import
+
+    async def _find_party(name: str):
+        """The CRM record a name on a bill is: by exact name, else by the same
+        matcher Dex and New Task use ("Toyota Kirloskar Pvt. Ltd." is the Toyota
+        Kirloskar already there, on either side), so a bill never makes a twin."""
+        existing = await db.contacts.find_one(
+            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0, "id": 1})
+        if existing:
+            return existing
+        from services import parties
+        if "bk" not in _party_book:
+            _party_book["bk"] = await parties.book(db, tenant_id)
+        ans = _party_book["bk"].find(name)
+        return {"id": ans["contact_id"]} if ans.get("status") == "linked" else None
+
+    async def _fill_details(contact_id: str, c: dict):
+        """A record Dex or a task added with only a name gets what the bill says
+        (blank fields only — never overwriting what somebody typed); a phone
+        number ends its Needs details."""
+        cur = await db.contacts.find_one({"id": contact_id, "tenant_id": tenant_id},
+                                         {"_id": 0, "needs_details": 1, "phone": 1, "email": 1, "address": 1})
+        if not cur or not cur.get("needs_details"):
+            return
+        sets = {f: str(c.get(f) or "").strip() for f in ("phone", "email", "address")
+                if str(c.get(f) or "").strip() and not str(cur.get(f) or "").strip()}
+        if sets.get("phone") or str(cur.get("phone") or "").strip():
+            sets["needs_details"] = False
+        if sets:
+            await db.contacts.update_one({"id": contact_id, "tenant_id": tenant_id}, {"$set": sets})
+
     async def resolve_contact(name: str, ctype: str = "customer"):
         name = (name or "").strip()
         if not name or _is_own(name):
@@ -321,17 +352,7 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         key = name.lower()
         if key in name_to_id:
             return name_to_id[key]
-        existing = await db.contacts.find_one(
-            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
-            {"_id": 0, "id": 1})
-        if not existing:
-            # Epic 11 S12 — one matcher for every door: "Toyota Kirloskar Pvt.
-            # Ltd." on a bill is the "Toyota Kirloskar" Dex added; a record made
-            # with only a name gets its details from the bill's side.
-            from services import parties
-            ans = (await parties.book(db, tenant_id)).find(name)
-            if ans.get("status") == "linked":
-                existing = {"id": ans["contact_id"]}
+        existing = await _find_party(name)
         if existing:
             name_to_id[key] = existing["id"]
             return existing["id"]
@@ -345,6 +366,10 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         })
         name_to_id[key] = cid
         created["contacts"] += 1
+        if "bk" in _party_book:   # a later line on the same bill finds this one
+            row = {"id": cid, "name": name, "type": ctype}
+            _party_book["bk"].contacts.append(row)
+            _party_book["bk"].by_id[cid] = row
         return cid
 
     for c in records.get("contacts", []):
@@ -353,11 +378,11 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
             continue
         ctype = c.get("type") if c.get("type") in CONTACT_TYPES else ("vendor" if c.get("type") == "supplier" else "customer")
         key = name.lower()
-        existing = await db.contacts.find_one(
-            {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}}, {"_id": 0, "id": 1})
+        existing = await _find_party(name)
         if existing:
             name_to_id[key] = existing["id"]
             await _fill_tax_id(existing["id"], c.get("tax_id"))
+            await _fill_details(existing["id"], c)
             continue
         cid = new_id()
         await db.contacts.insert_one({
@@ -371,6 +396,10 @@ async def commit_ingestion_records(tenant_id: str, user_id: str, records: dict, 
         })
         name_to_id[key] = cid
         created["contacts"] += 1
+        if "bk" in _party_book:
+            row = {"id": cid, "name": name, "type": ctype}
+            _party_book["bk"].contacts.append(row)
+            _party_book["bk"].by_id[cid] = row
 
     for inv in records.get("invoices", []):
         itype = inv.get("type") if inv.get("type") in ("sales_invoice", "purchase_bill") else "sales_invoice"

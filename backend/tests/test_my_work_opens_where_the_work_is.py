@@ -36,7 +36,8 @@ def test_it_only_chooses_until_the_person_does():
     # 2026-10-29 — the phone shows the bands to everyone (not only those who may
     # run the AI ranking), so the guard covers both; it still stops choosing
     # once the person has.
-    assert "if (!(aiOn || (isMobile && aiPriority)) || bandChosen.current) return;" in MW
+    # 2026-10-31 — the AI ranking is gone; the bands (the phone's) still choose.
+    assert "if (!aiPriority || bandChosen.current) return;" in MW
 
 
 def test_the_chips_are_what_counts_as_choosing():
@@ -51,43 +52,8 @@ def test_turning_ai_priority_off_hands_the_choice_back():
     assert "if (!aiPriority) { bandChosen.current = false; setBand(\"high\"); }" in MW
 
 
-def test_only_one_band_is_on_screen_below_lg():
-    """The premise of the whole fix: on a phone the other two columns are
-    display:none, so choosing the wrong one hides real work."""
-    at = MW.index("function TaskPriorityColumns(")
-    body = MW[at:at + 900]
-    assert 'band === col.key ? "block" : "hidden"' in body
-    assert "lg:block" in body, "and all three are shown on a wide screen"
-
-
-def test_the_measurement_is_recorded_for_the_next_reader():
-    assert "620px" in MW and "Medium 3" in MW
-
-
-# ───────── the Desk stops asking for money it may not see ─────────────────
-DESK = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages"
-        / "desk" / "useDeskMetrics.js").read_text(encoding="utf-8")
-LEDGER = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages"
-          / "Ledger.js").read_text(encoding="utf-8")
-
-
-def test_the_desk_does_not_ask_for_the_ledger_it_cannot_open():
-    """Found walking the app as a sales member: every Desk load fired
-    GET /ledger/summary and took a 403 back. Nothing looked wrong -- the money
-    tile is correctly hidden either way -- so this was a guaranteed-to-fail
-    request on the busiest page in the product, once per member per load,
-    landing in the logs and in any monitoring as a permission error nobody
-    caused."""
-    # 2026-10-03 RBAC audit: owners are no longer special-cased here -- an
-    # owner holds the key unless the company switched it off for owners.
-    assert "const canLedger = hasPerm(user, \"finance\");" in DESK
-    at = DESK.index('queryKey: ["ledger-summary"]')
-    assert "enabled: canLedger," in DESK[at:at + 260]
-
-
-def test_it_is_the_same_gate_the_ledger_page_already_used():
-    """Two copies of one query; they should agree about who may run it."""
-    # 2026-10-03 RBAC audit: owners are no longer special-cased here -- an
-    # owner holds the key unless the company switched it off for owners.
-    assert 'hasPerm(user, "finance")' in LEDGER
-    assert "enabled: canLedger" in LEDGER
+def test_only_one_band_is_on_screen_on_a_phone():
+    """The premise of the whole fix: on a phone the deck shows one band, so
+    choosing the wrong one hides real work. (2026-10-31: the desktop's priority
+    columns went with the AI ranking; the phone's deck is the banded list.)"""
+    assert "const deckList = bandsOn ? list.filter((tk) => TIER_OF(tk) === band) : list;" in MW

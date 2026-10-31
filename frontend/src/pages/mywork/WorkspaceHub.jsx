@@ -1,16 +1,18 @@
 /* THE WORKSPACE (2026-10-30, founder, from a client's ask) — desktop My Work,
  * renamed Workspace and rebuilt round the person reading it.
  *
- *   1. The STATUS FENCE: every status the list can be narrowed by — All open,
- *      To do, Doing, Waiting on someone, Needs approval, Overdue, Due today,
- *      No due date, Done — as one row of count tiles. It replaces the Status
- *      dropdown; a tile is the filter, the lit one is the filter in force.
- *   2. The WORK TREE: the reader's own face in the middle and the places their
- *      work lives hanging off it on branches — My Tasks, Asked by me, All
- *      Tasks (straight under the owner, the team's work being theirs), My
- *      requests, Approvals. It replaces the segmented switcher; the path to
- *      the branch in use is drawn in ink.
- *   3. The TEAM BOARD: the owner's All Tasks opens on one horizontal card per
+ *   1. The FILTER PANEL (2026-10-31, founder's reference image): one glass
+ *      panel with a soft glow under it, holding two rows split by a hairline.
+ *      Top, the STATUS FENCE: every status the list can be narrowed by — All
+ *      Open, To Do, Doing, Waiting, Needs Approval, Overdue, Due Today, No Due
+ *      Date, Repeating, Done — one tile each, each in its own colour: a white
+ *      top fading to that colour at the foot; the name along the top, and
+ *      under it the icon and the count in one row, the icon as tall as the
+ *      figures. The tile in force is the dark navy one. Bottom, the VIEWS: All Tasks, My Tasks, Asked by me,
+ *      My Requests, Approvals as glass pills with icons; the one in use is ink.
+ *      (This replaced the work tree — the reader's face with the views hanging
+ *      off it on branches — the same day.)
+ *   2. The TEAM BOARD: the owner's All Tasks opens on one horizontal card per
  *      person, ranked, before any task. Clicking a person opens their task
  *      cards. The Department filter lives here, as a segment bar, because a
  *      department only narrows the team's work.
@@ -32,7 +34,10 @@
  * disagree with the cards they open onto.
  */
 import { useMemo } from "react";
-import { CaretLeft, CaretRight } from "@phosphor-icons/react";
+import {
+  ArrowBendUpRight, CalendarDots, CaretLeft, CaretRight, CheckCircle, CheckSquare, Clock, FileText, MinusSquare,
+  PlayCircle, Repeat, Stack, Stamp, User, UsersThree, Warning,
+} from "@phosphor-icons/react";
 import { PersonAvatar } from "../../components/neuglass/PersonAvatar";
 import { DRAWER_TRACK, GLASS_PILL, INK_PILL, INK_PLATE } from "../../components/neuglass/glass";
 import { roleLabel } from "../../lib/departments";
@@ -40,38 +45,79 @@ import { roleLabel } from "../../lib/departments";
 const CARD = "rounded-[1.5rem] bg-[linear-gradient(180deg,#fff,hsl(220_14%_97%))] ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_18px_40px_-26px_hsl(220_30%_20%/0.5)]";
 const DAY = 86400000;
 
-/* ── 1 · The status fence ─────────────────────────────────────────────── */
-const DOT = {
-  "": "bg-slate-400", todo: "bg-slate-400", in_progress: "bg-sky-500", waiting: "bg-amber-400",
-  approval: "bg-violet-400", overdue: "bg-ng-accent", due_today: "bg-orange-400", no_date: "bg-slate-300",
-  repeating: "bg-teal-500",   // NF-4.24
-  completed: "bg-emerald-500",
+/* ── 1 · The filter panel ─────────────────────────────────────────────── */
+/* Each tile's colour, read off the founder's reference and then dialled down
+   (2026-10-31, founder: "no need to make a saturated color in our entire UI"):
+   `foot` is where its white fades to at the bottom edge, `glow` the softer
+   wash in its lower corner, `ink` the icon, `k` how much of its box the
+   icon's glyph fills top to bottom (measured), so every icon can be drawn
+   exactly as tall as the count's figures. Labels as the reference writes
+   them. The tile in force wears the reference's first tile, the navy. */
+export const FENCE = {
+  "":          { label: "All Open",       Icon: Stack,        k: 0.873, ink: "215 18% 32%", foot: "222 16% 94%", glow: "222 20% 90%" },
+  todo:        { label: "To Do",          Icon: CheckSquare,  k: 0.75,  ink: "210 52% 52%", foot: "212 40% 95%", glow: "210 52% 90%" },
+  in_progress: { label: "Doing",          Icon: PlayCircle,   k: 0.81,  ink: "207 58% 48%", foot: "214 44% 94.5%", glow: "208 56% 89%" },
+  waiting:     { label: "Waiting",        Icon: Clock,        k: 0.81,  ink: "39 56% 50%",  foot: "220 20% 96%", glow: "42 55% 91%" },
+  approval:    { label: "Needs Approval", Icon: User,         k: 0.78,  ink: "254 42% 62%", foot: "250 38% 95%", glow: "254 52% 92%" },
+  overdue:     { label: "Overdue",        Icon: Warning,      k: 0.78,  ink: "13 56% 50%",  foot: "13 52% 93.5%", glow: "14 60% 89%" },
+  due_today:   { label: "Due Today",      Icon: CalendarDots, k: 0.81,  ink: "216 16% 46%", foot: "212 34% 95%", glow: "214 40% 90%" },
+  no_date:     { label: "No Due Date",    Icon: MinusSquare,  k: 0.75,  ink: "220 7% 46%",  foot: "222 16% 95%", glow: "222 14% 90%" },
+  repeating:   { label: "Repeating",      Icon: Repeat,       k: 0.75,  ink: "169 46% 38%", foot: "176 30% 93.5%", glow: "170 38% 87%" },
+  completed:   { label: "Done",           Icon: CheckCircle,  k: 0.81,  ink: "153 44% 39%", foot: "158 36% 93.5%", glow: "152 42% 87%" },
 };
+export const NAVY = "bg-[linear-gradient(180deg,hsl(218_15%_28%),hsl(220_28%_14%))] text-white ring-1 ring-inset ring-white/[0.08] shadow-[0_18px_32px_-18px_hsl(222_40%_10%/0.8),inset_0_1px_0_hsl(0_0%_100%/0.12)]";
+export const RED = "hsl(13 56% 48%)";
+export const TILE_REST = "ring-1 ring-inset ring-white/90 shadow-[0_10px_22px_-16px_hsl(220_25%_25%/0.42),0_1px_2px_hsl(220_25%_30%/0.05)]";
+// White at the top, the tile's own colour at the foot, a softer wash in its lower corner.
+export const tileWash = (f) => ({
+  backgroundImage: `radial-gradient(120% 80% at 100% 118%, hsl(${f.glow} / 0.7), transparent 62%), linear-gradient(180deg, #fff 8%, hsl(${f.foot}) 100%)`,
+});
 
 /* `capped` — the list holds at most that many of a kind (the server sends the
-   500 newest finished tasks), so a count that reaches it reads "500+". */
+   500 newest finished tasks), so a count that reaches it reads "500+".
+
+   2026-10-31 (founder) — ONE GRID FOR THE EYE. The name runs along the top,
+   flush left; under it, in one row, the icon and then the count. The icon is
+   as tall as the count's figures and centred on them, not on the tile.
+   Measured in the browser: Urbanist's figures ink 0.715 of the type size
+   (18.6px at 26), and in a line box one em tall their middle sits 0.03em
+   above the box's middle — so each icon is drawn at CAP / k of the type size
+   and lifted by that 0.03em. (CSS text-box trimming would do it for the
+   count, but not in every browser the desktop runs in, and a layout that
+   differs by browser is the opposite of standard.) */
+const FIGURE = 26;   // px, the count
+const CAP = 0.715;   // Urbanist figure height, in ems
+const LIFT = 0.03;   // ems the figures' middle sits above their box's middle
 export function StatusFence({ options, value, counts, onPick, loading, dim = false, capped = {} }) {
   return (
+    /* Five to a row until there is room for all ten side by side; side by
+       side, each tile is as wide as its name needs and they share the rest. */
     <div role="group" aria-label="Status" data-testid="workspace-status"
-      className={`grid gap-2 ${dim ? "opacity-70" : ""}`}
-      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      className={`grid grid-cols-5 gap-2 min-[1400px]:flex ${dim ? "opacity-70" : ""}`}>
       {options.map((o) => {
         const on = !dim && value === o.key;
         const n = counts(o.key);
-        const loud = !on && n > 0 && (o.key === "overdue" || o.key === "due_today");
+        const f = FENCE[o.key] || FENCE[""];
+        const late = o.key === "overdue";
         return (
           <button key={o.key || "all"} type="button" aria-pressed={on} data-testid={`workspace-status-${o.key || "all"}`}
             // The lit tile again means "no filter": tapping it lets go.
             onClick={() => onPick(on && o.key ? "" : o.key)}
-            className={`flex min-w-0 flex-col items-start gap-1.5 rounded-[1.1rem] px-3 py-2.5 text-left transition-[box-shadow,transform] duration-200 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 ${
-              on ? `${INK_PLATE} text-white shadow-[0_14px_28px_-16px_hsl(0_0%_0%/0.7)]` : CARD}`}>
-            <span className={`flex w-full min-w-0 items-center gap-1.5 text-[11px] font-semibold leading-tight ${on ? "text-white/75" : "text-slate-500"}`}>
-              <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[o.key] || "bg-slate-400"}`} />
-              <span className="truncate">{o.label}</span>
+            style={on ? undefined : tileWash(f)}
+            className={`flex min-h-[80px] min-w-0 flex-col items-start justify-between gap-2.5 rounded-[1.15rem] px-3.5 pb-3.5 pt-3 text-left transition-[box-shadow,transform] duration-200 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 min-[1400px]:flex-auto ${
+              on ? NAVY : TILE_REST}`}>
+            <span className="w-full truncate whitespace-nowrap text-[13px] font-semibold leading-tight"
+              style={{ color: on ? "hsl(0 0% 100% / 0.9)" : late ? RED : "hsl(230 30% 14%)" }}>
+              {f.label}
             </span>
-            <span className={`font-display text-[22px] font-semibold leading-none tabular-nums ${
-              on ? "text-white" : loud ? (o.key === "overdue" ? "text-ng-accent" : "text-orange-600") : n ? "text-slate-900" : "text-slate-400"}`}>
-              {loading ? "–" : capped[o.key] && n >= capped[o.key] ? `${capped[o.key]}+` : n}
+            <span className="flex items-center gap-2" data-testid={`workspace-status-${o.key || "all"}-row`}>
+              <f.Icon size={Math.round((FIGURE * CAP) / f.k * 2) / 2} weight="duotone" aria-hidden="true" className="shrink-0"
+                style={{ transform: `translateY(${-LIFT * FIGURE}px)` }}
+                color={on ? "#fff" : `hsl(${f.ink})`} />
+              <span className="font-display font-bold leading-none tabular-nums"
+                style={{ fontSize: FIGURE, color: on ? "#fff" : late && n > 0 ? RED : "hsl(230 40% 8%)" }}>
+                {loading ? "–" : capped[o.key] && n >= capped[o.key] ? `${capped[o.key]}+` : n}
+              </span>
             </span>
           </button>
         );
@@ -80,54 +126,45 @@ export function StatusFence({ options, value, counts, onPick, loading, dim = fal
   );
 }
 
-/* ── 2 · The work tree ────────────────────────────────────────────────── */
-/* Columns of equal width, so every branch drops from a point the rail can
-   find without measuring: column i's centre is (i + ½) / n of the width. */
-export function WorkTree({ person, branches }) {
-  const n = branches.length;
-  const at = Math.max(0, branches.findIndex((b) => b.active));
-  const centre = (i) => ((i + 0.5) / n) * 100;
-  const lit = branches.some((b) => b.active);
-  const from = Math.min(50, centre(at));
-  const span = Math.abs(centre(at) - 50);
-  const LINE = "bg-slate-900/[0.13]";
-  const INK = "bg-neutral-900";
+/* The views, as pills under the fence. `views`: [{key, label, testid, active,
+   onClick, count}] — the one in use is the black ink pill. */
+const VIEW_ICON = { all: Stack, mine: User, asked: ArrowBendUpRight, team: UsersThree, requests: FileText, approvals: Stamp };
+export function WorkViews({ views }) {
   return (
-    <nav aria-label="Workspace" data-testid="workspace-tree" className="mx-auto flex w-full max-w-[880px] flex-col items-center">
-      <div className="flex flex-col items-center gap-1.5" data-testid="workspace-me">
-        <span className="rounded-full p-1 ring-1 ring-slate-900/[0.06] shadow-[0_16px_34px_-18px_hsl(220_30%_20%/0.55)] bg-white">
-          <PersonAvatar name={person.name} src={person.avatar_url} size={64} ring={false} />
-        </span>
-        <span className="text-[13px] font-semibold text-slate-900">{person.name}</span>
-      </div>
-      <div className="relative h-9 w-full" aria-hidden="true">
-        <span className={`absolute left-1/2 top-0 h-[18px] w-[1.5px] -translate-x-1/2 ${lit ? INK : LINE}`} />
-        <span className={`absolute top-[18px] h-[1.5px] ${LINE}`} style={{ left: `${centre(0)}%`, right: `${100 - centre(n - 1)}%` }} />
-        {lit && <span className={`absolute top-[18px] h-[1.5px] transition-all duration-300 ease-out ${INK}`} style={{ left: `${from}%`, width: `${span}%` }} />}
-        {branches.map((b, i) => (
-          <span key={b.key} className={`absolute top-[18px] h-[18px] w-[1.5px] -translate-x-1/2 transition-colors duration-300 ${b.active ? INK : LINE}`}
-            style={{ left: `${centre(i)}%` }} />
-        ))}
-      </div>
-      <div className="grid w-full" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
-        {branches.map((b) => (
-          <div key={b.key} className="flex justify-center px-1">
-            <button type="button" onClick={b.onClick} aria-pressed={b.active} data-testid={b.testid}
-              className={`flex h-11 min-w-0 items-center gap-2 rounded-pill px-5 text-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 ${
-                b.active ? `${INK_PILL} font-semibold` : `${GLASS_PILL} font-medium text-slate-700 hover:text-slate-900`}`}>
-              <span className="truncate">{b.label}</span>
-              {b.count > 0 && (
-                <span data-testid={`${b.testid}-count`}
-                  className={`grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums leading-none ${
-                    b.active ? "bg-white text-neutral-900" : "bg-neutral-900 text-white"}`}>
-                  {b.count}
-                </span>
-              )}
-            </button>
-          </div>
-        ))}
-      </div>
+    <nav aria-label="Workspace" data-testid="workspace-views" className="flex flex-wrap items-center justify-center gap-3 xl:gap-5">
+      {views.map((v) => { const Icon = VIEW_ICON[v.key]; return (
+        <button key={v.key} type="button" onClick={v.onClick} aria-pressed={v.active} data-testid={v.testid}
+          className={`flex h-12 min-w-[12.5rem] items-center justify-center gap-2.5 rounded-pill px-8 text-[15px] font-medium transition-[box-shadow,transform] duration-200 hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 ${
+            v.active ? `${INK_PILL} font-semibold`
+              : "bg-[linear-gradient(180deg,#fff,hsl(220_22%_97%))] text-[#0b1020] ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_10px_20px_-14px_hsl(220_30%_25%/0.45),inset_0_1px_0_#fff]"}`}>
+          {Icon && <Icon size={20} weight={v.active ? "bold" : "regular"} aria-hidden="true" className={v.active ? "text-white" : "text-slate-800"} />}
+          <span className="truncate">{v.label}</span>
+          {v.count > 0 && (
+            <span data-testid={`${v.testid}-count`}
+              className={`grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-[12px] font-semibold tabular-nums leading-none ${
+                v.active ? "bg-white text-neutral-900" : "bg-neutral-950 text-white"}`}>
+              {v.count}
+            </span>
+          )}
+        </button>
+      ); })}
     </nav>
+  );
+}
+
+/* The two rows in one glass panel, a hairline between them and a soft glow
+   under the panel's foot. */
+export function FilterPanel({ fence, views }) {
+  return (
+    <div className="relative" data-testid="workspace-filters">
+      <span aria-hidden="true"
+        className="pointer-events-none absolute inset-x-[6%] -bottom-4 h-14 rounded-[50%] bg-[hsl(222_45%_70%/0.28)] blur-2xl" />
+      <div className="relative rounded-[2rem] bg-[linear-gradient(180deg,hsl(0_0%_100%/0.82),hsl(220_25%_97%/0.72))] p-4 ring-1 ring-inset ring-white/90 shadow-[0_30px_60px_-38px_hsl(222_40%_25%/0.5),0_2px_6px_-2px_hsl(222_30%_30%/0.07),inset_0_1px_0_hsl(0_0%_100%/0.95)] backdrop-blur-xl xl:p-5">
+        {fence}
+        <div aria-hidden="true" className="mx-1 my-4 h-px bg-slate-900/[0.07] shadow-[0_1px_0_hsl(0_0%_100%/0.85)] xl:my-5" />
+        {views}
+      </div>
+    </div>
   );
 }
 

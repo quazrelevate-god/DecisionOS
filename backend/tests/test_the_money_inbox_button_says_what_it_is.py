@@ -28,5 +28,6 @@ def test_the_phone_card_has_no_inbox_button():
 
 
 def test_a_single_tab_is_not_drawn_as_a_bar():
-    assert "{!isMobile && tabs.length > 1 && (" in LEDGER
+    # 2026-10-31 — desktop's tabs sit in the title row, at the head of the controls.
+    assert "{!isMobile && tabs.length > 1 && <SectionTabs " in LEDGER
     assert "{tabs.length > 1 && <SectionTabs " in LEDGER

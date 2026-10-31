@@ -23,22 +23,46 @@ def test_the_phone_has_its_own_tree_and_the_desktop_is_untouched():
     assert "!approvalsPage" in MW.split('<div data-testid="mywork-phone">')[0].rsplit("if (isMobile", 1)[1]
 
 
-def test_the_filters_are_tiles_in_categories():
-    for testid in ("work-tile-view", "work-tile-status", "work-tile-department", "work-tile-person"):
-        assert f'testid="{testid}"' in MW, testid
-    assert 'category="Showing"' in MW and 'category="Status"' in MW and 'category="Department"' in MW
+def test_the_filters_are_status_tiles_and_one_row_of_views():
+    # 2026-10-31 (founder's reference) — the four category dropdown tiles became
+    # two rows of status tiles and one row of view pills.
+    assert "<StatusTiles value={filters.status} onPick={setStatusFilter}" in MW
+    assert "<ViewPills pills={phonePills} />" in MW
+    assert 'const TILE_SLOTS = ["", "todo", "in_progress", "waiting", "approval", "overdue", "completed", "when"];' in DECK
+    # Ten statuses, eight tiles: the three about WHEN share the last tile,
+    # Schedule — a name and a caret, no count — whose list has the counts.
+    assert 'const WHEN = ["due_today", "no_date", "repeating"];' in DECK
+    assert 'data-testid="work-status-schedule"' in DECK and "<span className=\"truncate\">Schedule</span>" in DECK
+    # Asked by me and My team live in Assigned to me; Department and Person in
+    # All Tasks; Approvals opens its own page.
+    assert '{ key: "asked", label: t("mywork.asked_by_me", "Asked by me"), go: () => goView("asked") },' in MW
+    assert "menu: [...deptMenu, ...personMenu]" in MW
+    assert 'onClick: () => navigate("/approvals")' in MW
+    # Department only narrows All Tasks, on the phone as on desktop.
+    assert 'const deptTab = !approvalsPage && !onAll ? "all" : tab;' in MW
     # The options open in the app's glass list, never an OS dropdown.
     assert "<select" not in DECK
     assert "GLASS_MENU" in DECK
+    assert "FilterTile" not in DECK
 
 
-def test_the_priority_bands_are_the_phones_default_view():
-    assert "loadedPrefs.aiPriorityM ?? true" in MW, "on by default on a phone"
-    assert "...(isMobile ? { aiPriorityM: aiPriority } : { aiPriority })" in MW, "a separate setting from the desktop's"
+def test_the_priority_bands_are_the_phones_only_view():
+    # 2026-10-31 (founder) — the bands are always on, on the phone; the sparkle
+    # that turned them off, and the AI ranking with its "Priority score" panel,
+    # are gone from phone and desktop alike.
+    assert "const aiPriority = isMobile;" in MW
     assert 'data-testid="mywork-priority-bands"' in MW
-    # Everyone gets the bands; only those who may run the AI ranking get the ranking.
     assert "const bandsOn = aiPriority && !showingCompleted && view === \"mywork\";" in MW
-    assert "staleTime: 5 * 60 * 1000" in MW, "scoring is an AI call; not on every visit"
+    for gone in ("setAiPriority", "ai-priority-toggle", 'data-testid="work-mobile-priority"', "PriorityScoreBars",
+                 "/tasks/prioritize", "scoreMap", "function TaskPriorityColumns(", "<TaskPriorityColumns"):
+        assert gone not in MW, gone
+
+
+def test_the_phone_page_is_the_workspace_with_no_summary_line():
+    assert 't("mywork.workspace", "Workspace")}</h1>' in MW and 'data-testid="workspace-title-mobile"' in MW
+    assert 'data-testid="mywork-mobile-summary"' not in MW
+    # What narrows the list still says so, with a way out.
+    assert 'data-testid="mywork-mobile-filtered"' in MW
 
 
 def test_every_task_is_a_card_in_a_list_that_scrolls_as_usual():

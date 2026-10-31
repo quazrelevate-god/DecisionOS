@@ -81,8 +81,8 @@ import { askPartyDetails } from "../components/party/PartyDetailsPrompt";
 import { ReportButton } from "../components/ReportButton";
 import { askBeforeMic } from "../lib/micNotice";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { WorkSplit, TaskSummaryCard, FilterTile, DeckNotice } from "./mywork/WorkDeck";
-import { StatusFence, WorkTree, Segments, TeamBoard, PersonBar, personStats } from "./mywork/WorkspaceHub";
+import { WorkSplit, TaskSummaryCard, StatusTiles, ViewPills, DeckNotice } from "./mywork/WorkDeck";
+import { StatusFence, WorkViews, FilterPanel, Segments, TeamBoard, PersonBar, personStats } from "./mywork/WorkspaceHub";
 import { TaskActionSlider } from "./mywork/TaskActionSlider";
 import { TaskNotes } from "./mywork/TaskNotes";
 
@@ -1148,51 +1148,6 @@ function ExecutionPlan({ t, onChange, onPatched, members = [], roleOptions = [],
   );
 }
 
-const PRIORITY_AXES = [
-  { key: "business_impact", label: "Impact", color: "bg-foreground/70",
-    tip: "How much this moves the business -- customer relationship weight, workflow blockage, cross-team dependencies." },
-  { key: "revenue", label: "Revenue", color: "bg-foreground/70",
-    tip: "Amount tied to this task -- unpaid invoices, overdue collections, deal value." },
-  { key: "risk", label: "Risk", color: "bg-foreground/70",
-    tip: "Downside if this slips -- customer complaints, compliance dates, financial penalties." },
-  { key: "urgency", label: "Urgency", color: "bg-foreground/70",
-    tip: "Time pressure -- days overdue, hours to due-date, escalation history." },
-];
-
-function PriorityScoreBars({ scores }) {
-  return (
-    <div className="mt-3 nm-inset p-3" data-testid="priority-score-bars">
-      <div className="flex items-center justify-between mb-2">
-        <span className="label-mono text-muted-foreground flex items-center gap-1"><Sparkle size={12} weight="bold" aria-hidden="true" className="text-muted-foreground" /> Priority score</span>
-        {scores.priority_score != null && (
-          <span
-            className="font-heading font-black text-lg leading-none"
-            data-testid="priority-score-value"
-            title="Overall ranking. Weighted mix of the four signals below."
-          >{scores.priority_score}</span>
-        )}
-      </div>
-      <div className="space-y-1.5">
-        {PRIORITY_AXES.map((a) => (
-          <div
-            key={a.key}
-            className="flex items-center gap-2"
-            data-testid={`axis-${a.key}`}
-            title={a.tip}
-          >
-            <span className="label-mono w-16 shrink-0 text-muted-foreground cursor-help">{a.label}</span>
-            <div className="flex-1 h-2 overflow-hidden rounded-pill nm-inset">
-              <div className={`h-full rounded-pill ${a.color}`} style={{ width: `${scores[a.key] || 0}%` }} />
-            </div>
-            <span className="label-mono w-7 text-right tabular-nums">{scores[a.key] || 0}</span>
-          </div>
-        ))}
-      </div>
-      {scores.reason && <p className="text-xs text-muted-foreground mt-2 italic">{scores.reason}</p>}
-    </div>
-  );
-}
-
 function TaskDetailDialog({ t, open, onOpenChange, onChange }) {
   const { user } = useAuth();
   const [zoom, setZoom] = useState(null);
@@ -2241,7 +2196,7 @@ function dueLabel(iso) {
  * `showAssignee` too: the faces on the card and the Assigned section in the
  * drawer show everyone on the task, for everyone.
  */
-export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], scores, highlight = false, selected = false, onToggleSelect, open, onToggleOpen, drawerOnly = false, initialTab = "steps" }) {
+export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOptions = [], highlight = false, selected = false, onToggleSelect, open, onToggleOpen, drawerOnly = false, initialTab = "steps" }) {
   const { user, tenant } = useAuth();
   // MW-01 fix: the queryClient is used to write PATCH responses straight
   // into the cache before onChange() invalidates. The old flow was
@@ -2742,6 +2697,10 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     </div>
   ) : null);
 
+  /* 2026-10-08 — Play's UGC policy: a file a colleague shared can be reported. */
+  const reportable = (a) => !!a?.by && a.by !== user?.id;
+  const reportProps = (a) => ({ kind: "content", targetType: "file", targetId: a.id || a.url,
+    snapshot: `${a.filename || "attachment"} (${a.url}) on task "${t.title}"` });
   const attachmentBlocks = (sfx) => {
     const beUrl = process.env.REACT_APP_BACKEND_URL;
     const atts = t.attachments || [];
@@ -2771,17 +2730,15 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             {armedAtt === a.id ? "Remove" : <X size={11} weight="bold" aria-hidden="true" />}
           </button>
         )}
-        {/* 2026-10-08 — Play's UGC policy: a file a colleague shared can be reported. */}
-        {a.by && a.by !== user?.id && (
-          <ReportButton kind="content" targetType="file" targetId={a.id || a.url}
-            snapshot={`${a.filename || "attachment"} (${a.url}) on task "${t.title}"`} size={10}
-            className="absolute -bottom-1.5 -right-1.5 z-10 h-6 w-6 justify-center rounded-full bg-white p-0 max-lg:my-0 text-slate-500 shadow-sm ring-1 ring-inset ring-black/[0.06]" />
-        )}
+        {/* 2026-10-31 (founder) — no Report flag on the thumbnail any more: it
+            sat over the photo and the file. A file a colleague shared is
+            reported from its preview (lightboxDialog); a voice note, which
+            plays where it is, carries Report beside its player. */}
       </div>
     );
     const renderAttInner = (a) => (
       isImg(a)
-        ? <button key={a.url} type="button" onClick={() => setLightbox(`${beUrl}${a.url}`)}
+        ? <button key={a.url} type="button" onClick={() => setLightbox({ src: `${beUrl}${a.url}`, att: a, image: true })}
             className="group relative h-20 w-20 overflow-hidden rounded-xl ring-1 ring-slate-900/[0.06]" title="View the full image"
             data-testid={`att-photo${sfx}-${t.id}-${a.url}`}>
             <img src={`${beUrl}${a.url}`} alt={a.filename || "attachment"} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
@@ -2790,11 +2747,19 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
             </span>
           </button>
         : isAudio(a)
-          ? <audio key={a.url} controls preload="none" src={`${beUrl}${a.url}`} className="h-9 max-w-full" data-testid={`att-voice${sfx}-${t.id}-${a.url}`} />
-          : <a key={a.url} {...fileLink(`${beUrl}${a.url}`, a.filename)} data-testid={`att-file${sfx}-${t.id}-${a.url}`}
+          ? (
+            <span key={a.url} className="flex max-w-full items-center gap-2">
+              <audio controls preload="none" src={`${beUrl}${a.url}`} className="h-9 min-w-0 max-w-full" data-testid={`att-voice${sfx}-${t.id}-${a.url}`} />
+              {reportable(a) && <ReportButton {...reportProps(a)} size={13} label="Report" className="max-lg:my-0" />}
+            </span>
+          )
+          // A file opens its preview first: its name, Open, and Report when a
+          // colleague shared it.
+          : <button key={a.url} type="button" onClick={() => setLightbox({ src: `${beUrl}${a.url}`, att: a })}
+              data-testid={`att-file${sfx}-${t.id}-${a.url}`} title={a.filename || "file"}
               className="inline-flex max-w-[180px] items-center gap-1.5 rounded-pill bg-white/80 px-2.5 py-1.5 text-xs text-slate-700 ring-1 ring-inset ring-slate-900/[0.06] transition-colors hover:bg-white">
               <FileIcon size={13} weight="bold" aria-hidden="true" /> <span className="truncate">{a.filename || "file"}</span>
-            </a>
+            </button>
     );
     return (
       <>
@@ -2891,14 +2856,35 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     } finally { setAskBusy(false); }
   };
   /* The full-size proof photo. It lived in the desktop body only, so a photo
-     tapped in the phone's task view opened nothing; it is the view's own now. */
+     tapped in the phone's task view opened nothing; it is the view's own now.
+     2026-10-31 (founder) — and it is every attachment's preview: a photo full
+     size, a file its name and Open. Report lives here, under the preview,
+     instead of as a flag over the thumbnail. */
+  const previewAtt = lightbox?.att;
   const lightboxDialog = (
     <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
       <DialogContent className="rounded-cardlg border border-nm-edge/40 max-w-3xl p-2" data-testid={`photo-lightbox-${t.id}`}>
         <DialogHeader>
-          <DialogTitle className="sr-only">Proof photo</DialogTitle>
+          <DialogTitle className="sr-only">{previewAtt?.filename || (lightbox?.image ? "Photo" : "Attachment")}</DialogTitle>
         </DialogHeader>
-        {lightbox && <img src={lightbox} alt="proof full" className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
+        {lightbox?.image && <img src={lightbox.src} alt={previewAtt?.filename || "attachment"} className="w-full h-auto max-h-[calc(80vh/var(--ui-scale,1))] object-contain" />}
+        {lightbox && !lightbox.image && (
+          <div className="flex flex-col items-center gap-3 px-6 pb-4 pt-8 text-center" data-testid={`file-preview-${t.id}`}>
+            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-slate-900/[0.05] text-slate-600">
+              <FileIcon size={30} weight="duotone" aria-hidden="true" />
+            </span>
+            <p className="max-w-full break-words text-[15px] font-semibold text-slate-900">{previewAtt?.filename || "File"}</p>
+            <a {...fileLink(lightbox.src, previewAtt?.filename)} data-testid={`file-preview-open-${t.id}`}
+              className={`inline-flex h-11 items-center gap-2 rounded-pill px-6 text-sm font-medium ${INK_PILL}`}>
+              Open
+            </a>
+          </div>
+        )}
+        {previewAtt && reportable(previewAtt) && (
+          <div className="flex items-center justify-end border-t border-slate-900/[0.06] px-2 pb-1 pt-2" data-testid={`preview-report-${t.id}`}>
+            <ReportButton {...reportProps(previewAtt)} size={13} label="Report" className="max-lg:my-0" />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -3198,12 +3184,6 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
               )}
               <div className="border-t border-slate-900/[0.06] pt-2.5"><TaskRolesLines t={t} roleOptions={roleOptions} /></div>
             </section>
-            {scores && (
-              <div className={`${DRAWER_CARD} p-4`} data-testid={`ai-scores-${t.id}`}>
-                <p className={DRAWER_LABEL}>Why it ranks here</p>
-                <PriorityScoreBars scores={scores} />
-              </div>
-            )}
             {reopenBlock("-m")}
             {canDelete && (
               <button type="button" onClick={() => setConfirmDelete(true)} data-testid={`drawer-delete-task-${t.id}`}
@@ -3554,13 +3534,6 @@ export function TaskCard({ hideStatus = false, t, onChange, members = [], roleOp
     <TakeItBar t={t} roleOptions={roleOptions} onPatched={onPeoplePatched} />
     <AssigneesEditor t={t} members={members} roleOptions={roleOptions}
       canEdit={canEditPeople} onPatched={onPeoplePatched} />
-    {/* U7-05.4: AI-priority bars get a "why?" tooltip on the container
-        so users understand what drove the ranking. */}
-    {scores && (
-      <div title="Priority score: higher = more urgent to open next. Bars show what drove it -- priority signal, overdue, workflow blockage, complaints touched." data-testid={`ai-scores-${t.id}`}>
-        <PriorityScoreBars scores={scores} />
-      </div>
-    )}
 
     {isOp && (
       <div className="flex flex-wrap items-center gap-2" data-testid={`op-meta-${t.id}`}>
@@ -4344,33 +4317,6 @@ const BANDS = [
   { key: "low", label: "Low" },
 ];
 
-function TaskPriorityColumns({ list, openId, setOpenId, cardProps, band = "high", deck }) {
-  const grouped = BANDS.map((b) => ({ ...b, items: list.filter((t) => TIER_OF(t) === b.key) }));
-  return (
-    <div className="grid gap-4 lg:grid-cols-3" data-testid="mywork-priority-columns">
-      {grouped.map((col) => (
-        <section key={col.key} data-testid={`priority-col-${col.key}`}
-                 className={`min-w-0 lg:block ${band === col.key ? "block" : "hidden"}`}>
-          <div className="mb-3 hidden items-baseline gap-2 lg:flex">
-            <h3 className="text-sm font-semibold">{col.label}</h3>
-            <span className="font-mono text-xs tabular-nums opacity-55">{col.items.length}</span>
-          </div>
-          <div className="flex flex-col gap-3">
-            {col.items.length === 0 && (
-              <div className="rounded-tile border border-dashed border-foreground/15 p-5">
-                <p className="text-center text-xs text-muted-foreground">Nothing here</p>
-              </div>
-            )}
-            {col.items.map((t) => (
-              <TaskCell key={t.id} t={t} isOpen={openId === t.id} setOpenId={setOpenId} cardProps={cardProps} deck={deck} />
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
 /* MW-19 — Completed lives HERE, not in Department. It is a state, and the
    Department dropdown beside it lists departments; "Completed" sitting among
    Sales and Logistics asked the reader to hold two meanings in one control. */
@@ -4555,10 +4501,12 @@ export default function MyWork({ only = null }) {
     || (deskHub && isOwner && canSeeAll && !rawView ? "all" : savedScope));
   const [tab, setTab] = useState(loadedPrefs.tab || "all");
   /* 2026-10-29, founder — ON A PHONE THE PRIORITY BANDS ARE THE DEFAULT VIEW
-     (High / Medium / Low over the deck); the sparkle turns them off and on.
-     Its own saved setting, so the desktop's choice is not changed by it. */
-  const [aiPriority, setAiPriority] = useState(() => (isMobile
-    ? (loadedPrefs.aiPriorityM ?? true) : Boolean(loadedPrefs.aiPriority)));
+     (High / Medium / Low over the deck). 2026-10-31, founder: and the only one
+     — the sparkle that turned them off, and the AI ranking it switched on
+     (the "Priority score" panel on every task), are gone from phone and
+     desktop alike. The desktop keeps its grid; priority shows as each card's
+     bottom glow. */
+  const aiPriority = isMobile;
   /* KM-30 — ONE progress lens, and no priority lens at all.
      KM-29 added a High/Medium/Low bar; the founder pointed out the priority
      band bar inside TaskPriorityColumns already does exactly that, so mine was
@@ -4621,10 +4569,9 @@ export default function MyWork({ only = null }) {
       const prev = JSON.parse(localStorage.getItem(prefsKey) || "{}");
       localStorage.setItem(prefsKey, JSON.stringify({
         ...prev, scope: URL_SCOPES.includes(scope) ? savedScope : scope, tab,
-        ...(isMobile ? { aiPriorityM: aiPriority } : { aiPriority }),
       }));
     } catch { /* quota; ignore */ }
-  }, [prefsKey, scope, tab, aiPriority, savedScope, isMobile]);
+  }, [prefsKey, scope, tab, savedScope]);
 
   // U7-05.3: bulk selection. Set of task ids across the currently-visible
   // list. Cleared when the tab / scope / view changes so a stale selection
@@ -4662,7 +4609,6 @@ export default function MyWork({ only = null }) {
   // More menu's tile and the page's own data.
   const navigate = useNavigate();
   const canSeeWorkflows = userPerms(user).includes("workflows");
-  const aiOn = canPrioritize && aiPriority && !asked && !team;
   // ASK-24 — with Person set, every card would repeat the same name.
   const showAssignee = ((canSeeAll && scope === "all") || team) && !personFilter;
   const tasksQ = useQuery({
@@ -4804,9 +4750,6 @@ export default function MyWork({ only = null }) {
     else if (!rawView && URL_SCOPES.includes(scope)) setScope(savedScope);
   }, [rawView]); // eslint-disable-line react-hooks/exhaustive-deps
   const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/users").then((r) => r.data) });
-  const prioritiesQ = useQuery({ queryKey: ["priorities"], queryFn: () => api.post("/tasks/prioritize").then((r) => r.data), enabled: aiOn,
-    // An AI call over the whole list; on by default on a phone now, so not on every visit.
-    staleTime: 5 * 60 * 1000 });
   const members = usersQ.data || [];
   // ASK-28 TK-03 — My team is offered to anyone who is someone's Reporting
   // Manager. A My team link opened by someone without reports lands on My Tasks
@@ -4913,9 +4856,6 @@ export default function MyWork({ only = null }) {
     if (count === 0) setTab("all");
   }, [tab, tasksQ.data]);
 
-  const scoreMap = {};
-  (prioritiesQ.data?.tasks || []).forEach((pt) => { if (pt.ai_scores) scoreMap[pt.id] = pt.ai_scores; });
-  const scoring = aiOn && prioritiesQ.isFetching && !prioritiesQ.data;
 
   const all = tasksQ.data || [];
   /* B23 — nothing has ever been here, as opposed to nothing is here today.
@@ -4944,7 +4884,9 @@ export default function MyWork({ only = null }) {
   // segment bar); elsewhere a department saved earlier must not narrow a list
   // with no control on screen to say so.
   const onAll = canSeeAll && scope === "all";
-  const deptTab = deskHub && !onAll ? "all" : tab;
+  // 2026-10-31 — and on the phone too, where Department now lives inside the
+  // All Tasks pill.
+  const deptTab = !approvalsPage && !onAll ? "all" : tab;
   const filters = {
     tab: urlFilter === "completed" ? "completed" : deptTab,
     person: personFilter,
@@ -4952,9 +4894,6 @@ export default function MyWork({ only = null }) {
   };
   const countWith = (over) => all.filter((tk) => matchesFilters(tk, { ...filters, ...over })).length;
   let list = all.filter((tk) => matchesFilters(tk, filters));
-  if (aiOn && !showingCompleted) {
-    list = [...list].sort((a, b) => (scoreMap[b.id]?.priority_score || 0) - (scoreMap[a.id]?.priority_score || 0));
-  }
 
   /* 2026-10-02 — OPEN ON A BAND THAT HAS WORK IN IT.
      Below lg only the selected band's column is on screen, and the band
@@ -4972,9 +4911,9 @@ export default function MyWork({ only = null }) {
   useEffect(() => {
     // The phone's bands are on for everyone (not only those who may run the AI
     // ranking), so the first band with work is chosen for them too.
-    if (!(aiOn || (isMobile && aiPriority)) || bandChosen.current) return;
+    if (!aiPriority || bandChosen.current) return;
     if (!bandHasWork[band] && firstBandWithWork) setBand(firstBandWithWork);
-  }, [aiOn, isMobile, aiPriority, band, firstBandWithWork, bandHasWork]);
+  }, [aiPriority, band, firstBandWithWork, bandHasWork]);
   useEffect(() => {
     if (!openId) return;
     const row = (tasksQ.data || []).find((tk) => tk.id === openId) || (openId === focusTaskId ? focusQ.data : openTaskQ.data);
@@ -5134,9 +5073,14 @@ export default function MyWork({ only = null }) {
   // What is narrowing the list, in words — the phone caption and the
   // no-match empty state both say it.
   const labelIn = (opts, key) => opts.find((o) => o.key === key)?.label;
-  const filterParts = [
+  // The phone's tiles show the status; the department and the person have no
+  // tile, so the phone names them under its title.
+  const hiddenFilters = [
     deptTab !== "all" && deptTab !== "completed" ? labelIn(WORK_TABS, deptTab) : null,
     personFilter ? (labelIn(personOptions, personFilter) || "One person") : null,
+  ].filter(Boolean);
+  const filterParts = [
+    ...hiddenFilters,
     filters.status ? labelIn(STATUS_FILTER_OPTIONS, filters.status) : null,
   ].filter(Boolean);
   const filtersActive = filterParts.length > 0;
@@ -5156,7 +5100,6 @@ export default function MyWork({ only = null }) {
   const hubFx = { isOverdue, isTerminal, statusMatches };
   // The board counts open AND finished work, within the department chosen.
   const boardTasks = onAll ? all.filter((tk) => deptTab === "all" || tk.task_type === deptTab) : [];
-  const meCard = members.find((m) => m.id === user?.id) || { name: user?.name || "You", avatar_url: user?.avatar_url };
   // Back to the board: All Tasks with nothing narrowed but the department.
   const goBoard = () => {
     setScope("all");
@@ -5181,16 +5124,18 @@ export default function MyWork({ only = null }) {
     });
   };
   const mineActive = view === "mywork" && !URL_SCOPES.includes(scope) && !onAll;
-  const deskBranches = [
-    { key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine", active: mineActive, onClick: () => goView("mine") },
-    { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
-      active: view === "mywork" && scope === "asked", onClick: () => goView("asked") },
-    ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), testid: "work-scope-team",
-      active: view === "mywork" && scope === "team", onClick: () => goView("team") }] : []),
+  // 2026-10-31 (founder's reference) — the views as one row of pills, All
+  // Tasks first; they used to hang off the reader's face as a tree.
+  const deskViews = [
     // The owner's All Tasks always opens on the board, whatever was narrowed.
     ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), testid: "work-scope-all",
       active: view === "mywork" && onAll, onClick: () => (isOwner ? goBoard() : goView("all")) }] : []),
-    { key: "requests", label: t("mywork.my_requests", "My requests"), testid: "work-view-requests",
+    { key: "mine", label: t("mywork.my_tasks"), testid: "work-scope-mine", active: mineActive, onClick: () => goView("mine") },
+    { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), testid: "work-scope-asked",
+      active: view === "mywork" && scope === "asked", onClick: () => goView("asked") },
+    ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My Team"), testid: "work-scope-team",
+      active: view === "mywork" && scope === "team", onClick: () => goView("team") }] : []),
+    { key: "requests", label: t("mywork.my_requests", "My Requests"), testid: "work-view-requests",
       active: view === "requests", onClick: () => goView(null, "requests") },
     ...(showApprovalsView ? [{ key: "approvals", label: t("mywork.view_approvals"), testid: "work-view-approvals",
       count: waitingOnMe, active: view === "approvals", onClick: () => goView(null, "approvals") }] : []),
@@ -5241,13 +5186,40 @@ export default function MyWork({ only = null }) {
     const openRow = openId
       ? (all.find((tk) => tk.id === openId) || (openId === focusTaskId ? focusQ.data : openTaskQ.data) || null)
       : null;
-    const openOpts = all.filter((tk) => !isTerminal(tk));
-    const overdueN = openOpts.filter(isOverdue).length;
-    const todayN = openOpts.filter(isDueToday).length;
-    const summary = view === "requests" ? "What you have asked for, and where each stands"
-      : [`${openOpts.length} open`, overdueN ? `${overdueN} overdue` : null, todayN ? `${todayN} due today` : null]
-        .filter(Boolean).join(" · ");
-    const viewTileOptions = mobileViewOptions.map((o) => ({ key: o.key, label: o.label, leaves: o.leaves, pick: o.pick }));
+    /* 2026-10-31 (founder's reference) — one row of four pills. Assigned to me
+       holds Asked by me and My team; All Tasks holds Department and Person;
+       each list opens from the pill in use (pages/mywork/WorkDeck ViewPills). */
+    const personMenu = personOptions.map((o) => ({
+      group: o.group ? (o.group === "People" ? "Person" : o.group) : "Person", key: `p:${o.key}`, label: o.label, sub: o.sub,
+      count: countWith({ person: o.key }), selected: personFilter === o.key, onSelect: () => setPersonFilter(o.key),
+      testid: `work-view-person-${o.key || "all"}`,
+    }));
+    const deptMenu = onAll && departmentOptions.length > 1 ? departmentOptions.map((o) => ({
+      group: "Department", key: `d:${o.key}`, label: o.label, count: countWith({ tab: o.key }),
+      selected: deptTab === o.key, onSelect: () => setTab(o.key), testid: `work-view-dept-${o.key}`,
+    })) : [];
+    const family = [
+      { key: "mine", label: "Assigned to me", go: () => goView("mine") },
+      { key: "asked", label: t("mywork.asked_by_me", "Asked by me"), go: () => goView("asked") },
+      ...(hasReports ? [{ key: "team", label: t("mywork.my_team", "My team"), go: () => goView("team") }] : []),
+    ];
+    const familyOn = view === "mywork" && !onAll ? (asked ? "asked" : team ? "team" : "mine") : null;
+    const familyShown = family.find((f) => f.key === familyOn) || family[0];
+    const phonePills = [
+      ...(canSeeAll ? [{ key: "all", label: t("mywork.all_tasks"), testid: "work-view-all",
+        active: view === "mywork" && onAll, onClick: () => goView("all"), menu: [...deptMenu, ...personMenu] }] : []),
+      { key: "mine", icon: familyShown.key, label: familyShown.label, testid: "work-view-mine",
+        active: !!familyOn, onClick: familyShown.go,
+        menu: [
+          ...family.map((f) => ({ group: "Show", key: `v:${f.key}`, label: f.label, selected: familyOn === f.key,
+            onSelect: f.go, testid: `work-view-${f.key}` })),
+          ...(familyOn !== "mine" ? personMenu : []),
+        ] },
+      { key: "requests", label: t("mywork.my_requests", "My requests"), testid: "work-view-requests-pill",
+        active: view === "requests", onClick: () => goView(null, "requests") },
+      ...(showApprovalsView ? [{ key: "approvals", label: t("mywork.view_approvals"), testid: "work-view-approvals-pill",
+        count: waitingOnMe, active: false, onClick: () => navigate("/approvals") }] : []),
+    ];
     const firstWithWork = BANDS.find((b) => list.some((tk) => TIER_OF(tk) === b.key));
     const bandLabel = BANDS.find((b) => b.key === band)?.label || "High";
 
@@ -5296,25 +5268,20 @@ export default function MyWork({ only = null }) {
           </div>
         )}
         <div className="flex items-center gap-2" data-testid="mywork-mobile-header">
+          {/* 2026-10-31 (founder) — the page is the Workspace, as on desktop, and
+              the "9 open · 3 overdue" line under it is gone: the tiles say it.
+              What is narrowing the list still says so, with a way out. */}
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[30px] leading-none">{t("mywork.title")}</h1>
-            <p className="mt-1.5 truncate text-[13px] text-foreground/60" data-testid="mywork-mobile-summary">
-              {summary}
-              {filtersActive && view === "mywork" && (
-                <> · <button type="button" onClick={clearFilters} data-testid="work-mobile-filter-clear"
-                  className="font-medium text-foreground underline underline-offset-4">Clear filters</button></>
-              )}
-            </p>
+            <h1 className="font-display text-[30px] leading-none" data-testid="workspace-title-mobile">{t("mywork.workspace", "Workspace")}</h1>
+            {/* Only what no tile shows: the department and the person (a status
+                is the lit tile already). */}
+            {hiddenFilters.length > 0 && view === "mywork" && (
+              <p className="mt-1.5 truncate text-[13px] text-foreground/60" data-testid="mywork-mobile-filtered">
+                Filtered: {hiddenFilters.join(" · ")} · <button type="button" onClick={clearFilters} data-testid="work-mobile-filter-clear"
+                  className="font-medium text-foreground underline underline-offset-4">Clear</button>
+              </p>
+            )}
           </div>
-          {view === "mywork" && (
-            <button type="button" onClick={() => setAiPriority((v) => !v)}
-              aria-pressed={aiPriority} data-testid="work-mobile-priority"
-              aria-label={aiPriority ? "Priority bands on" : "Priority bands off"}
-              title={scoring ? t("mywork.scoring", "Scoring…") : aiPriority ? "Priority bands on" : "Priority bands off"}
-              className={`grid h-11 w-11 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
-              <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true" className={scoring ? "animate-pulse" : ""} />
-            </button>
-          )}
           <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={tab}
             onTaskOpenChange={(o) => { if (o) setOpenId(null); }}
             onRequestCreated={() => { if (view !== "requests") goView(null, "requests"); }}
@@ -5322,42 +5289,36 @@ export default function MyWork({ only = null }) {
             triggerChildren={<Plus size={20} weight="bold" aria-hidden="true" />}
             triggerClassName={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${INK_PILL}`} />
         </div>
-        <div className={`grid gap-2 ${view === "requests" ? "grid-cols-1" : personOptions.length > 0 ? "grid-cols-2" : "grid-cols-3"}`}
-          data-testid="mywork-filter-tiles">
-          <FilterTile testid="work-tile-view" icon={Kanban} category="Showing"
-            value={mobileView} options={viewTileOptions} narrowed={false}
-            counts={(k) => (k === mobileView ? (view === "requests" ? null : all.filter((tk) => !isTerminal(tk)).length) : null)}
-            onSelect={(o) => o.pick()} loading={tasksLoading} />
-          {view !== "requests" && (
-            <>
-              <FilterTile testid="work-tile-status" icon={ListChecks} category="Status"
-                value={filters.status} options={STATUS_FILTER_OPTIONS} narrowed={!!filters.status}
-                counts={(k) => countWith({ status: k })} onSelect={(o) => setStatusFilter(o.key)} loading={tasksLoading} />
-              <FilterTile testid="work-tile-department" icon={Buildings} category="Department"
-                value={tab === "completed" ? "all" : tab} options={mobileFilterTabs} narrowed={tab !== "all" && tab !== "completed"}
-                counts={(k) => countWith({ tab: k })} onSelect={(o) => setTab(o.key)} loading={tasksLoading} />
-              {personOptions.length > 0 && (
-                <FilterTile testid="work-tile-person" icon={UserCircle} category="Person"
-                  value={personFilter} options={personOptions} narrowed={!!personFilter}
-                  counts={(k) => countWith({ person: k })} onSelect={(o) => setPersonFilter(o.key)} loading={tasksLoading} />
-              )}
-            </>
-          )}
-        </div>
+        {/* 2026-10-31 (founder's reference) — two rows of status tiles, one row
+            of views, then the priority bands. The tiles narrow the task list;
+            on My requests there is no task list, so they rest. */}
+        {view !== "requests" && (
+          <StatusTiles value={filters.status} onPick={setStatusFilter} loading={tasksLoading}
+            counts={(k) => countWith({ status: k })}
+            /* routers/tasks.py FINISHED_TASKS_MAX: the list carries the 500 newest finished. */
+            capped={{ completed: 500 }} />
+        )}
+        <ViewPills pills={phonePills} />
         {bandsOn && (
-          <div className="ng-pressed flex items-center gap-1 rounded-pill p-1" role="group"
-            aria-label="Filter by priority" data-testid="mywork-priority-bands">
-            {BANDS.map((b) => {
+          <div className="flex items-center rounded-pill bg-[linear-gradient(180deg,hsl(220_16%_92%/0.85),hsl(220_18%_96%/0.75))] p-1 ring-1 ring-inset ring-white/80 shadow-[inset_0_1px_3px_hsl(220_30%_30%/0.09)]"
+            role="group" aria-label="Filter by priority" data-testid="mywork-priority-bands">
+            {BANDS.map((b, i) => {
               const n = list.filter((tk) => TIER_OF(tk) === b.key).length;
+              const on = band === b.key;
+              // A hairline between two bands that are both at rest.
+              const rule = i > 0 && !on && band !== BANDS[i - 1].key;
               return (
-                <button key={b.key} type="button" onClick={() => pickBand(b.key)}
-                  aria-pressed={band === b.key} data-testid={`priority-band-${b.key}`}
-                  className={`ng-seg-compact flex h-9 flex-1 items-center justify-center gap-1.5 rounded-pill px-2 text-[13px] ${
-                    band === b.key ? "ng-pop font-semibold text-foreground" : "text-foreground/60"}`}>
-                  <span aria-hidden="true" className={`h-2 w-2 rounded-full ${PRIO_STRIPE[b.key]}`} />
-                  {b.label}
-                  <span className="tabular-nums opacity-55">{tasksLoading ? "–" : n}</span>
-                </button>
+                <Fragment key={b.key}>
+                  {i > 0 && <span aria-hidden="true" className={`h-5 w-px shrink-0 ${rule ? "bg-slate-900/[0.1]" : "bg-transparent"}`} />}
+                  <button type="button" onClick={() => pickBand(b.key)}
+                    aria-pressed={on} data-testid={`priority-band-${b.key}`}
+                    className={`flex h-10 flex-1 items-center justify-center gap-2 rounded-pill px-2 text-[14px] transition-colors ${
+                      on ? "bg-white font-semibold text-slate-900 shadow-[0_8px_18px_-10px_hsl(220_30%_25%/0.45),inset_0_1px_0_#fff]" : "font-medium text-slate-500"}`}>
+                    <span aria-hidden="true" className={`h-2 w-2 rounded-full ${PRIO_STRIPE[b.key]}`} />
+                    {b.label}
+                    <span className="tabular-nums text-slate-400">{tasksLoading ? "–" : n}</span>
+                  </button>
+                </Fragment>
               );
             })}
           </div>
@@ -5381,8 +5342,7 @@ export default function MyWork({ only = null }) {
             initialTab={openTab}
             onToggleOpen={() => { setOpenId(null); if (focusTaskId) setFilterParams({ task: "", focus: "" }); }}
             onChange={() => { refresh(); qc.invalidateQueries({ queryKey: ["task", drawerRow.id] }); }}
-            members={members} roleOptions={roleOptions}
-            scores={aiOn ? scoreMap[drawerRow.id] : undefined} />
+            members={members} roleOptions={roleOptions} />
         )}
       </div>
     );
@@ -5483,16 +5443,6 @@ export default function MyWork({ only = null }) {
               — reorder it, filter it — sit together, in the same shape, in
               the same place. */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {inSegmentView && canPrioritize && (
-              <button type="button" onClick={() => { setAiPriority((v) => !v); setView("mywork"); }}
-                aria-pressed={aiPriority} data-testid="work-mobile-priority"
-                aria-label={aiPriority ? t("mywork.ai_priority_on", "Smart priority on") : t("mywork.ai_priority", "Smart priority")}
-                title={scoring ? t("mywork.scoring", "Scoring…") : (aiPriority ? t("mywork.ai_priority_on", "Smart priority on") : t("mywork.ai_priority", "Smart priority"))}
-                className={`${MCIRCLE} ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
-                <Sparkle size={15} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
-                  className={scoring ? "animate-pulse" : ""} />
-              </button>
-            )}
 
             {/* KM-48 — THE CATEGORY FILTER COMES BACK, and this time it says
                 what it is doing. KM-29 removed it as an unlabelled sliders
@@ -5666,16 +5616,6 @@ export default function MyWork({ only = null }) {
           </h1>
         </div>
         <div className="flex items-center gap-2.5" data-testid="mywork-controls">
-          {view === "mywork" && !asked && !team && canPrioritize && !boardOn && (
-            <button onClick={() => setAiPriority((v) => !v)} data-testid="ai-priority-toggle"
-              aria-pressed={aiPriority}
-              aria-label={aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-              title={scoring ? t("mywork.scoring") : aiPriority ? t("mywork.ai_priority_on") : t("mywork.ai_priority")}
-              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground ${aiPriority ? "ng-pressed" : "ng-pop"}`}>
-              <Sparkle size={16} weight={aiPriority ? "fill" : "bold"} aria-hidden="true"
-                className={scoring ? "animate-pulse" : ""} />
-            </button>
-          )}
           {view !== "approvals" && (
             /* 2026-10-21 — "+ New" asks: a task, or a request. */
             <NewWorkMenu onTaskCreated={refresh} roleOptions={roleOptions} members={members} defaultType={deptTab}
@@ -5689,19 +5629,20 @@ export default function MyWork({ only = null }) {
       </>}
 
       {/* 2026-10-30 — THE WORKSPACE'S ONE SCROLL (desktop). ASK-20 kept the
-          header and filters still and scrolled only the cards; the fence and
-          the work tree are too tall to hold still above a list, so they scroll
-          away with it and only the title stays. Elsewhere (the phone's
+          header and filters still and scrolled only the cards; the filter panel
+          (fence and views) is too tall to hold still above a list, so it scrolls
+          away with the list and only the title stays. Elsewhere (the phone's
           Approvals, the Approvals page) the wrapper is not a box at all. */}
       <div className={deskHub ? "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1" : "contents"}
         data-testid={deskHub ? "workspace-scroll" : undefined}>
       {deskHub && (
         <div className="mb-8 flex flex-col gap-7" data-testid="workspace-hub">
-          <StatusFence options={STATUS_FILTER_OPTIONS} value={filters.status} onPick={pickStatus}
-            counts={(k) => countWith({ status: k })} loading={tasksLoading} dim={view !== "mywork"}
-            /* routers/tasks.py FINISHED_TASKS_MAX: the list carries the 500 newest finished. */
-            capped={{ completed: 500 }} />
-          <WorkTree person={meCard} branches={deskBranches} />
+          <FilterPanel
+            fence={<StatusFence options={STATUS_FILTER_OPTIONS} value={filters.status} onPick={pickStatus}
+              counts={(k) => countWith({ status: k })} loading={tasksLoading} dim={view !== "mywork"}
+              /* routers/tasks.py FINISHED_TASKS_MAX: the list carries the 500 newest finished. */
+              capped={{ completed: 500 }} />}
+            views={<WorkViews views={deskViews} />} />
         </div>
       )}
       {/* 2026-09-21 — sign-up routines still waiting for the owner's answer. */}
@@ -6154,10 +6095,8 @@ export default function MyWork({ only = null }) {
               roleOptions,
               showAssignee,
               highlight: t.id === focusTaskId,
-              scores: aiOn && !showingCompleted ? scoreMap[t.id] : undefined,
               // KM-30 — the card drops the status chip when the lens already
-              // says it. Priority is handled by TaskPriorityColumns when AI
-              // Priority is on (each column already names the band).
+              // says it.
               // ASK-24: Overdue is not a status, so the chip still has news.
               // A LENS narrows by a reason, not a status, so the status chip
               // still carries information under it; a real status filter
@@ -6167,9 +6106,7 @@ export default function MyWork({ only = null }) {
               onToggleSelect: () => toggleSelected(t.id),
             });
             const shared = { list, openId, setOpenId, cardProps, deck: { kit, patchRow, setOpenTab, openTab } };
-            return aiOn && !showingCompleted
-              ? <TaskPriorityColumns {...shared} band={band} />
-              : <TaskGrid {...shared} />;
+            return <TaskGrid {...shared} />;
           })()}
           {focusDrawer(list.map((tk) => tk.id), tasksQ.isSuccess)}
           </>)}

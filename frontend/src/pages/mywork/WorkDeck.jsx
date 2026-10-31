@@ -14,10 +14,11 @@
  * Helpers that live in pages/MyWork.js reach these components as `kit`, so the
  * two files do not import each other.
  */
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, forwardRef, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowSquareOut, CalendarBlank, CaretDown, CaretRight, CheckCircle, ListChecks,
   LockKey, Paperclip, Play, Sparkle, ArrowClockwise, Hourglass, ShieldCheck, File as FileIcon, Check as CheckIcon,
+  ArrowBendUpRight, ListBullets, PaperPlaneTilt, Stamp, User, UsersThree,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import api from "../../lib/api";
@@ -28,72 +29,183 @@ import { AvatarStack } from "../../components/neuglass/PersonAvatar";
 import { INK_PILL, INK_PLATE, GLASS_MENU, GLASS_MENU_ITEM, GLASS_MENU_LABEL } from "../../components/neuglass/glass";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel } from "../../components/ui/dropdown-menu";
 import { PartyChip } from "../../components/party/PartyChip";
+import { FENCE, NAVY, RED, TILE_REST, tileWash } from "./WorkspaceHub";
 import { askPartyDetails } from "../../components/party/PartyDetailsPrompt";
 
 const BACKEND = process.env.REACT_APP_BACKEND_URL || "";
 const uiScale = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")) || 1;
 
-/* ── The filter tiles ──────────────────────────────────────────────────────
-   One tile per category, the Desk's KPI tile cut small: an icon, the
-   category's name, what it is set to and how many tasks that is. A tile that
-   narrows the list wears an ink edge, so a filtered deck says so at a glance.
-   The options open in the app's glass list, never an OS dropdown. */
-/* 2026-10-29 (founder) — "a very subtle light shade" on each tile. */
-export const TILE_TINTS = {
-  // 2026-10-29, second look (founder): the hues were nice but not this design
-  // system's — one very soft grey gradient for every tile instead.
-  grey: { tile: "bg-[linear-gradient(160deg,hsl(220_12%_95.5%/0.96),hsl(0_0%_100%/0.86))]", chip: "bg-slate-200/70 text-slate-700" },
+/* ── The status tiles (2026-10-31, founder's reference) ─────────────────────
+   Two rows of four on the sky, the desktop fence's colours and icons, cut to
+   the phone: the icon on top, the name, the count. Ten statuses do not fit in
+   eight tiles, so the three that are about WHEN rather than where the work
+   stands — Due today, No due date, Repeating — share the last tile, SCHEDULE,
+   which opens a list with their counts. (2026-10-31, founder: as "Due today"
+   with a count it read as one more status; a name and no number, last in the
+   grid, reads as the button it is.) Overdue keeps a tile of its own: it is
+   the one that needs acting on. The tile in force is the navy one, as on
+   desktop. */
+const PHONE_LABEL = {
+  "": "All open", todo: "To do", in_progress: "Doing", waiting: "Waiting", approval: "Approval",
+  overdue: "Overdue", due_today: "Due today", no_date: "No due date", repeating: "Repeating", completed: "Done",
 };
+const WHEN = ["due_today", "no_date", "repeating"];
+const TILE_SLOTS = ["", "todo", "in_progress", "waiting", "approval", "overdue", "completed", "when"];
 
-export function FilterTile({ testid, icon: Icon, category, value, options, counts, onSelect, loading, narrowed, tint = "grey" }) {
-  const active = options.find((o) => o.key === value) || options[0];
-  const n = counts ? counts(active?.key) : null;
-  const hue = TILE_TINTS[tint] || TILE_TINTS.grey;
+const StatusTile = forwardRef(function StatusTile({ k, on, n, ...rest }, ref) {
+  const f = FENCE[k] || FENCE[""];
+  const ink = on ? "#fff" : k === "overdue" && n !== "–" && Number(n) > 0 ? RED : k === "completed" ? "hsl(158 40% 22%)" : "hsl(230 40% 8%)";
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" data-testid={testid} aria-label={`${category}: ${active?.label}`} data-tint={tint}
-          className={`flex min-w-0 flex-col gap-2 rounded-[1.25rem] ${hue.tile} p-3 text-left shadow-[0_10px_30px_-18px_hsl(220_30%_20%/0.45)] backdrop-blur-md transition-[box-shadow] ${
-            narrowed ? "ring-2 ring-inset ring-neutral-900" : "ring-1 ring-inset ring-white"}`}>
-          <span className="flex items-center justify-between">
-            <span className={`grid h-8 w-8 place-items-center rounded-full ${narrowed ? `${INK_PLATE} text-white` : hue.chip}`}>
-              <Icon size={15} weight="bold" aria-hidden="true" />
-            </span>
-            <CaretDown size={12} weight="bold" aria-hidden="true" className="text-slate-400" />
+    <button ref={ref} type="button" aria-pressed={on} data-testid={`work-status-${k || "all"}`} {...rest}
+      style={on ? undefined : tileWash(f)}
+      className={`flex min-h-[5.5rem] min-w-0 flex-col items-start justify-between gap-2 rounded-[1.25rem] p-2.5 text-left transition-transform duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 ${
+        on ? NAVY : TILE_REST}`}>
+      <f.Icon size={20} weight="duotone" aria-hidden="true" color={on ? "#fff" : `hsl(${f.ink})`} />
+      <span className="flex w-full min-w-0 flex-col gap-1">
+        <span className={`flex min-w-0 items-center gap-0.5 text-[12px] font-medium leading-tight ${on ? "text-white/80" : "text-slate-500"}`}>
+          <span className="truncate">{PHONE_LABEL[k]}</span>
+        </span>
+        <span className="font-display text-[21px] font-bold leading-none tabular-nums" style={{ color: ink }}>{n}</span>
+      </span>
+    </button>
+  );
+});
+
+/* The Schedule tile: the name and a caret where a count would be, and which
+   of its three is in force when one is. */
+const ScheduleTile = forwardRef(function ScheduleTile({ on, chosen, ...rest }, ref) {
+  const f = FENCE.due_today;
+  return (
+    <button ref={ref} type="button" aria-pressed={on} data-testid="work-status-schedule" {...rest}
+      style={on ? undefined : tileWash(f)}
+      className={`flex min-h-[5.5rem] min-w-0 flex-col items-start justify-between gap-2 rounded-[1.25rem] p-2.5 text-left transition-transform duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 ${
+        on ? NAVY : TILE_REST}`}>
+      <f.Icon size={20} weight="duotone" aria-hidden="true" color={on ? "#fff" : `hsl(${f.ink})`} />
+      <span className="flex w-full min-w-0 flex-col gap-1">
+        {on && <span className="truncate text-[12px] font-medium leading-tight text-white/80">{PHONE_LABEL[chosen]}</span>}
+        {/* 14px written as rem: the phone steps every text-[Npx] up by 2, and
+            "Schedule" at 17.5 does not fit beside its caret in a quarter row. */}
+        <span className={`flex items-center gap-[3px] text-[0.875rem] font-bold leading-none ${on ? "text-white" : "text-[hsl(230_40%_8%)]"}`}>
+          <span className="truncate">Schedule</span>
+          <span aria-hidden="true" className={`grid h-4 w-4 shrink-0 place-items-center rounded-full ${on ? "bg-white/15" : "bg-slate-900/[0.07]"}`}>
+            <CaretDown size={9} weight="bold" />
           </span>
-          <span className="min-w-0">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{category}</span>
-            <span className="mt-0.5 flex items-baseline justify-between gap-1.5">
-              <span className="min-w-0 truncate text-[13px] font-semibold text-slate-900">{active?.label}</span>
-              {n !== null && (
-                <span className="shrink-0 font-display text-[20px] leading-none tabular-nums text-slate-900">{loading ? "–" : n}</span>
-              )}
-            </span>
-          </span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6}
-        className={`${GLASS_MENU} max-h-[calc(60vh/var(--ui-scale,1))] w-60 overflow-y-auto p-1.5`}>
-        {options.map((o, i) => (
-          <div key={o.key || "__all__"}>
-            {o.group && o.group !== options[i - 1]?.group && (
-              <DropdownMenuLabel className={GLASS_MENU_LABEL}>{o.group}</DropdownMenuLabel>
+        </span>
+      </span>
+    </button>
+  );
+});
+
+export function StatusTiles({ value, counts, onPick, loading, capped = {} }) {
+  const shown = (key) => (loading ? "–" : capped[key] && counts(key) >= capped[key] ? `${capped[key]}+` : counts(key));
+  return (
+    <div role="group" aria-label="Status" data-testid="work-status-tiles" className="grid grid-cols-4 gap-2">
+      {TILE_SLOTS.map((slot) => {
+        if (slot !== "when") {
+          const on = value === slot;
+          // The lit tile again means "no filter": tapping it lets go.
+          return <StatusTile key={slot || "all"} k={slot} on={on} n={shown(slot)} onClick={() => onPick(on && slot ? "" : slot)} />;
+        }
+        return (
+          <DropdownMenu key="when">
+            <DropdownMenuTrigger asChild>
+              <ScheduleTile on={WHEN.includes(value)} chosen={value} data-slot="when"
+                aria-label={`Schedule${WHEN.includes(value) ? `: ${PHONE_LABEL[value]}` : ""}. Due today, No due date or Repeating`} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={6} className={`${GLASS_MENU} w-56 p-1.5`}>
+              <DropdownMenuLabel className={GLASS_MENU_LABEL}>Schedule</DropdownMenuLabel>
+              {WHEN.map((k) => {
+                const f = FENCE[k];
+                return (
+                  <DropdownMenuItem key={k} data-testid={`work-status-when-${k}`}
+                    onSelect={() => onPick(value === k ? "" : k)} className={`${GLASS_MENU_ITEM} gap-3`}>
+                    <f.Icon size={18} weight="duotone" aria-hidden="true" color={`hsl(${f.ink})`} className="shrink-0" />
+                    <span className={`min-w-0 flex-1 truncate ${value === k ? "font-semibold text-slate-900" : ""}`}>{PHONE_LABEL[k]}</span>
+                    <span className="shrink-0 tabular-nums text-xs opacity-55">{shown(k)}</span>
+                    {value === k && <CheckIcon size={14} weight="bold" aria-hidden="true" className="shrink-0" />}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── The views (2026-10-31, founder's reference) ─────────────────────────────
+   One row of pills under the tiles: All Tasks, Assigned to me, My requests,
+   Approvals. The one in use is the ink pill, as on desktop. What used to be
+   more pills lives inside the one it belongs to, behind a caret that only
+   the pill in use shows: Assigned to me holds Asked by me and My team (the
+   three are your relation to the work), All Tasks holds Department and
+   Person (they only narrow the team's work). Workflows and Approvals have
+   their own pages; Approvals here takes you to it.
+   `pills`: [{key, label, active, onClick, count, testid, menu: [{group, key,
+   label, sub, count, selected, onSelect}]}] */
+const VIEW_ICON = { all: ListBullets, mine: User, asked: ArrowBendUpRight, team: UsersThree, requests: PaperPlaneTilt, approvals: Stamp };
+export function ViewPills({ pills }) {
+  return (
+    /* Measured at 390 wide (UI scale 0.8): 456px of row. The type is the
+       phone's 13px floor, written as rem because the phone steps every
+       text-[Npx] up by 2 (index.css) and 15px names do not fit four across;
+       at 13px these sizes need 445, leaving each pill ~3px so no name is
+       cut by a fraction of a pixel. Under 380 wide only the pill in use keeps
+       its icon, which buys 57px. */
+    <nav aria-label="Work" data-testid="work-views" className="flex items-center gap-1">
+      {pills.map((p) => {
+        const Icon = VIEW_ICON[p.icon || p.key];
+        const menu = p.active && p.menu && p.menu.length ? p.menu : null;
+        const cls = `flex h-11 min-w-0 flex-auto items-center justify-center gap-1 rounded-pill px-[5px] text-[0.8125rem] font-semibold transition-transform duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/30 ${
+          p.active ? INK_PILL : "bg-[linear-gradient(180deg,#fff,hsl(220_22%_97%))] text-[hsl(230_40%_8%)] ring-1 ring-inset ring-slate-900/[0.05] shadow-[0_8px_18px_-12px_hsl(220_30%_25%/0.45),inset_0_1px_0_#fff]"}`;
+        const inner = (
+          <>
+            {Icon && <Icon size={15} weight={p.active ? "bold" : "regular"} aria-hidden="true"
+              className={`shrink-0 ${p.active ? "" : "max-[379px]:hidden"}`} />}
+            <span className="truncate">{p.label}</span>
+            {p.count > 0 && (
+              <span data-testid={`${p.testid}-count`}
+                className={`grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-full px-1 text-[10.5px] font-semibold tabular-nums leading-none ${
+                  p.active ? "bg-white text-neutral-900" : "bg-neutral-950 text-white"}`}>{p.count}</span>
             )}
-            <DropdownMenuItem onSelect={() => onSelect(o)} data-testid={`${testid}-${o.key || "all"}`}
-              className={`${GLASS_MENU_ITEM} justify-between gap-3`}>
-              <span className="min-w-0">
-                <span className={`block truncate ${value === o.key ? "font-semibold text-slate-900" : ""}`}>{o.label}</span>
-                {o.sub && <span className="block truncate text-[11px] text-slate-500">{o.sub}</span>}
-              </span>
-              {counts && !o.leaves && (
-                <span className="shrink-0 tabular-nums text-xs opacity-55">{loading ? "–" : counts(o.key)}</span>
-              )}
-              {o.leaves && <ArrowSquareOut size={14} weight="bold" aria-hidden="true" className="shrink-0 opacity-60" />}
-            </DropdownMenuItem>
-          </div>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+            {menu && <CaretDown size={10} weight="bold" aria-hidden="true" className="shrink-0 opacity-70" />}
+          </>
+        );
+        if (!menu) {
+          return (
+            <button key={p.key} type="button" onClick={p.onClick} aria-pressed={p.active} data-testid={p.testid} className={cls}>{inner}</button>
+          );
+        }
+        return (
+          <DropdownMenu key={p.key}>
+            <DropdownMenuTrigger asChild>
+              <button type="button" aria-pressed data-testid={p.testid} aria-label={`${p.label}: more choices`} className={cls}>{inner}</button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" sideOffset={6}
+              className={`${GLASS_MENU} max-h-[calc(60vh/var(--ui-scale,1))] w-64 overflow-y-auto p-1.5`}>
+              {menu.map((o, i) => (
+                <Fragment key={`${o.group || ""}:${o.key}`}>
+                  {o.group && o.group !== menu[i - 1]?.group && (
+                    <DropdownMenuLabel className={GLASS_MENU_LABEL}>{o.group}</DropdownMenuLabel>
+                  )}
+                  <DropdownMenuItem onSelect={o.onSelect} data-testid={o.testid} className={`${GLASS_MENU_ITEM} justify-between gap-3`}>
+                    <span className="min-w-0">
+                      <span className={`block truncate ${o.selected ? "font-semibold text-slate-900" : ""}`}>{o.label}</span>
+                      {o.sub && <span className="block truncate text-[11px] text-slate-500">{o.sub}</span>}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {o.count != null && <span className="tabular-nums text-xs opacity-55">{o.count}</span>}
+                      {o.selected && <CheckIcon size={14} weight="bold" aria-hidden="true" />}
+                    </span>
+                  </DropdownMenuItem>
+                </Fragment>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -149,7 +261,7 @@ export function WorkSplit({ top, slides = [], label, children, mode = "deck", to
             ? "bg-[linear-gradient(180deg,hsl(0_0%_97%),hsl(0_0%_93%))] text-foreground shadow-[0_-24px_60px_-30px_hsl(0_0%_0%/0.35),inset_0_1px_0_#fff]"
             : "bg-[linear-gradient(180deg,hsl(240_4%_12%),hsl(240_4%_7%)_160px,hsl(240_4%_6%))] text-white shadow-[0_-24px_60px_-28px_hsl(0_0%_0%/0.6),inset_0_1px_0_hsl(0_0%_100%/0.12)]"}`}>
         <header className="mb-3 flex h-8 items-center justify-between gap-3 px-1">
-          <p className={`min-w-0 truncate text-[13px] font-semibold ${light ? "text-slate-600" : "text-white/80"}`} data-testid={`${testid}-label`}>{label}</p>
+          <p className={`min-w-0 truncate font-semibold ${light ? "text-[13px] text-slate-600" : "text-[16px] text-white"}`} data-testid={`${testid}-label`}>{label}</p>
           {mode === "deck" && n > 0 && (
             <span className="shrink-0 rounded-pill bg-white/10 px-3 py-1 text-[12px] font-semibold tabular-nums text-white/85"
               data-testid={`${testid}-count`}>{n} {n === 1 ? "task" : "tasks"}</span>

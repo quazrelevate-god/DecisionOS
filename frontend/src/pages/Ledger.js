@@ -113,7 +113,7 @@ function SectionTabs({ tab, setTab, pendingCount, isMobile, tabs = TABS }) {
     );
   }
   return (
-    <div className="flex justify-center">
+    <div className="flex">
       <div role="group" aria-label={t("nav.finance", "Finance")} data-testid={isMobile ? "ledger-tabs-mobile" : "ledger-tabs"}
         className={`inline-flex gap-1 rounded-pill p-1 ${GLASS_PILL}`}>
         {tabs.map((tb) => {
@@ -366,19 +366,10 @@ export default function Ledger() {
 
   return (
     <div data-testid="finance-page">
-      {/* 2026-09-15, founder — only the tabs stay pinned. The breadcrumb,
-          title and controls used to sit inside StickyHeader too, so the whole
-          hero stayed stuck to the top; now it scrolls away with the page. */}
-      {/* Desktop keeps the pinned tab strip at the top. On a phone the tabs sit
-          under the Finance title instead (2026-09-15, founder) — see below. */}
-      {/* BUG-15 — without Finance the only tab is Inbox: a one-cell bar that
-          is always selected and does nothing when tapped. Shown only when
-          there is a choice to make. */}
-      {!isMobile && tabs.length > 1 && (
-        <StickyHeader>
-          <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} tabs={tabs} />
-        </StickyHeader>
-      )}
+      {/* 2026-10-31 (founder) — on desktop the section tabs no longer take a
+          row of their own above the title: they sit in the title's row, at the
+          head of the controls on the right (Finance on the left). On a phone
+          the tabs sit under the Finance title, pinned with it (2026-09-15). */}
       {/* 2026-09-15, founder — on a phone the Finance title and the section
           tabs are pinned together: StickyHeader lands in the frame's top slot,
           outside the scroller, so both stay put while the page moves under
@@ -390,7 +381,7 @@ export default function Ledger() {
         </StickyHeader>
       )}
       <div className="mb-5 lg:mb-6">
-        <div className="mt-1 flex flex-wrap items-end justify-between gap-x-6 gap-y-6 lg:gap-y-3">
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-x-6 gap-y-6 lg:items-center lg:gap-y-3">
           {/* 2026-09-15, founder — the "Track your money flow…" line is gone.
               Desktop only here; the phone title is pinned above with the tabs. */}
           {!isMobile && (
@@ -398,7 +389,11 @@ export default function Ledger() {
               <h1 className="font-display text-3xl sm:text-4xl">{t("finance.title")}</h1>
             </div>
           )}
-          <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto" data-testid="ledger-controls">
+          <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto lg:justify-end" data-testid="ledger-controls">
+            {/* BUG-15 — without Finance the only tab is Inbox: a one-cell bar that
+                is always selected and does nothing when tapped. Shown only when
+                there is a choice to make. */}
+            {!isMobile && tabs.length > 1 && <SectionTabs tab={tab} setTab={setTab} pendingCount={pendingCount} isMobile={isMobile} tabs={tabs} />}
             {/* 2026-10-29 — one period for every tab that reports money moving. */}
             {PERIOD_TABS.includes(tab) && (
               <PeriodPicker value={period} onChange={setPeriod} fyStartMonth={tenant?.fy_start_month} earliest={earliest} now={now} />

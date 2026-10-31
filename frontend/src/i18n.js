@@ -11,7 +11,7 @@ const resources = {
   en: {
     translation: {
       nav: {
-        inbox: "Decision Desk", brief: "CEO Brief", mywork: "My Work",
+        inbox: "Decision Desk", brief: "CEO Brief", mywork: "Workspace",
         people: "People", // legacy — retained for /contacts back-compat only
         crm: "CRM", team: "Team", ops: "Ops",
         brain: "Dex", finance: "Finance", capture: "Capture", meetings: "Meeting Notes", settings: "Settings",
@@ -163,7 +163,7 @@ const resources = {
   hi: {
     translation: {
       nav: {
-        inbox: "निर्णय डेस्क", brief: "सीईओ ब्रीफ़", mywork: "मेरा काम",
+        inbox: "निर्णय डेस्क", brief: "सीईओ ब्रीफ़", mywork: "कार्यक्षेत्र",
         people: "लोग", crm: "सीआरएम", team: "टीम", ops: "ऑप्स",
         brain: "डेक्स", finance: "वित्त", capture: "कैप्चर", meetings: "मीटिंग नोट्स", settings: "सेटिंग्स",
         guide: "मदद और गाइड", preferences: "प्राथमिकताएँ",
@@ -294,7 +294,7 @@ const resources = {
   ta: {
     translation: {
       nav: {
-        inbox: "முடிவு மேசை", brief: "தலைமை சுருக்கம்", mywork: "எனது வேலை",
+        inbox: "முடிவு மேசை", brief: "தலைமை சுருக்கம்", mywork: "பணியிடம்",
         people: "நபர்கள்", crm: "CRM", team: "குழு", ops: "இயக்கம்",
         brain: "டெக்ஸ்", finance: "நிதி", capture: "பதிவு", meetings: "கூட்டக் குறிப்புகள்", settings: "அமைப்புகள்",
         guide: "உதவி & வழிகாட்டி", preferences: "விருப்பங்கள்",
